@@ -11,7 +11,7 @@ export function PaymentPendingOverlay({
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
         </div>
-        <h2 className="text-xl font-bold text-foreground">Processing your payment</h2>
+        <h2 className="text-xl font-bold text-foreground">Initializing your transaction</h2>
         <p className="mt-2 text-sm text-foreground/60">
           Please don&apos;t close this page
         </p>

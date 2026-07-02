@@ -1,0 +1,34 @@
+# PAYLITY NG
+
+Fast utility payment platform for Nigeria.
+
+## Local development
+
+### Terminal 1 — API
+
+```bash
+cd apps/api
+composer install
+cp .env.example .env
+php artisan key:generate
+touch database/database.sqlite
+php artisan migrate
+php artisan serve
+```
+
+### Terminal 2 — Web
+
+```bash
+cd apps/web
+npm install
+cp .env.local.example .env.local
+npm run dev
+```
+
+- Web: [http://localhost:3000](http://localhost:3000)
+- API: [http://127.0.0.1:8000/api/v1/health](http://127.0.0.1:8000/api/v1/health)
+
+## Docs
+
+- `docs/PAY-003-CHECKOUT-EXPERIENCE-BLUEPRINT.md`
+- `docs/PAY-005-TRANSACTION-ENGINE-FOUNDATION.md`

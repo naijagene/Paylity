@@ -28,6 +28,7 @@ export type CheckoutState = {
   payableAmount: number;
   customProductAmount: string;
   transactionRef: string | null;
+  transactionInitialized: boolean;
 };
 
 export type FieldErrors = Partial<

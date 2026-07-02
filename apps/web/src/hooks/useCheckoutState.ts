@@ -19,6 +19,7 @@ import type {
   FieldErrors,
   ProductType,
 } from "@/lib/checkout/types";
+import type { InitializeCheckoutResponse } from "@/lib/api/checkout";
 
 const defaultFields = (): CheckoutFields => ({
   customerPhone: "",
@@ -45,6 +46,7 @@ function createInitialState(product: ProductType): CheckoutState {
     payableAmount: 0,
     customProductAmount: "",
     transactionRef: null,
+    transactionInitialized: false,
   };
 }
 
@@ -65,6 +67,7 @@ function normalizeStoredState(
       product,
       convenienceFee: parsed.convenienceFee ?? CONVENIENCE_FEE,
       gatewayFee: parsed.gatewayFee ?? GATEWAY_FEE,
+      transactionInitialized: parsed.transactionInitialized ?? false,
     };
   }
 
@@ -80,6 +83,7 @@ function normalizeStoredState(
     payableAmount: parsed.total ?? calculatePayableAmount(productAmount),
     customProductAmount: parsed.customAmount ?? "",
     transactionRef: parsed.transactionRef ?? null,
+    transactionInitialized: false,
   };
 }
 
@@ -194,8 +198,32 @@ export function useCheckoutState(product: ProductType) {
   );
 
   const setStep = useCallback((step: CheckoutStep) => {
-    setState((prev) => ({ ...prev, step }));
+    setState((prev) => ({
+      ...prev,
+      step,
+      ...(step === "form"
+        ? {
+            transactionInitialized: false,
+            transactionRef: null,
+          }
+        : {}),
+    }));
   }, []);
+
+  const setTransactionInitialized = useCallback(
+    (transaction: InitializeCheckoutResponse) => {
+      setState((prev) => ({
+        ...prev,
+        transactionRef: transaction.reference,
+        transactionInitialized: true,
+        productAmount: transaction.product_amount,
+        convenienceFee: transaction.convenience_fee,
+        gatewayFee: transaction.gateway_fee,
+        payableAmount: transaction.payable_amount,
+      }));
+    },
+    [],
+  );
 
   const setCustomProductAmount = useCallback((value: string) => {
     setSelectedProductAmount(0);
@@ -245,6 +273,7 @@ export function useCheckoutState(product: ProductType) {
     setProduct,
     updateField,
     setStep,
+    setTransactionInitialized,
     setCustomProductAmount,
     selectProductAmount,
     resetMeterVerification,

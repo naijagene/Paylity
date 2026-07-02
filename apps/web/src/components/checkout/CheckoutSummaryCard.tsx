@@ -12,6 +12,8 @@ type SummaryItem = {
   value: string;
 };
 
+type PricingMode = "estimated" | "confirmed";
+
 type CheckoutSummaryCardProps = {
   product: ProductType;
   fields: CheckoutFields;
@@ -20,6 +22,8 @@ type CheckoutSummaryCardProps = {
   gatewayFee: number;
   payableAmount: number;
   transactionReference: string | null;
+  pricingMode: PricingMode;
+  transactionReady: boolean;
   isOverGuestLimit: boolean;
   onReduceProductAmount?: () => void;
 };
@@ -66,16 +70,41 @@ export function CheckoutSummaryCard({
   gatewayFee,
   payableAmount,
   transactionReference,
+  pricingMode,
+  transactionReady,
   isOverGuestLimit,
   onReduceProductAmount,
 }: CheckoutSummaryCardProps) {
   const items = buildSummaryItems(product, fields);
-  const gatewayFeeLabel = formatGatewayFeeLabel(gatewayFee);
+  const gatewayFeeLabel =
+    pricingMode === "confirmed"
+      ? formatNaira(gatewayFee)
+      : formatGatewayFeeLabel(gatewayFee);
+  const pricingLabel = pricingMode === "confirmed" ? "Confirmed" : "Estimated";
 
   return (
     <div className="space-y-4">
+      {transactionReady ? (
+        <div className="rounded-3xl border border-success/20 bg-success/5 p-5 sm:p-6">
+          <p className="text-sm font-bold text-success">Transaction Ready</p>
+          <p className="mt-2 text-sm text-foreground/70">
+            Your checkout has been initialized successfully.
+          </p>
+          {transactionReference ? (
+            <p className="mt-3 font-mono text-sm font-semibold text-foreground">
+              {transactionReference}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm sm:p-6">
-        <h2 className="mb-4 text-lg font-bold text-foreground">Review your payment</h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-foreground">Review your payment</h2>
+          <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-dark">
+            {pricingLabel}
+          </span>
+        </div>
 
         <dl className="space-y-3">
           {items.map((item) => (
@@ -140,6 +169,8 @@ export function CheckoutSummaryCard({
         gatewayFee={gatewayFee}
         payableAmount={payableAmount}
         transactionReference={transactionReference}
+        pricingMode={pricingMode}
+        status={transactionReady ? "Transaction ready" : "Awaiting payment"}
       />
     </div>
   );

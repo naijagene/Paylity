@@ -11,6 +11,8 @@ type ReceiptPreviewProps = {
   gatewayFee: number;
   payableAmount: number;
   transactionReference: string | null;
+  pricingMode?: "estimated" | "confirmed";
+  status?: string;
 };
 
 export function ReceiptPreview({
@@ -21,9 +23,14 @@ export function ReceiptPreview({
   gatewayFee,
   payableAmount,
   transactionReference,
+  pricingMode = "estimated",
+  status = "Awaiting payment",
 }: ReceiptPreviewProps) {
   const schema = getProductSchema(product);
-  const gatewayFeeLabel = formatGatewayFeeLabel(gatewayFee);
+  const gatewayFeeLabel =
+    pricingMode === "confirmed"
+      ? formatNaira(gatewayFee)
+      : formatGatewayFeeLabel(gatewayFee);
   const timestamp = new Date().toLocaleString("en-NG", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -37,7 +44,7 @@ export function ReceiptPreview({
     { label: "Convenience Fee", value: formatNaira(convenienceFee) },
     { label: "Gateway Charge", value: gatewayFeeLabel },
     { label: "Total Paid", value: formatNaira(payableAmount) },
-    { label: "Status", value: "Awaiting payment" },
+    { label: "Status", value: status },
     { label: "Timestamp", value: timestamp },
   ];
 
