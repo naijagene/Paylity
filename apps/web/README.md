@@ -58,6 +58,12 @@ The checkout review step calls:
 
 `POST /api/v1/checkout/initialize`
 
+When Paystack is enabled on the API, the response includes `authorization_url` and the browser redirects to Paystack checkout.
+
+After payment, Paystack redirects to:
+
+`/payment/callback?reference=...`
+
 The frontend displays backend-confirmed:
 
 - `reference`
@@ -65,5 +71,6 @@ The frontend displays backend-confirmed:
 - `convenience_fee`
 - `gateway_fee`
 - `payable_amount`
+- `authorization_url` (when Paystack is enabled)
 
-Paystack and VTPass are not integrated yet.
+VTPass fulfillment is not integrated yet.

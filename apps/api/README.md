@@ -19,6 +19,20 @@ touch database/database.sqlite
 php artisan migrate
 ```
 
+### Paystack (optional)
+
+Add to `.env`:
+
+```env
+PAYSTACK_PUBLIC_KEY=pk_test_...
+PAYSTACK_SECRET_KEY=sk_test_...
+PAYSTACK_BASE_URL=https://api.paystack.co
+PAYSTACK_CALLBACK_URL=http://localhost:3000/payment/callback
+FEATURE_PAYSTACK=true
+```
+
+When `FEATURE_PAYSTACK=true`, checkout initialization calls Paystack and returns an `authorization_url`. When `false`, the placeholder response is returned instead.
+
 ## Run
 
 ```bash
@@ -35,6 +49,7 @@ API base URL: `http://127.0.0.1:8000/api/v1`
 | POST | `/checkout/initialize` | Initialize checkout transaction |
 | GET | `/transactions/{reference}` | Fetch transaction by reference |
 | POST | `/payments/paystack/callback` | Paystack callback placeholder |
+| GET | `/payments/paystack/verify/{reference}` | Verify payment with Paystack |
 | POST | `/payments/paystack/webhook` | Paystack webhook placeholder |
 
 ## Example: Initialize checkout
@@ -61,4 +76,5 @@ php artisan test
 - All money values are stored and returned in **naira** (integer).
 - Guest checkout limit applies to `product_amount` only (max ₦10,000).
 - Convenience fee is ₦100 for all v1 products.
-- Paystack and VTPass are not integrated yet.
+- Paystack initialization is supported when `FEATURE_PAYSTACK=true`.
+- VTPass fulfillment is not integrated yet.

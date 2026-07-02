@@ -13,4 +13,5 @@ Route::post('/checkout/initialize', [CheckoutController::class, 'initialize']);
 Route::get('/transactions/{reference}', [TransactionController::class, 'show']);
 
 Route::post('/payments/paystack/callback', [PaystackController::class, 'callback']);
+Route::get('/payments/paystack/verify/{reference}', [PaystackController::class, 'verify']);
 Route::post('/payments/paystack/webhook', [PaystackController::class, 'webhook']);

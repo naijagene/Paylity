@@ -4,7 +4,10 @@ namespace App\Services;
 
 use App\Enums\TransactionStatus;
 use App\Exceptions\FraudCheckException;
+use App\Exceptions\PaystackConfigurationException;
+use App\Exceptions\PaystackException;
 use App\Models\Transaction;
+use App\Services\Payments\PaystackService;
 use Illuminate\Support\Facades\DB;
 
 class TransactionService
@@ -13,14 +16,21 @@ class TransactionService
         private readonly TransactionReferenceGenerator $referenceGenerator,
         private readonly FeeService $feeService,
         private readonly FraudService $fraudService,
+        private readonly PaystackService $paystackService,
     ) {
     }
 
     /**
      * @throws FraudCheckException
+     * @throws PaystackConfigurationException
+     * @throws PaystackException
      */
     public function initializeCheckout(array $input, ?string $ipAddress, ?string $userAgent): Transaction
     {
+        if ($this->paystackService->isEnabled() && ! $this->paystackService->hasSecretKey()) {
+            throw new PaystackConfigurationException();
+        }
+
         $productType = $input['product_type'];
         $productAmount = (int) $input['product_amount'];
         $convenienceFee = $this->feeService->convenienceFeeFor($productType);
@@ -38,7 +48,7 @@ class TransactionService
             verifiedPhone: false,
         );
 
-        return DB::transaction(function () use ($input, $productAmount, $convenienceFee, $gatewayFee, $payableAmount, $ipAddress, $userAgent, $productType) {
+        $transaction = DB::transaction(function () use ($input, $productAmount, $convenienceFee, $gatewayFee, $payableAmount, $ipAddress, $userAgent, $productType) {
             $reference = $this->referenceGenerator->generate();
 
             while (Transaction::query()->where('reference', $reference)->exists()) {
@@ -63,11 +73,43 @@ class TransactionService
                 'verified_phone' => false,
             ]);
         });
+
+        if ($this->paystackService->isEnabled()) {
+            $this->initializePaystackPayment($transaction);
+        }
+
+        return $transaction->fresh();
+    }
+
+    /**
+     * @throws PaystackException
+     */
+    private function initializePaystackPayment(Transaction $transaction): void
+    {
+        try {
+            $result = $this->paystackService->initializeTransaction($transaction);
+
+            $transaction->update([
+                'status' => TransactionStatus::PAYMENT_PENDING,
+                'payment_provider' => 'paystack',
+                'payment_reference' => $result['reference'],
+                'payment_authorization_url' => $result['authorization_url'],
+                'response_payload' => $result['raw'],
+                'failure_reason' => null,
+            ]);
+        } catch (PaystackException $exception) {
+            $transaction->update([
+                'status' => TransactionStatus::FAILED,
+                'failure_reason' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
     }
 
     public function toCheckoutResponse(Transaction $transaction): array
     {
-        return [
+        $response = [
             'reference' => $transaction->reference,
             'product_type' => $transaction->product_type,
             'product_amount' => $transaction->product_amount,
@@ -76,8 +118,20 @@ class TransactionService
             'payable_amount' => $transaction->payable_amount,
             'currency' => $transaction->currency,
             'status' => $transaction->status,
-            'payment_status' => 'payment integration coming next',
+            'payment_provider' => $transaction->payment_provider,
         ];
+
+        if ($transaction->payment_authorization_url) {
+            $response['authorization_url'] = $transaction->payment_authorization_url;
+            $response['access_code'] = data_get(
+                $transaction->response_payload,
+                'data.access_code',
+            );
+        } else {
+            $response['payment_status'] = 'payment integration coming next';
+        }
+
+        return $response;
     }
 
     public function toDetailResponse(Transaction $transaction): array
@@ -96,6 +150,7 @@ class TransactionService
             'status' => $transaction->status,
             'payment_provider' => $transaction->payment_provider,
             'payment_reference' => $transaction->payment_reference,
+            'payment_authorization_url' => $transaction->payment_authorization_url,
             'fulfillment_reference' => $transaction->fulfillment_reference,
             'failure_reason' => $transaction->failure_reason,
             'verified_phone' => $transaction->verified_phone,

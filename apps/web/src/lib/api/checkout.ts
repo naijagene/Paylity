@@ -19,7 +19,10 @@ export type InitializeCheckoutResponse = {
   payable_amount: number;
   currency: string;
   status: string;
-  payment_status: string;
+  payment_provider?: string | null;
+  authorization_url?: string;
+  access_code?: string;
+  payment_status?: string;
 };
 
 export function buildInitializeCheckoutPayload(

@@ -43,6 +43,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
 
   const [isVerifyingMeter, setIsVerifyingMeter] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -116,6 +117,8 @@ function CheckoutEngine({ product }: { product: ProductType }) {
 
     setIsInitializing(true);
 
+    let redirecting = false;
+
     try {
       const payload = buildInitializeCheckoutPayload(
         product,
@@ -124,6 +127,14 @@ function CheckoutEngine({ product }: { product: ProductType }) {
       );
       const transaction = await initializeCheckout(payload);
       setTransactionInitialized(transaction);
+
+      if (transaction.authorization_url) {
+        redirecting = true;
+        setIsRedirecting(true);
+        window.location.assign(transaction.authorization_url);
+        return;
+      }
+
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       if (error instanceof ApiOfflineError || error instanceof ApiError) {
@@ -132,7 +143,9 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         setApiError("Something went wrong. Please try again.");
       }
     } finally {
-      setIsInitializing(false);
+      if (!redirecting) {
+        setIsInitializing(false);
+      }
     }
   }, [
     product,
@@ -274,8 +287,25 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         )}
       </CheckoutShell>
 
-      {isInitializing ? (
-        <PaymentPendingOverlay transactionRef={state.transactionRef} />
+      {isInitializing || isRedirecting ? (
+        <PaymentPendingOverlay
+          transactionRef={state.transactionRef}
+          title={
+            isRedirecting
+              ? "Redirecting to secure payment…"
+              : "Initializing your transaction"
+          }
+          subtitle={
+            isRedirecting
+              ? "Please wait while we connect you to Paystack"
+              : "Please don't close this page"
+          }
+          footerMessage={
+            isRedirecting
+              ? undefined
+              : "Payment integration coming next"
+          }
+        />
       ) : null}
     </>
   );
