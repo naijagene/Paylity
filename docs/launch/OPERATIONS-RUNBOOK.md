@@ -138,7 +138,7 @@ Refunds are processed in **Paystack dashboard** manually until PAY-013+ tooling 
 
 ---
 
-## Manual fulfillment endpoint
+## Manual fulfillment (ops console only)
 
 **When to use:** Transaction is `payment_success`, VTPass enabled, product not delivered.
 
@@ -146,11 +146,14 @@ Refunds are processed in **Paystack dashboard** manually until PAY-013+ tooling 
 
 - `FEATURE_VTPASS=true`
 - Valid VTPass credentials on server
-- Operator access to server or internal tool (curl)
+- Operator access via internal console at `/ops` or ops API with `X-Operator-Key`
 
 ```bash
-curl -X POST https://api.paylity.ng/api/v1/transactions/PYL-20260703-ABC123/fulfill
+curl -X POST https://api.paylity.ng/api/v1/ops/transactions/PYL-20260703-ABC123/fulfill \
+  -H "X-Operator-Key: YOUR_OPERATOR_ACCESS_KEY"
 ```
+
+**Note:** The public `POST /api/v1/transactions/{reference}/fulfill` endpoint was removed in PAY-014.
 
 **Expected progression:** `payment_success` → `fulfillment_pending` → `fulfilled` or `failed`
 
@@ -176,7 +179,7 @@ Use when customer returned from Paystack but status stuck on pending.
 |--------|-----|
 | Edit transaction status in DB manually | Breaks audit trail |
 | Enable auto-fulfill to "fix" backlog | Risk mass failed vends |
-| Share fulfill endpoint publicly | Unauthenticated vend risk |
+| Share fulfill endpoint publicly | Removed — use ops console only |
 | Promise instant refund in chat | No automation yet |
 | Trust customer screenshot as payment proof | Use Paystack verify |
 | Fulfill when status is not `payment_success` | Unpaid delivery |

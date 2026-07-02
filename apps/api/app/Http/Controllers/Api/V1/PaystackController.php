@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Payments\PaymentVerificationService;
 use App\Services\Payments\PaystackService;
 use App\Support\ApiResponse;
+use App\Support\ProviderErrorSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -55,8 +56,12 @@ class PaystackController extends Controller
                 status: $status,
             );
         } catch (PaystackException $exception) {
+            ProviderErrorSanitizer::logProviderError('Paystack error during payment verification.', $exception, [
+                'reference' => $reference,
+            ]);
+
             return ApiResponse::error(
-                message: $exception->getMessage(),
+                message: ProviderErrorSanitizer::customerMessage($exception),
                 errors: ['code' => $exception->errorCode],
                 status: 502,
             );

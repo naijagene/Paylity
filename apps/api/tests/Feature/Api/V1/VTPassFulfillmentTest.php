@@ -4,9 +4,6 @@ namespace Tests\Feature\Api\V1;
 
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
-use App\Services\Fulfillment\Adapters\AirtimeAdapter;
-use App\Services\Fulfillment\Adapters\DataAdapter;
-use App\Services\Fulfillment\Adapters\ElectricityAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -14,6 +11,8 @@ use Tests\TestCase;
 class VTPassFulfillmentTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const OPERATOR_KEY = 'test-operator-key';
 
     protected function setUp(): void
     {
@@ -29,14 +28,17 @@ class VTPassFulfillmentTest extends TestCase
             'services.paystack.enabled' => true,
             'services.paystack.secret_key' => 'sk_test_secret',
             'services.paystack.base_url' => 'https://api.paystack.co',
+            'services.operator.access_key' => self::OPERATOR_KEY,
         ]);
     }
 
-    public function test_fulfillment_endpoint_blocked_when_feature_vtpass_is_false(): void
+    public function test_ops_fulfillment_endpoint_blocked_when_feature_vtpass_is_false(): void
     {
         $transaction = $this->createPaidTransaction();
 
-        $response = $this->postJson('/api/v1/transactions/'.$transaction->reference.'/fulfill');
+        $response = $this->withHeaders([
+            'X-Operator-Key' => self::OPERATOR_KEY,
+        ])->postJson('/api/v1/ops/transactions/'.$transaction->reference.'/fulfill');
 
         $response
             ->assertStatus(503)
@@ -47,7 +49,7 @@ class VTPassFulfillmentTest extends TestCase
             ]);
     }
 
-    public function test_fulfillment_rejects_unpaid_transaction(): void
+    public function test_ops_fulfillment_rejects_unpaid_transaction(): void
     {
         config(['services.vtpass.enabled' => true]);
 
@@ -68,7 +70,9 @@ class VTPassFulfillmentTest extends TestCase
             'verified_phone' => false,
         ]);
 
-        $response = $this->postJson('/api/v1/transactions/'.$transaction->reference.'/fulfill');
+        $response = $this->withHeaders([
+            'X-Operator-Key' => self::OPERATOR_KEY,
+        ])->postJson('/api/v1/ops/transactions/'.$transaction->reference.'/fulfill');
 
         $response
             ->assertStatus(422)
@@ -107,7 +111,9 @@ class VTPassFulfillmentTest extends TestCase
             return Http::response(['code' => '999'], 500);
         });
 
-        $this->postJson('/api/v1/transactions/'.$transaction->reference.'/fulfill')
+        $this->withHeaders([
+            'X-Operator-Key' => self::OPERATOR_KEY,
+        ])->postJson('/api/v1/ops/transactions/'.$transaction->reference.'/fulfill')
             ->assertOk()
             ->assertJsonPath('data.status', TransactionStatus::FULFILLED)
             ->assertJsonPath('data.fulfillment_provider', 'vtpass')
@@ -134,7 +140,9 @@ class VTPassFulfillmentTest extends TestCase
             ]),
         ]);
 
-        $this->postJson('/api/v1/transactions/'.$transaction->reference.'/fulfill')
+        $this->withHeaders([
+            'X-Operator-Key' => self::OPERATOR_KEY,
+        ])->postJson('/api/v1/ops/transactions/'.$transaction->reference.'/fulfill')
             ->assertOk()
             ->assertJsonPath('data.status', TransactionStatus::FULFILLED);
 
@@ -159,7 +167,9 @@ class VTPassFulfillmentTest extends TestCase
             ]),
         ]);
 
-        $response = $this->postJson('/api/v1/transactions/'.$transaction->reference.'/fulfill');
+        $response = $this->withHeaders([
+            'X-Operator-Key' => self::OPERATOR_KEY,
+        ])->postJson('/api/v1/ops/transactions/'.$transaction->reference.'/fulfill');
 
         $response
             ->assertStatus(422)
@@ -262,7 +272,7 @@ class VTPassFulfillmentTest extends TestCase
             'verified_phone' => false,
         ]);
 
-        $payload = app(ElectricityAdapter::class)->buildPayload($transaction);
+        $payload = app(\App\Services\Fulfillment\Adapters\ElectricityAdapter::class)->buildPayload($transaction);
 
         $this->assertSame('ikeja-electric', $payload['serviceID']);
         $this->assertSame('12345678901', $payload['billersCode']);
@@ -293,7 +303,7 @@ class VTPassFulfillmentTest extends TestCase
             'verified_phone' => false,
         ]);
 
-        $payload = app(DataAdapter::class)->buildPayload($transaction);
+        $payload = app(\App\Services\Fulfillment\Adapters\DataAdapter::class)->buildPayload($transaction);
 
         $this->assertSame('mtn-data', $payload['serviceID']);
         $this->assertSame('mtn-1gb-daily', $payload['variation_code']);
@@ -319,7 +329,7 @@ class VTPassFulfillmentTest extends TestCase
             'verified_phone' => false,
         ]);
 
-        $payload = app(AirtimeAdapter::class)->buildPayload($transaction);
+        $payload = app(\App\Services\Fulfillment\Adapters\AirtimeAdapter::class)->buildPayload($transaction);
 
         $this->assertSame('mtn', $payload['serviceID']);
         $this->assertSame(1000, $payload['amount']);

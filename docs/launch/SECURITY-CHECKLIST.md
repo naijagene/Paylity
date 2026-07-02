@@ -52,11 +52,13 @@ Pre-launch security review. Check each item before public go-live.
 
 ## API hardening
 
-- [ ] **CORS** restricted to production web origin(s) only (remove localhost)
-- [ ] **Rate limiting** on `/checkout/initialize` — ⚠️ **not yet implemented** (blocker for high-traffic launch)
-- [ ] Fulfill endpoint **not exposed to public internet** without IP restriction or auth — ⚠️ **required before launch**
+- [ ] **CORS** restricted to production web origin via `FRONTEND_URL` (localhost allowed in non-production only)
+- [x] **Rate limiting** on checkout, transaction lookup, payment verify, and ops endpoints (PAY-014)
+- [x] Public fulfill endpoint removed — manual fulfillment via ops console only (PAY-014)
+- [x] Provider errors sanitized in production (`ProviderErrorSanitizer`)
 - [ ] Error responses do not leak stack traces (`APP_DEBUG=false`)
 - [ ] Health endpoint acceptable to expose publicly (no secrets in response)
+- [ ] Run `php artisan paylity:preflight` before deploy — must pass with no FAIL items
 
 ---
 
@@ -64,10 +66,12 @@ Pre-launch security review. Check each item before public go-live.
 
 - [ ] Laravel logs written to persistent storage
 - [ ] Log rotation configured
-- [ ] Paystack webhook failures logged (`Log::warning`)
+- [ ] Paystack webhook failures logged (`Log::warning`) — reference and error code only, no secrets
 - [ ] Auto-fulfill failures logged
+- [ ] Provider configuration/API errors logged server-side (`ProviderErrorSanitizer::logProviderError`)
 - [ ] Alert on repeated 5xx from API (recommended — not built in MVP)
 - [ ] Do not log full Paystack/VTPass secret keys or card data
+- [ ] Raw provider responses may be stored in `response_payload` — never log secret keys
 
 ---
 
@@ -95,7 +99,9 @@ Pre-launch security review. Check each item before public go-live.
 - [ ] No payment secrets in browser bundle
 - [ ] External links (WhatsApp) use `rel="noopener noreferrer"`
 - [ ] Build identity shows Sandbox vs Production clearly
-- [ ] Privacy / Terms placeholders replaced before marketing push (legal review)
+- [x] Privacy / Terms MVP placeholder pages at `/privacy` and `/terms` (legal review still required)
+- [ ] `NEXT_PUBLIC_WHATSAPP_URL` set in production (placeholder number hidden when unset)
+- [x] Security headers configured in Next.js (`X-Frame-Options`, `X-Content-Type-Options`, etc.)
 
 ---
 
@@ -114,9 +120,9 @@ Pre-launch security review. Check each item before public go-live.
 ## Future requirements (post-MVP)
 
 - [ ] **OTP verification** for product amounts above ₦10,000
-- [ ] Authenticated admin console (PAY-013)
-- [ ] API rate limiting (Laravel throttle middleware)
-- [ ] Fulfill endpoint authentication
+- [x] Authenticated admin console (PAY-013 ops console)
+- [x] API rate limiting (Laravel throttle middleware) — PAY-014
+- [x] Fulfill endpoint authentication (ops-only) — PAY-014
 - [ ] WAF / DDoS protection at edge
 - [ ] PCI: remain SAQ A (card fields on Paystack hosted page only)
 

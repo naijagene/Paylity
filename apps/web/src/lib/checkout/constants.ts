@@ -10,9 +10,6 @@ export {
 
 export const CHECKOUT_STORAGE_KEY = "paylity-checkout-state";
 
-export const WHATSAPP_URL =
-  "https://wa.me/2348000000000?text=Hi%20PAYLITY%20NG%2C%20I%20need%20help";
-
 export const NETWORKS = ["MTN", "Airtel", "Glo", "9mobile"] as const;
 
 export const DISCOS = [

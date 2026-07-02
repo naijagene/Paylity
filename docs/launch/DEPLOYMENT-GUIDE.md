@@ -135,6 +135,7 @@ APP_NAME=PAYLITY NG
 APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://api.paylity.ng
+FRONTEND_URL=https://paylity.ng
 APP_VERSION=1.0.0
 APP_BUILD=2026.07.03
 
@@ -157,6 +158,7 @@ VTPASS_API_KEY=...
 FEATURE_VTPASS=true
 FEATURE_VTPASS_AUTO_FULFILL=false
 
+OPERATOR_ACCESS_KEY=<strong-random-key>
 LOG_LEVEL=warning
 ```
 
@@ -164,6 +166,7 @@ LOG_LEVEL=warning
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=https://api.paylity.ng/api/v1
+NEXT_PUBLIC_OPERATOR_API_BASE_URL=https://api.paylity.ng/api/v1
 NEXT_PUBLIC_APP_NAME=PAYLITY NG
 NEXT_PUBLIC_APP_VERSION=1.0.0
 NEXT_PUBLIC_BUILD_NUMBER=2026.07.03
@@ -184,6 +187,7 @@ composer install --no-dev --optimize-autoloader
 cp .env.example .env   # then edit for production
 php artisan key:generate
 php artisan migrate --force
+php artisan paylity:preflight
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
@@ -247,7 +251,7 @@ Future use: async fulfillment, webhook retries, receipt emails.
 2. Open `https://paylity.ng` — landing page loads, footer shows Production build
 3. Checkout airtime ₦500 → Paystack live/test → callback success
 4. Verify transaction status page shows `payment_success`
-5. Manual fulfill (if VTPass enabled) → status `fulfilled`
+5. Manual fulfill via ops console (if VTPass enabled) → status `fulfilled`
 6. Trigger invalid reference → friendly 404 on status page
 7. Send test Paystack webhook — signature rejected without valid header
 8. Confirm CORS: browser checkout calls API without errors

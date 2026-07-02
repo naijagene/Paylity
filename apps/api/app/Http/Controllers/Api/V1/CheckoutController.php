@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\InitializeCheckoutRequest;
 use App\Services\TransactionService;
 use App\Support\ApiResponse;
+use App\Support\ProviderErrorSanitizer;
 use Illuminate\Http\JsonResponse;
 
 class CheckoutController extends Controller
@@ -33,14 +34,18 @@ class CheckoutController extends Controller
                 status: 422,
             );
         } catch (PaystackConfigurationException $exception) {
+            ProviderErrorSanitizer::logProviderError('Paystack configuration error during checkout.', $exception);
+
             return ApiResponse::error(
-                message: $exception->getMessage(),
+                message: ProviderErrorSanitizer::customerMessage($exception),
                 errors: ['code' => $exception->errorCode],
                 status: 422,
             );
         } catch (PaystackException $exception) {
+            ProviderErrorSanitizer::logProviderError('Paystack error during checkout.', $exception);
+
             return ApiResponse::error(
-                message: $exception->getMessage(),
+                message: ProviderErrorSanitizer::customerMessage($exception),
                 errors: ['code' => $exception->errorCode],
                 status: 502,
             );

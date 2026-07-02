@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use App\Support\ApiResponse;
@@ -27,6 +28,16 @@ return Application::configure(basePath: dirname(__DIR__))
                     message: 'The given data was invalid.',
                     errors: $exception->errors(),
                     status: 422,
+                );
+            }
+        });
+
+        $exceptions->render(function (ThrottleRequestsException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return ApiResponse::error(
+                    message: 'Too many requests. Please try again shortly.',
+                    errors: ['code' => 'RATE_LIMIT_EXCEEDED'],
+                    status: 429,
                 );
             }
         });

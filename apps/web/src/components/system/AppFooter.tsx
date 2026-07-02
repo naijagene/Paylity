@@ -1,13 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { AboutModal } from "@/components/system/AboutModal";
 import { getBuildInfo } from "@/lib/system/buildInfo";
-import { WHATSAPP_URL } from "@/lib/checkout/constants";
-
-function getSupportUrl(): string {
-  return process.env.NEXT_PUBLIC_WHATSAPP_URL ?? WHATSAPP_URL;
-}
+import { getWhatsAppSupportUrl } from "@/lib/support/whatsapp";
 
 type AppFooterProps = {
   className?: string;
@@ -18,6 +15,7 @@ export function AppFooter({ className = "" }: AppFooterProps) {
   const [expanded, setExpanded] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const currentYear = new Date().getFullYear();
+  const supportUrl = getWhatsAppSupportUrl();
 
   return (
     <>
@@ -46,14 +44,18 @@ export function AppFooter({ className = "" }: AppFooterProps) {
           >
             {build.environment}
           </span>
-          <a
-            href={getSupportUrl()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-          >
-            Support
-          </a>
+          {supportUrl ? (
+            <a
+              href={supportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              Support
+            </a>
+          ) : (
+            <span className="text-foreground/35">Support</span>
+          )}
           <button
             type="button"
             onClick={() => setAboutOpen(true)}
@@ -61,8 +63,18 @@ export function AppFooter({ className = "" }: AppFooterProps) {
           >
             About
           </button>
-          <span className="text-foreground/30">Privacy</span>
-          <span className="text-foreground/30">Terms</span>
+          <Link
+            href="/privacy"
+            className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            Privacy
+          </Link>
+          <Link
+            href="/terms"
+            className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            Terms
+          </Link>
         </div>
 
         {expanded ? (

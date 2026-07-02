@@ -1,11 +1,16 @@
 import { Button } from "@/components/Button";
-import { WHATSAPP_URL } from "@/lib/checkout/constants";
+import {
+  buildWhatsAppHref,
+  getWhatsAppSupportUrl,
+} from "@/lib/support/whatsapp";
 
 type GuestLimitBannerProps = {
   onReduceProductAmount?: () => void;
 };
 
 export function GuestLimitBanner({ onReduceProductAmount }: GuestLimitBannerProps) {
+  const whatsappUrl = getWhatsAppSupportUrl();
+
   return (
     <div className="rounded-2xl border border-error/20 bg-error/5 p-4">
       <p className="text-sm font-bold text-foreground">Guest limit reached</p>
@@ -24,15 +29,24 @@ export function GuestLimitBanner({ onReduceProductAmount }: GuestLimitBannerProp
             Reduce product amount
           </Button>
         ) : null}
-        <Button
-          href={WHATSAPP_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          variant="secondary"
-          className="w-full sm:w-auto"
-        >
-          Chat on WhatsApp
-        </Button>
+        {whatsappUrl ? (
+          <Button
+            href={buildWhatsAppHref(
+              whatsappUrl,
+              "Hi PAYLITY NG, I need help with a guest checkout limit.",
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="secondary"
+            className="w-full sm:w-auto"
+          >
+            Chat on WhatsApp
+          </Button>
+        ) : (
+          <p className="self-center text-sm text-foreground/60">
+            Contact PAYLITY NG support for higher purchase limits.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -1,8 +1,7 @@
-import { WHATSAPP_URL } from "@/lib/checkout/constants";
-
-function getWhatsAppUrl(): string {
-  return process.env.NEXT_PUBLIC_WHATSAPP_URL ?? WHATSAPP_URL;
-}
+import {
+  buildWhatsAppHref,
+  getWhatsAppSupportUrl,
+} from "@/lib/support/whatsapp";
 
 type WhatsAppSupportCardProps = {
   reference?: string;
@@ -13,13 +12,27 @@ export function WhatsAppSupportCard({
   reference,
   className = "",
 }: WhatsAppSupportCardProps) {
-  const baseUrl = getWhatsAppUrl();
+  const baseUrl = getWhatsAppSupportUrl();
+
+  if (!baseUrl) {
+    return (
+      <aside
+        className={`animate-fade-in rounded-3xl border border-dark/5 bg-white p-5 shadow-sm ${className}`}
+        aria-label="Customer support"
+      >
+        <p className="text-sm font-semibold text-foreground">Need help?</p>
+        <p className="mt-1 text-sm text-foreground/60">
+          Contact PAYLITY NG support with your transaction reference if you need
+          payment or delivery assistance.
+        </p>
+      </aside>
+    );
+  }
+
   const message = reference
     ? `Hi PAYLITY NG, I need help with transaction ${reference}.`
     : "Hi PAYLITY NG, I need help.";
-  const href = baseUrl.includes("text=")
-    ? baseUrl.replace(/text=[^&]*/, `text=${encodeURIComponent(message)}`)
-    : `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}text=${encodeURIComponent(message)}`;
+  const href = buildWhatsAppHref(baseUrl, message);
 
   return (
     <aside

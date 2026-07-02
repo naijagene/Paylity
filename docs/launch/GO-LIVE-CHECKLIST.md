@@ -40,8 +40,8 @@ Check `[x]` only when verified in the target environment.
 - [ ] **`FEATURE_VTPASS_AUTO_FULFILL=false`** confirmed unless explicitly approved
 - [ ] Data plan variation codes mapped to live VTPass catalog
 - [ ] Electricity disco service IDs validated
-- [ ] Manual fulfill tested on staging with live/sandbox creds
-- [ ] Fulfill endpoint access restricted (not public open internet)
+- [ ] Manual fulfill tested on staging with live/sandbox creds via **ops console** (`/ops`)
+- [x] Public fulfill endpoint removed — ops-only with `X-Operator-Key` (PAY-014)
 
 ---
 
@@ -59,10 +59,14 @@ Check `[x]` only when verified in the target environment.
 
 - [ ] `APP_DEBUG=false`
 - [ ] `APP_ENV=production`
+- [ ] `FRONTEND_URL=https://paylity.ng` (API CORS)
 - [ ] `NEXT_PUBLIC_API_BASE_URL` points to production API
-- [ ] CORS allows production web origin only
+- [ ] CORS allows production web origin only (`FRONTEND_URL`)
 - [ ] **Support WhatsApp** configured (`NEXT_PUBLIC_WHATSAPP_URL`)
-- [ ] Placeholder WhatsApp number replaced with real support line
+- [ ] Placeholder WhatsApp number not shown when URL unset
+- [ ] `OPERATOR_ACCESS_KEY` set for ops console
+- [ ] `php artisan paylity:preflight` passes with no FAIL items
+- [ ] Privacy and Terms pages reviewed (`/privacy`, `/terms`)
 - [ ] `APP_VERSION` / `APP_BUILD` match release tag
 
 ---

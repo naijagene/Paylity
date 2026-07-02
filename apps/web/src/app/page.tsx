@@ -3,11 +3,10 @@ import { PageContainer } from "@/components/PageContainer";
 import { AppFooter } from "@/components/system/AppFooter";
 import { ServiceCard } from "@/components/ServiceCard";
 import { TrustBadge } from "@/components/TrustBadge";
-
-const WHATSAPP_URL =
-  "https://wa.me/2348000000000?text=Hi%20PAYLITY%20NG%2C%20I%20need%20help";
+import { getWhatsAppSupportUrl } from "@/lib/support/whatsapp";
 
 export default function Home() {
+  const whatsappUrl = getWhatsAppSupportUrl();
   return (
     <main className="flex flex-1 flex-col">
       <PageContainer>
@@ -118,17 +117,18 @@ export default function Home() {
         </section>
 
         {/* WhatsApp CTA */}
-        <section className="mb-8 text-center">
-          <p className="mb-4 text-sm text-foreground/60">
-            Need help? Chat with us on WhatsApp
-          </p>
-          <Button
-            href={WHATSAPP_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            variant="secondary"
-            className="w-full sm:w-auto"
-          >
+        {whatsappUrl ? (
+          <section className="mb-8 text-center">
+            <p className="mb-4 text-sm text-foreground/60">
+              Need help? Chat with us on WhatsApp
+            </p>
+            <Button
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="secondary"
+              className="w-full sm:w-auto"
+            >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -141,6 +141,7 @@ export default function Home() {
             Chat on WhatsApp
           </Button>
         </section>
+        ) : null}
       </PageContainer>
 
       <AppFooter />
