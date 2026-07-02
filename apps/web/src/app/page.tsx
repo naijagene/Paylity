@@ -1,5 +1,6 @@
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { AppFooter } from "@/components/system/AppFooter";
 import { ServiceCard } from "@/components/ServiceCard";
 import { TrustBadge } from "@/components/TrustBadge";
 
@@ -140,12 +141,9 @@ export default function Home() {
             Chat on WhatsApp
           </Button>
         </section>
-
-        {/* Footer */}
-        <footer className="border-t border-dark/5 py-6 text-center text-xs text-foreground/40">
-          © {new Date().getFullYear()} PAYLITY NG. Fast Utility Payments.
-        </footer>
       </PageContainer>
+
+      <AppFooter />
     </main>
   );
 }

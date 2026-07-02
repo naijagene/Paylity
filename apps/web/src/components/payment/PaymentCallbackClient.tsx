@@ -4,15 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { ErrorStatePage } from "@/components/transaction/ErrorStatePage";
+import { PaymentSuccessCard } from "@/components/transaction/PaymentSuccessCard";
+import { PaymentVerificationSkeleton } from "@/components/transaction/TransactionPageSkeleton";
+import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
+import { StatusBadge } from "@/components/transaction/StatusBadge";
+import { WhatsAppSupportCard } from "@/components/transaction/WhatsAppSupportCard";
 import { verifyPaystackPayment } from "@/lib/api/payments";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
-import { formatNaira } from "@/lib/checkout/formatNaira";
-
-const PRODUCT_LABELS: Record<string, string> = {
-  airtime: "Airtime",
-  data: "Data",
-  electricity: "Electricity",
-};
+import {
+  getPaymentBadgeLabel,
+  getPaymentBadgeVariant,
+  getTimelinePhase,
+  PRODUCT_LABELS,
+} from "@/lib/transaction/display";
 
 type VerificationState =
   | { kind: "loading" }
@@ -29,6 +34,7 @@ type VerificationState =
       convenienceFee: number;
       gatewayFee: number;
       payableAmount: number;
+      customerPhone?: string;
       failureReason?: string;
     };
 
@@ -65,39 +71,6 @@ function mapVerificationError(error: unknown): VerificationState {
     kind: "error",
     message: "Something went wrong while confirming your payment.",
   };
-}
-
-function StatusIcon({ status }: { status: string }) {
-  if (status === "payment_success") {
-    return (
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-success/10">
-        <span className="text-3xl text-success">✓</span>
-      </div>
-    );
-  }
-
-  if (status === "payment_failed") {
-    return (
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-error/10">
-        <span className="text-3xl text-error">✕</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
-    </div>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3 text-sm">
-      <span className="text-foreground/60">{label}</span>
-      <span className="font-medium text-foreground">{value}</span>
-    </div>
-  );
 }
 
 export function PaymentCallbackClient() {
@@ -150,78 +123,52 @@ export function PaymentCallbackClient() {
 
   if (state.kind === "missing_reference") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <StatusIcon status="payment_failed" />
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Payment reference missing
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          We could not find a payment reference in the callback URL. Please try
-          again from checkout.
-        </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button href="/checkout?product=airtime">Try Again</Button>
-          <Button href="/" variant="outline">
-            Back Home
-          </Button>
-        </div>
+      <PageContainer>
+        <ErrorStatePage
+          title="Payment reference missing"
+          message="We could not find a payment reference in the callback URL. Please return to checkout and try again."
+          icon="warning"
+          onPrimaryClick={() => {
+            window.location.href = "/checkout?product=airtime";
+          }}
+          primaryLabel="Try Again"
+        />
       </PageContainer>
     );
   }
 
   if (state.kind === "loading") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <StatusIcon status="payment_pending" />
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Confirming your payment...
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          Please wait while we verify your payment with Paystack.
-        </p>
-        {reference ? (
-          <p className="mt-6 font-mono text-xs text-foreground/50">
-            Ref: {reference}
-          </p>
-        ) : null}
+      <PageContainer>
+        <PaymentVerificationSkeleton />
       </PageContainer>
     );
   }
 
   if (state.kind === "offline") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <StatusIcon status="payment_pending" />
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Verification unavailable
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          PAYLITY API is currently unavailable. Please start the backend server
-          and try again.
-        </p>
-        <Button className="mt-8" onClick={() => void checkAgain()}>
-          Check Again
-        </Button>
+      <PageContainer>
+        <ErrorStatePage
+          title="Network unavailable"
+          message="PAYLITY could not reach the server to verify your payment. Check your connection and try again."
+          icon="offline"
+          onPrimaryClick={() => void checkAgain()}
+          primaryLabel="Retry"
+        />
       </PageContainer>
     );
   }
 
   if (state.kind === "error") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <StatusIcon status="payment_failed" />
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Verification failed
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          {state.message}
-        </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button onClick={() => void checkAgain()}>Check Again</Button>
-          <Button href="/" variant="outline">
-            Back Home
-          </Button>
-        </div>
+      <PageContainer>
+        <ErrorStatePage
+          title="Payment could not be verified"
+          message={state.message}
+          icon="error"
+          onPrimaryClick={() => void checkAgain()}
+          primaryLabel="Retry"
+        />
       </PageContainer>
     );
   }
@@ -231,93 +178,89 @@ export function PaymentCallbackClient() {
 
   if (state.status === "payment_success") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16">
-        <div className="w-full max-w-md text-center">
-          <StatusIcon status={state.status} />
-          <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-3xl">
-            Payment Successful
-          </h1>
-          <p className="mt-3 text-sm text-foreground/60">
-            {state.paymentStatus}
-          </p>
-
-          <div className="mt-8 divide-y divide-dark/5 rounded-3xl border border-dark/5 bg-white px-5 text-left">
-            <SummaryRow label="Reference" value={state.reference} />
-            <SummaryRow label="Product" value={productLabel} />
-            <SummaryRow
-              label="Product Amount"
-              value={formatNaira(state.productAmount)}
-            />
-            <SummaryRow
-              label="Convenience Fee"
-              value={formatNaira(state.convenienceFee)}
-            />
-            <SummaryRow
-              label="Gateway Charge"
-              value={formatNaira(state.gatewayFee)}
-            />
-            <SummaryRow
-              label="Total Paid"
-              value={formatNaira(state.payableAmount)}
-            />
-            <SummaryRow label="Status" value="Payment successful" />
-            <SummaryRow label="Fulfillment" value="Awaiting delivery" />
-          </div>
-
-          <div className="mt-8 space-y-3">
-            <Button
-              href={`/transaction/${encodeURIComponent(state.reference)}`}
-              className="w-full"
-            >
-              View Transaction Status
-            </Button>
-            <Button href="/" variant="outline" className="w-full">
-              Back Home
-            </Button>
-          </div>
-        </div>
+      <PageContainer className="py-8 sm:py-12">
+        <PaymentSuccessCard
+          reference={state.reference}
+          productLabel={productLabel}
+          customerPhone={state.customerPhone ?? "—"}
+          productAmount={state.productAmount}
+          convenienceFee={state.convenienceFee}
+          gatewayFee={state.gatewayFee}
+          payableAmount={state.payableAmount}
+          transactionStatus={state.status}
+        />
       </PageContainer>
     );
   }
 
   if (state.status === "payment_failed") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <StatusIcon status={state.status} />
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Payment Failed
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          {state.failureReason ?? state.paymentStatus}
-        </p>
-        <p className="mt-4 font-mono text-xs text-foreground/50">
-          Ref: {state.reference}
-        </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button href="/checkout?product=airtime">Try Again</Button>
-          <Button href="/" variant="outline">
-            Back Home
-          </Button>
+      <PageContainer className="py-8 sm:py-12">
+        <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6">
+          <section className="rounded-3xl border border-error/15 bg-error/5 p-6 text-center">
+            <div
+              className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error text-white"
+              aria-hidden="true"
+            >
+              ✕
+            </div>
+            <h1 className="text-2xl font-black text-foreground">Payment Failed</h1>
+            <p className="mt-3 text-sm text-foreground/60">
+              {state.failureReason ?? state.paymentStatus}
+            </p>
+            <p className="mt-4 font-mono text-xs text-foreground/50">
+              {state.reference}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <StatusBadge
+                label={getPaymentBadgeLabel(state.status)}
+                variant={getPaymentBadgeVariant(state.status)}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-dark/5 bg-white p-5">
+            <TransactionTimeline phase={getTimelinePhase(state.status)} />
+          </section>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button href="/checkout?product=airtime" className="flex-1">
+              Try Again
+            </Button>
+            <Button href="/" variant="outline" className="flex-1">
+              Back Home
+            </Button>
+          </div>
+
+          <WhatsAppSupportCard reference={state.reference} />
         </div>
       </PageContainer>
     );
   }
 
   return (
-    <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-      <StatusIcon status={state.status} />
-      <h1 className="text-2xl font-black tracking-tight text-foreground">
-        Payment Pending
-      </h1>
-      <p className="mt-3 max-w-md text-sm text-foreground/60">
-        Your payment is still being confirmed.
-      </p>
-      <p className="mt-4 font-mono text-xs text-foreground/50">
-        Ref: {state.reference}
-      </p>
-      <Button className="mt-8" onClick={() => void checkAgain()}>
-        Check Again
-      </Button>
+    <PageContainer className="py-8 sm:py-12">
+      <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6 text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <div
+            className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary"
+            aria-hidden="true"
+          />
+        </div>
+        <h1 className="text-2xl font-black text-foreground">Payment Pending</h1>
+        <p className="text-sm text-foreground/60">
+          Your payment is still being confirmed.
+        </p>
+        <p className="font-mono text-xs text-foreground/50">{state.reference}</p>
+        <StatusBadge
+          label={getPaymentBadgeLabel(state.status)}
+          variant={getPaymentBadgeVariant(state.status)}
+        />
+        <section className="rounded-3xl border border-dark/5 bg-white p-5 text-left">
+          <TransactionTimeline phase={getTimelinePhase(state.status)} />
+        </section>
+        <Button onClick={() => void checkAgain()}>Check Again</Button>
+      </div>
     </PageContainer>
   );
 }

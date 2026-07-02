@@ -15,6 +15,10 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    'version' => env('APP_VERSION', '1.0.0-beta'),
+
+    'build' => env('APP_BUILD', '2026.07.03'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

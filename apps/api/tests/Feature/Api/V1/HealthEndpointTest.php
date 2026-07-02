@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Api\V1;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class HealthEndpointTest extends TestCase
@@ -16,10 +15,19 @@ class HealthEndpointTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'message' => 'PAYLITY API is healthy.',
+            ])
+            ->assertJsonStructure([
                 'data' => [
-                    'service' => 'PAYLITY NG API',
-                    'status' => 'ok',
+                    'status',
+                    'application',
+                    'version',
+                    'environment',
+                    'build',
+                    'current_time',
                 ],
-            ]);
+            ])
+            ->assertJsonPath('data.status', 'ok')
+            ->assertJsonPath('data.version', '1.0.0-beta')
+            ->assertJsonPath('data.build', '2026.07.03');
     }
 }

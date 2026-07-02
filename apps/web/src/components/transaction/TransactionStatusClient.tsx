@@ -1,20 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { ErrorStatePage } from "@/components/transaction/ErrorStatePage";
+import { StatusBadge } from "@/components/transaction/StatusBadge";
+import { TransactionPageSkeleton } from "@/components/transaction/TransactionPageSkeleton";
+import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
+import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
+import { WhatsAppSupportCard } from "@/components/transaction/WhatsAppSupportCard";
+import { SystemIdentity } from "@/components/system/SystemIdentity";
 import { getTransaction, type TransactionDetail } from "@/lib/api/transactions";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
-import { formatNaira } from "@/lib/checkout/formatNaira";
-
-const PRODUCT_LABELS: Record<string, string> = {
-  airtime: "Airtime",
-  data: "Data",
-  electricity: "Electricity",
-};
+import {
+  getFulfillmentBadgeLabel,
+  getFulfillmentBadgeVariant,
+  getPaymentBadgeLabel,
+  getPaymentBadgeVariant,
+  getTimelinePhase,
+  PRODUCT_LABELS,
+  shouldPollTransactionStatus,
+} from "@/lib/transaction/display";
 
 const REFERENCE_PATTERN = /^PYL-\d{8}-[A-Z0-9]{6}$/;
+const MAX_POLL_ATTEMPTS = 24;
+const POLL_INTERVAL_MS = 5000;
 
 type PageState =
   | { kind: "loading" }
@@ -24,47 +35,6 @@ type PageState =
   | { kind: "error"; message: string }
   | { kind: "loaded"; transaction: TransactionDetail };
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3 text-sm">
-      <span className="text-foreground/60">{label}</span>
-      <span className="text-right font-medium text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function paymentStatusLabel(status: string): string {
-  switch (status) {
-    case "payment_success":
-      return "Payment successful";
-    case "payment_failed":
-      return "Payment failed";
-    case "payment_pending":
-      return "Payment pending";
-    case "created":
-      return "Transaction created";
-    case "failed":
-      return "Transaction failed";
-    default:
-      return status.replaceAll("_", " ");
-  }
-}
-
-function fulfillmentStatusLabel(status: string): string {
-  switch (status) {
-    case "fulfilled":
-      return "Delivered";
-    case "fulfillment_pending":
-      return "Delivery in progress";
-    case "payment_success":
-      return "Awaiting delivery";
-    case "failed":
-      return "Delivery failed";
-    default:
-      return "Not started";
-  }
-}
-
 export function TransactionStatusClient() {
   const params = useParams<{ reference: string }>();
   const reference = decodeURIComponent(params.reference ?? "");
@@ -72,40 +42,47 @@ export function TransactionStatusClient() {
   const [state, setState] = useState<PageState>(() =>
     isValidReference ? { kind: "loading" } : { kind: "invalid_reference" },
   );
+  const [isCheckingDelivery, setIsCheckingDelivery] = useState(false);
+  const pollAttemptsRef = useRef(0);
 
-  const loadTransaction = useCallback(async () => {
-    if (!reference || !REFERENCE_PATTERN.test(reference)) {
-      setState({ kind: "invalid_reference" });
-      return;
-    }
-
-    setState({ kind: "loading" });
-
-    try {
-      const transaction = await getTransaction(reference);
-      setState({ kind: "loaded", transaction });
-    } catch (error) {
-      if (error instanceof ApiOfflineError) {
-        setState({ kind: "offline" });
+  const loadTransaction = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!reference || !REFERENCE_PATTERN.test(reference)) {
+        setState({ kind: "invalid_reference" });
         return;
       }
 
-      if (error instanceof ApiError && error.status === 404) {
-        setState({ kind: "not_found" });
-        return;
+      if (!options?.silent) {
+        setState({ kind: "loading" });
       }
 
-      if (error instanceof ApiError) {
-        setState({ kind: "error", message: error.message });
-        return;
-      }
+      try {
+        const transaction = await getTransaction(reference);
+        setState({ kind: "loaded", transaction });
+      } catch (error) {
+        if (error instanceof ApiOfflineError) {
+          setState({ kind: "offline" });
+          return;
+        }
 
-      setState({
-        kind: "error",
-        message: "Something went wrong while loading this transaction.",
-      });
-    }
-  }, [reference]);
+        if (error instanceof ApiError && error.status === 404) {
+          setState({ kind: "not_found" });
+          return;
+        }
+
+        if (error instanceof ApiError) {
+          setState({ kind: "error", message: error.message });
+          return;
+        }
+
+        setState({
+          kind: "error",
+          message: "Something went wrong while loading this transaction.",
+        });
+      }
+    },
+    [reference],
+  );
 
   useEffect(() => {
     if (!isValidReference) {
@@ -151,83 +128,114 @@ export function TransactionStatusClient() {
     };
   }, [isValidReference, reference]);
 
+  const transactionStatus =
+    state.kind === "loaded" ? state.transaction.status : null;
+
+  useEffect(() => {
+    if (!isValidReference || !transactionStatus) {
+      return;
+    }
+
+    if (!shouldPollTransactionStatus(transactionStatus)) {
+      pollAttemptsRef.current = 0;
+      return;
+    }
+
+    pollAttemptsRef.current = 0;
+    let cancelled = false;
+
+    const runPoll = () => {
+      if (cancelled || pollAttemptsRef.current >= MAX_POLL_ATTEMPTS) {
+        return;
+      }
+
+      pollAttemptsRef.current += 1;
+      setIsCheckingDelivery(true);
+
+      getTransaction(reference)
+        .then((transaction) => {
+          if (!cancelled) {
+            setState({ kind: "loaded", transaction });
+          }
+        })
+        .catch(() => {
+          // Keep last known state during polling errors.
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsCheckingDelivery(false);
+          }
+        });
+    };
+
+    const intervalId = window.setInterval(runPoll, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isValidReference, reference, transactionStatus]);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (state.kind === "invalid_reference") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Invalid transaction reference
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          The reference in this URL does not look valid. Check the link and try
-          again.
-        </p>
-        <Button href="/" className="mt-8">
-          Back Home
-        </Button>
+      <PageContainer>
+        <ErrorStatePage
+          title="Invalid transaction reference"
+          message="The reference in this URL does not look valid. Check the link and try again."
+          icon="warning"
+        />
       </PageContainer>
     );
   }
 
   if (state.kind === "loading") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
-        <p className="mt-4 text-sm text-foreground/60">
-          Loading transaction status...
-        </p>
+      <PageContainer>
+        <TransactionPageSkeleton />
       </PageContainer>
     );
   }
 
   if (state.kind === "offline") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Status unavailable
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          PAYLITY API is currently unavailable. Please start the backend server
-          and try again.
-        </p>
-        <Button className="mt-8" onClick={() => void loadTransaction()}>
-          Try Again
-        </Button>
+      <PageContainer>
+        <ErrorStatePage
+          title="Network unavailable"
+          message="PAYLITY could not load your transaction details. Check your connection and try again."
+          icon="offline"
+          onPrimaryClick={() => void loadTransaction()}
+          primaryLabel="Retry"
+        />
       </PageContainer>
     );
   }
 
   if (state.kind === "not_found") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Transaction not found
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          We could not find a transaction with reference{" "}
-          <span className="font-mono">{reference}</span>.
-        </p>
-        <Button href="/" className="mt-8">
-          Back Home
-        </Button>
+      <PageContainer>
+        <ErrorStatePage
+          title="Transaction not found"
+          message={`We could not find a transaction with reference ${reference}. It may have expired or the link is incorrect.`}
+          icon="warning"
+        />
       </PageContainer>
     );
   }
 
   if (state.kind === "error") {
     return (
-      <PageContainer className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <h1 className="text-2xl font-black tracking-tight text-foreground">
-          Unable to load transaction
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-foreground/60">
-          {state.message}
-        </p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button onClick={() => void loadTransaction()}>Try Again</Button>
-          <Button href="/" variant="outline">
-            Back Home
-          </Button>
-        </div>
+      <PageContainer>
+        <ErrorStatePage
+          title="Unable to load transaction"
+          message={state.message}
+          icon="error"
+          onPrimaryClick={() => void loadTransaction()}
+          primaryLabel="Retry"
+        />
       </PageContainer>
     );
   }
@@ -237,73 +245,100 @@ export function TransactionStatusClient() {
     PRODUCT_LABELS[transaction.product_type] ?? transaction.product_type;
 
   return (
-    <PageContainer className="py-10">
-      <div className="mx-auto w-full max-w-md">
-        <div className="mb-8 text-center">
+    <PageContainer className="py-8 sm:py-12">
+      <div className="animate-fade-in mx-auto w-full max-w-2xl space-y-6">
+        <header className="text-center sm:text-left">
           <p className="text-sm font-semibold uppercase tracking-wide text-primary">
-            Transaction Status
+            Transaction Details
           </p>
-          <h1 className="mt-2 text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground sm:text-4xl">
             {transaction.reference}
           </h1>
+          <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
+            <StatusBadge
+              label={getPaymentBadgeLabel(transaction.status)}
+              variant={getPaymentBadgeVariant(transaction.status)}
+            />
+            <StatusBadge
+              label={getFulfillmentBadgeLabel(transaction.status)}
+              variant={getFulfillmentBadgeVariant(transaction.status)}
+            />
+          </div>
+        </header>
+
+        {isCheckingDelivery &&
+        shouldPollTransactionStatus(transaction.status) ? (
+          <div
+            className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground/70"
+            role="status"
+            aria-live="polite"
+          >
+            <div
+              className="h-4 w-4 animate-spin rounded-full border-2 border-primary/20 border-t-primary"
+              aria-hidden="true"
+            />
+            Checking delivery status...
+          </div>
+        ) : null}
+
+        <section
+          className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm"
+          aria-label="Reference details"
+        >
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Reference
+          </h2>
+          <p className="mt-2 font-mono text-lg font-bold text-foreground">
+            {transaction.reference}
+          </p>
+          <p className="mt-2 text-sm text-foreground/60">
+            {productLabel} · {transaction.customer_phone}
+          </p>
+        </section>
+
+        <TransactionReceiptCard
+          reference={transaction.reference}
+          productLabel={productLabel}
+          customerPhone={transaction.customer_phone}
+          productAmount={transaction.product_amount}
+          convenienceFee={transaction.convenience_fee}
+          gatewayFee={transaction.gateway_fee}
+          payableAmount={transaction.payable_amount}
+          transactionStatus={transaction.status}
+          failureReason={transaction.failure_reason}
+          printable
+        />
+
+        <section
+          className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm"
+          aria-label="Delivery progress"
+        >
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Status Timeline
+          </h2>
+          <TransactionTimeline phase={getTimelinePhase(transaction.status)} />
+        </section>
+
+        <div className="space-y-3 print:hidden">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handlePrint}
+            aria-label="Download receipt using print dialog"
+          >
+            Download Receipt
+          </Button>
+          <Button href="/" className="w-full">
+            Back Home
+          </Button>
         </div>
 
-        <div className="divide-y divide-dark/5 rounded-3xl border border-dark/5 bg-white px-5">
-          <SummaryRow label="Product" value={productLabel} />
-          <SummaryRow label="Phone" value={transaction.customer_phone} />
-          <SummaryRow
-            label="Product Amount"
-            value={formatNaira(transaction.product_amount)}
-          />
-          <SummaryRow
-            label="Convenience Fee"
-            value={formatNaira(transaction.convenience_fee)}
-          />
-          <SummaryRow
-            label="Gateway Fee"
-            value={formatNaira(transaction.gateway_fee)}
-          />
-          <SummaryRow
-            label="Total Paid"
-            value={formatNaira(transaction.payable_amount)}
-          />
-          <SummaryRow
-            label="Payment Status"
-            value={paymentStatusLabel(transaction.status)}
-          />
-          <SummaryRow
-            label="Fulfillment Status"
-            value={fulfillmentStatusLabel(transaction.status)}
-          />
-          {transaction.payment_provider ? (
-            <SummaryRow
-              label="Payment Provider"
-              value={transaction.payment_provider}
-            />
-          ) : null}
-          {transaction.fulfillment_provider ? (
-            <SummaryRow
-              label="Fulfillment Provider"
-              value={transaction.fulfillment_provider}
-            />
-          ) : null}
-          {transaction.fulfillment_reference ? (
-            <SummaryRow
-              label="Fulfillment Reference"
-              value={transaction.fulfillment_reference}
-            />
-          ) : null}
-          {transaction.failure_reason ? (
-            <SummaryRow
-              label="Failure Reason"
-              value={transaction.failure_reason}
-            />
-          ) : null}
+        <div className="print:hidden">
+          <WhatsAppSupportCard reference={transaction.reference} />
         </div>
 
-        <Button href="/" className="mt-8 w-full">
-          Back Home
-        </Button>
+        <SystemIdentity className="print:hidden" />
       </div>
     </PageContainer>
   );
