@@ -264,9 +264,17 @@ export function PaymentCallbackClient() {
             <SummaryRow label="Fulfillment" value="Awaiting delivery" />
           </div>
 
-          <Button href="/" className="mt-8 w-full">
-            Back Home
-          </Button>
+          <div className="mt-8 space-y-3">
+            <Button
+              href={`/transaction/${encodeURIComponent(state.reference)}`}
+              className="w-full"
+            >
+              View Transaction Status
+            </Button>
+            <Button href="/" variant="outline" className="w-full">
+              Back Home
+            </Button>
+          </div>
         </div>
       </PageContainer>
     );

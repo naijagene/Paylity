@@ -151,6 +151,7 @@ class TransactionService
             'payment_provider' => $transaction->payment_provider,
             'payment_reference' => $transaction->payment_reference,
             'payment_authorization_url' => $transaction->payment_authorization_url,
+            'fulfillment_provider' => $transaction->fulfillment_provider,
             'fulfillment_reference' => $transaction->fulfillment_reference,
             'failure_reason' => $transaction->failure_reason,
             'verified_phone' => $transaction->verified_phone,
