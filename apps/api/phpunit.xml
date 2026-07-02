@@ -33,5 +33,7 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="FEATURE_PAYSTACK" value="false"/>
+        <env name="FEATURE_VTPASS" value="false"/>
+        <env name="FEATURE_VTPASS_AUTO_FULFILL" value="false"/>
     </php>
 </phpunit>

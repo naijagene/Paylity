@@ -43,4 +43,15 @@ return [
         'callback_url' => env('PAYSTACK_CALLBACK_URL', 'http://localhost:3000/payment/callback'),
     ],
 
+    'vtpass' => [
+        'enabled' => env('FEATURE_VTPASS', false),
+        'auto_fulfill' => env('FEATURE_VTPASS_AUTO_FULFILL', false),
+        'base_url' => env('VTPASS_BASE_URL', 'https://sandbox.vtpass.com'),
+        'username' => env('VTPASS_USERNAME'),
+        'password' => env('VTPASS_PASSWORD'),
+        'api_key' => env('VTPASS_API_KEY'),
+        'public_key' => env('VTPASS_PUBLIC_KEY'),
+        'secret_key' => env('VTPASS_SECRET_KEY'),
+    ],
+
 ];

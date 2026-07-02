@@ -261,7 +261,7 @@ export function PaymentCallbackClient() {
               value={formatNaira(state.payableAmount)}
             />
             <SummaryRow label="Status" value="Payment successful" />
-            <SummaryRow label="Fulfillment" value="Coming next" />
+            <SummaryRow label="Fulfillment" value="Awaiting delivery" />
           </div>
 
           <Button href="/" className="mt-8 w-full">

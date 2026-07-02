@@ -47,7 +47,7 @@ class PaystackVerificationTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', TransactionStatus::PAYMENT_SUCCESS)
             ->assertJsonPath('data.payment_status', 'Payment successful.')
-            ->assertJsonPath('data.fulfillment_status', 'not_started')
+            ->assertJsonPath('data.fulfillment_status', 'awaiting_delivery')
             ->assertJsonPath('data.verified_at', '2026-07-02T22:00:00.000000Z');
 
         $this->assertDatabaseHas('transactions', [

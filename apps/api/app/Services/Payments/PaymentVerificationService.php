@@ -6,11 +6,16 @@ use App\Enums\TransactionStatus;
 use App\Exceptions\PaymentVerificationException;
 use App\Models\Transaction;
 use App\Exceptions\PaystackException;
+use App\Services\Fulfillment\FulfillmentService;
+use App\Services\Fulfillment\VTPassService;
+use Illuminate\Support\Facades\Log;
 
 class PaymentVerificationService
 {
     public function __construct(
         private readonly PaystackService $paystackService,
+        private readonly VTPassService $vtpassService,
+        private readonly FulfillmentService $fulfillmentService,
     ) {
     }
 
@@ -57,6 +62,7 @@ class PaymentVerificationService
         $this->assertCurrencyMatches($verification);
 
         $transaction = $this->applyVerificationResult($transaction, $verification);
+        $transaction = $this->maybeAutoFulfill($transaction);
 
         return [
             'transaction' => $transaction->fresh(),
@@ -82,7 +88,7 @@ class PaymentVerificationService
             'payable_amount' => $transaction->payable_amount,
             'currency' => $transaction->currency,
             'verified_at' => $this->verifiedAt($transaction, $verification),
-            'fulfillment_status' => 'not_started',
+            'fulfillment_status' => $this->fulfillmentStatus($transaction),
         ];
 
         if ($transaction->failure_reason) {
@@ -182,6 +188,27 @@ class PaymentVerificationService
         return $transaction;
     }
 
+    private function maybeAutoFulfill(Transaction $transaction): Transaction
+    {
+        if (
+            $transaction->status !== TransactionStatus::PAYMENT_SUCCESS
+            || ! $this->vtpassService->isAutoFulfillEnabled()
+        ) {
+            return $transaction;
+        }
+
+        try {
+            return $this->fulfillmentService->fulfill($transaction->fresh());
+        } catch (\Throwable $exception) {
+            Log::warning('Auto-fulfillment failed after payment verification.', [
+                'reference' => $transaction->reference,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $transaction->fresh();
+        }
+    }
+
     private function paymentStatusLabel(Transaction $transaction): string
     {
         return match ($transaction->status) {
@@ -192,12 +219,26 @@ class PaymentVerificationService
         };
     }
 
+    private function fulfillmentStatus(Transaction $transaction): string
+    {
+        return match ($transaction->status) {
+            TransactionStatus::FULFILLED => 'fulfilled',
+            TransactionStatus::FULFILLMENT_PENDING => 'pending',
+            TransactionStatus::FAILED => 'failed',
+            TransactionStatus::PAYMENT_SUCCESS => 'awaiting_delivery',
+            default => 'not_started',
+        };
+    }
+
     /**
      * @param  array<string, mixed>|null  $verification
      */
     private function verifiedAt(Transaction $transaction, ?array $verification): ?string
     {
-        if ($transaction->status !== TransactionStatus::PAYMENT_SUCCESS) {
+        if ($transaction->status !== TransactionStatus::PAYMENT_SUCCESS
+            && $transaction->status !== TransactionStatus::FULFILLED
+            && $transaction->status !== TransactionStatus::FULFILLMENT_PENDING
+        ) {
             return null;
         }
 
