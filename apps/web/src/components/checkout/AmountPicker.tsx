@@ -4,47 +4,48 @@ import { GuestLimitBanner } from "./GuestLimitBanner";
 
 type AmountPickerProps = {
   amounts: readonly number[];
-  selectedAmount: number;
-  customAmount: string;
-  onSelectAmount: (amount: number) => void;
-  onCustomAmountChange: (value: string) => void;
+  selectedProductAmount: number;
+  customProductAmount: string;
+  onSelectProductAmount: (productAmount: number) => void;
+  onCustomProductAmountChange: (value: string) => void;
   error?: string;
   isOverGuestLimit: boolean;
-  onReduceAmount?: () => void;
+  onReduceProductAmount?: () => void;
 };
 
 export function AmountPicker({
   amounts,
-  selectedAmount,
-  customAmount,
-  onSelectAmount,
-  onCustomAmountChange,
+  selectedProductAmount,
+  customProductAmount,
+  onSelectProductAmount,
+  onCustomProductAmountChange,
   error,
   isOverGuestLimit,
-  onReduceAmount,
+  onReduceProductAmount,
 }: AmountPickerProps) {
   return (
     <FormField
-      label="Amount"
-      htmlFor="custom-amount"
+      label="Product amount"
+      htmlFor="custom-product-amount"
       error={error}
-      hint="Guest payments up to ₦10,000"
+      hint="Guest product amount up to ₦10,000"
     >
       <div className="grid grid-cols-3 gap-2">
-        {amounts.map((amount) => {
-          const isSelected = selectedAmount === amount && !customAmount;
+        {amounts.map((productAmount) => {
+          const isSelected =
+            selectedProductAmount === productAmount && !customProductAmount;
           return (
             <button
-              key={amount}
+              key={productAmount}
               type="button"
-              onClick={() => onSelectAmount(amount)}
+              onClick={() => onSelectProductAmount(productAmount)}
               className={`min-h-11 rounded-2xl border px-3 py-3 text-sm font-semibold transition-colors ${
                 isSelected
                   ? "border-primary bg-primary/10 text-dark"
                   : "border-dark/10 bg-white text-foreground hover:border-primary/40"
               }`}
             >
-              {formatNaira(amount)}
+              {formatNaira(productAmount)}
             </button>
           );
         })}
@@ -52,34 +53,20 @@ export function AmountPicker({
 
       <div className="mt-3">
         <TextInput
-          id="custom-amount"
-          value={customAmount}
-          onChange={onCustomAmountChange}
+          id="custom-product-amount"
+          value={customProductAmount}
+          onChange={onCustomProductAmountChange}
           inputMode="numeric"
-          placeholder="Enter custom amount"
+          placeholder="Enter custom product amount"
         />
       </div>
 
       {isOverGuestLimit ? (
         <div className="mt-3">
-          <GuestLimitBanner onReduceAmount={onReduceAmount} />
+          <GuestLimitBanner onReduceProductAmount={onReduceProductAmount} />
         </div>
       ) : null}
     </FormField>
-  );
-}
-
-type ReadOnlyAmountProps = {
-  amount: number;
-  label?: string;
-};
-
-export function ReadOnlyAmount({ amount, label = "Amount" }: ReadOnlyAmountProps) {
-  return (
-    <div className="mb-4 rounded-2xl border border-dark/10 bg-dark/[0.02] px-4 py-3.5">
-      <p className="text-sm font-semibold text-foreground/60">{label}</p>
-      <p className="mt-1 text-lg font-bold text-foreground">{formatNaira(amount)}</p>
-    </div>
   );
 }
 

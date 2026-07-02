@@ -22,14 +22,17 @@ export type CheckoutState = {
   product: ProductType;
   step: CheckoutStep;
   fields: CheckoutFields;
-  amount: number;
-  fee: number;
-  total: number;
-  customAmount: string;
+  productAmount: number;
+  convenienceFee: number;
+  gatewayFee: number;
+  payableAmount: number;
+  customProductAmount: string;
   transactionRef: string | null;
 };
 
-export type FieldErrors = Partial<Record<keyof CheckoutFields | "amount", string>>;
+export type FieldErrors = Partial<
+  Record<keyof CheckoutFields | "productAmount", string>
+>;
 
 export type DataPlan = {
   id: string;
@@ -46,5 +49,19 @@ export type ProductSchema = {
   id: ProductType;
   label: string;
   amountMode: AmountMode;
-  guestMaxAmount: number;
+  guestMaxProductAmount: number;
+};
+
+export type ReceiptPreview = {
+  brand: string;
+  transactionReference: string | null;
+  product: string;
+  customerPhone: string;
+  productAmount: number;
+  convenienceFee: number;
+  gatewayFee: number;
+  gatewayFeeLabel: string;
+  totalPaid: number;
+  status: string;
+  timestamp: string;
 };

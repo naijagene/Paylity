@@ -2,26 +2,26 @@ import { Button } from "@/components/Button";
 import { WHATSAPP_URL } from "@/lib/checkout/constants";
 
 type GuestLimitBannerProps = {
-  onReduceAmount?: () => void;
+  onReduceProductAmount?: () => void;
 };
 
-export function GuestLimitBanner({ onReduceAmount }: GuestLimitBannerProps) {
+export function GuestLimitBanner({ onReduceProductAmount }: GuestLimitBannerProps) {
   return (
     <div className="rounded-2xl border border-error/20 bg-error/5 p-4">
       <p className="text-sm font-bold text-foreground">Guest limit reached</p>
       <p className="mt-2 text-sm text-foreground/70">
-        Payments above ₦10,000 require phone verification. This feature is coming
-        soon.
+        Guest checkout supports purchases up to ₦10,000. Please verify your phone
+        number via OTP to continue.
       </p>
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-        {onReduceAmount ? (
+        {onReduceProductAmount ? (
           <Button
             type="button"
             variant="outline"
             className="w-full sm:w-auto"
-            onClick={onReduceAmount}
+            onClick={onReduceProductAmount}
           >
-            Reduce amount
+            Reduce product amount
           </Button>
         ) : null}
         <Button

@@ -11,9 +11,9 @@ import { FormField, TextInput } from "./ValidationMessage";
 type CheckoutFormProps = {
   product: ProductType;
   fields: CheckoutFields;
-  selectedAmount: number;
-  customAmount: string;
-  amount: number;
+  selectedProductAmount: number;
+  customProductAmount: string;
+  productAmount: number;
   errors: FieldErrors;
   isOverGuestLimit: boolean;
   isVerifyingMeter: boolean;
@@ -21,25 +21,25 @@ type CheckoutFormProps = {
     key: K,
     value: CheckoutFields[K],
   ) => void;
-  onSelectAmount: (amount: number) => void;
-  onCustomAmountChange: (value: string) => void;
+  onSelectProductAmount: (productAmount: number) => void;
+  onCustomProductAmountChange: (value: string) => void;
   onVerifyMeter: () => void;
-  onReduceAmount: () => void;
+  onReduceProductAmount: () => void;
 };
 
 export function CheckoutForm({
   product,
   fields,
-  selectedAmount,
-  customAmount,
+  selectedProductAmount,
+  customProductAmount,
   errors,
   isOverGuestLimit,
   isVerifyingMeter,
   onFieldChange,
-  onSelectAmount,
-  onCustomAmountChange,
+  onSelectProductAmount,
+  onCustomProductAmountChange,
   onVerifyMeter,
-  onReduceAmount,
+  onReduceProductAmount,
 }: CheckoutFormProps) {
   return (
     <div className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm sm:p-6">
@@ -138,13 +138,13 @@ export function CheckoutForm({
       {product === "airtime" && (
         <AmountPicker
           amounts={AIRTIME_AMOUNTS}
-          selectedAmount={selectedAmount}
-          customAmount={customAmount}
-          onSelectAmount={onSelectAmount}
-          onCustomAmountChange={onCustomAmountChange}
-          error={errors.amount}
+          selectedProductAmount={selectedProductAmount}
+          customProductAmount={customProductAmount}
+          onSelectProductAmount={onSelectProductAmount}
+          onCustomProductAmountChange={onCustomProductAmountChange}
+          error={errors.productAmount}
           isOverGuestLimit={isOverGuestLimit}
-          onReduceAmount={onReduceAmount}
+          onReduceProductAmount={onReduceProductAmount}
         />
       )}
 
@@ -153,7 +153,7 @@ export function CheckoutForm({
           network={fields.network}
           selectedPlanId={fields.dataPlan}
           onChange={(value) => onFieldChange("dataPlan", value)}
-          error={errors.dataPlan ?? errors.amount}
+          error={errors.dataPlan ?? errors.productAmount}
         />
       )}
 
@@ -197,13 +197,13 @@ export function CheckoutForm({
 
           <AmountPicker
             amounts={ELECTRICITY_AMOUNTS}
-            selectedAmount={selectedAmount}
-            customAmount={customAmount}
-            onSelectAmount={onSelectAmount}
-            onCustomAmountChange={onCustomAmountChange}
-            error={errors.amount}
+            selectedProductAmount={selectedProductAmount}
+            customProductAmount={customProductAmount}
+            onSelectProductAmount={onSelectProductAmount}
+            onCustomProductAmountChange={onCustomProductAmountChange}
+            error={errors.productAmount}
             isOverGuestLimit={isOverGuestLimit}
-            onReduceAmount={onReduceAmount}
+            onReduceProductAmount={onReduceProductAmount}
           />
         </>
       )}

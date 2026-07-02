@@ -1,9 +1,11 @@
 import { DATA_PLANS } from "@/lib/checkout/constants";
 import { getProductSchema } from "@/lib/checkout/checkoutSchemas";
 import { formatNaira } from "@/lib/checkout/formatNaira";
+import { formatGatewayFeeLabel } from "@/lib/checkout/pricing";
 import { maskPhone } from "@/lib/checkout/normalizePhone";
 import type { CheckoutFields, ProductType } from "@/lib/checkout/types";
 import { GuestLimitBanner } from "./GuestLimitBanner";
+import { ReceiptPreview } from "./ReceiptPreview";
 
 type SummaryItem = {
   label: string;
@@ -13,17 +15,18 @@ type SummaryItem = {
 type CheckoutSummaryCardProps = {
   product: ProductType;
   fields: CheckoutFields;
-  amount: number;
-  fee: number;
-  total: number;
+  productAmount: number;
+  convenienceFee: number;
+  gatewayFee: number;
+  payableAmount: number;
+  transactionReference: string | null;
   isOverGuestLimit: boolean;
-  onReduceAmount?: () => void;
+  onReduceProductAmount?: () => void;
 };
 
 function buildSummaryItems(
   product: ProductType,
   fields: CheckoutFields,
-  amount: number,
 ): SummaryItem[] {
   const schema = getProductSchema(product);
   const items: SummaryItem[] = [{ label: "Product", value: schema.label }];
@@ -52,65 +55,92 @@ function buildSummaryItems(
     items.push({ label: "Customer name", value: fields.customerName || "—" });
   }
 
-  items.push({ label: "Amount", value: formatNaira(amount) });
-
   return items;
 }
 
 export function CheckoutSummaryCard({
   product,
   fields,
-  amount,
-  fee,
-  total,
+  productAmount,
+  convenienceFee,
+  gatewayFee,
+  payableAmount,
+  transactionReference,
   isOverGuestLimit,
-  onReduceAmount,
+  onReduceProductAmount,
 }: CheckoutSummaryCardProps) {
-  const items = buildSummaryItems(product, fields, amount);
+  const items = buildSummaryItems(product, fields);
+  const gatewayFeeLabel = formatGatewayFeeLabel(gatewayFee);
 
   return (
-    <div className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="mb-4 text-lg font-bold text-foreground">Review your payment</h2>
+    <div className="space-y-4">
+      <div className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="mb-4 text-lg font-bold text-foreground">Review your payment</h2>
 
-      <dl className="space-y-3">
-        {items.map((item) => (
-          <div
-            key={item.label}
-            className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3 last:border-b-0 last:pb-0"
-          >
-            <dt className="text-sm text-foreground/60">{item.label}</dt>
+        <dl className="space-y-3">
+          {items.map((item) => (
+            <div
+              key={item.label}
+              className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3"
+            >
+              <dt className="text-sm text-foreground/60">{item.label}</dt>
+              <dd className="text-right text-sm font-semibold text-foreground">
+                {item.value}
+              </dd>
+            </div>
+          ))}
+
+          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3">
+            <dt className="text-sm text-foreground/60">Product Amount</dt>
             <dd className="text-right text-sm font-semibold text-foreground">
-              {item.value}
+              {formatNaira(productAmount)}
             </dd>
           </div>
-        ))}
 
-        <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3">
-          <dt className="text-sm text-foreground/60">Fee</dt>
-          <dd className="text-right text-sm font-semibold text-foreground">
-            {formatNaira(fee)}
-          </dd>
+          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3">
+            <dt className="text-sm text-foreground/60">Convenience Fee</dt>
+            <dd className="text-right text-sm font-semibold text-foreground">
+              {formatNaira(convenienceFee)}
+            </dd>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3">
+            <dt className="text-sm text-foreground/60">Gateway Charge</dt>
+            <dd className="max-w-[60%] text-right text-sm font-semibold text-foreground">
+              {gatewayFeeLabel}
+            </dd>
+          </div>
+
+          <div className="flex items-start justify-between gap-4 pt-1">
+            <dt className="text-base font-bold text-foreground">Total Payable</dt>
+            <dd className="text-right text-base font-black text-foreground">
+              {formatNaira(payableAmount)}
+            </dd>
+          </div>
+        </dl>
+
+        {isOverGuestLimit ? (
+          <div className="mt-5">
+            <GuestLimitBanner onReduceProductAmount={onReduceProductAmount} />
+          </div>
+        ) : null}
+
+        <div className="mt-5 flex items-center justify-center gap-4 rounded-2xl bg-dark/[0.03] px-4 py-3 text-xs font-semibold text-foreground/70 sm:text-sm">
+          <span>🔒 Secure payment</span>
+          <span>·</span>
+          <span>⚡ Instant delivery</span>
         </div>
-
-        <div className="flex items-start justify-between gap-4 pt-1">
-          <dt className="text-base font-bold text-foreground">Total</dt>
-          <dd className="text-right text-base font-black text-foreground">
-            {formatNaira(total)}
-          </dd>
-        </div>
-      </dl>
-
-      {isOverGuestLimit ? (
-        <div className="mt-5">
-          <GuestLimitBanner onReduceAmount={onReduceAmount} />
-        </div>
-      ) : null}
-
-      <div className="mt-5 flex items-center justify-center gap-4 rounded-2xl bg-dark/[0.03] px-4 py-3 text-xs font-semibold text-foreground/70 sm:text-sm">
-        <span>🔒 Secure payment</span>
-        <span>·</span>
-        <span>⚡ Instant delivery</span>
       </div>
+
+      <ReceiptPreview
+        product={product}
+        fields={fields}
+        productAmount={productAmount}
+        convenienceFee={convenienceFee}
+        gatewayFee={gatewayFee}
+        payableAmount={payableAmount}
+        transactionReference={transactionReference}
+      />
     </div>
   );
 }

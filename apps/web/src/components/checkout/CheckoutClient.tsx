@@ -18,17 +18,19 @@ import type { ProductType } from "@/lib/checkout/types";
 function CheckoutEngine({ product }: { product: ProductType }) {
   const {
     state,
-    amount,
-    total,
-    selectedAmount,
+    productAmount,
+    convenienceFee,
+    gatewayFee,
+    payableAmount,
+    selectedProductAmount,
     fieldErrors,
     setFieldErrors,
     isOverGuestLimit,
     setProduct,
     updateField,
     setStep,
-    setCustomAmount,
-    selectAmount,
+    setCustomProductAmount,
+    selectProductAmount,
     markMeterVerified,
     resetMeterVerification,
   } = useCheckoutState(product);
@@ -51,7 +53,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         : state.fields.recipientPhone,
     };
 
-    const errors = validateCheckoutForm(product, fields, amount);
+    const errors = validateCheckoutForm(product, fields, productAmount);
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
@@ -61,7 +63,14 @@ function CheckoutEngine({ product }: { product: ProductType }) {
 
     setStep("review");
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [amount, product, scrollToFirstError, setFieldErrors, setStep, state.fields]);
+  }, [
+    product,
+    productAmount,
+    scrollToFirstError,
+    setFieldErrors,
+    setStep,
+    state.fields,
+  ]);
 
   const handleVerifyMeter = useCallback(async () => {
     if (!state.fields.meterNumber.trim()) return;
@@ -75,11 +84,11 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     setIsVerifyingMeter(false);
   }, [markMeterVerified, resetMeterVerification, state.fields.meterNumber]);
 
-  const handleReduceAmount = useCallback(() => {
-    selectAmount(10000);
-    setCustomAmount("");
+  const handleReduceProductAmount = useCallback(() => {
+    selectProductAmount(10000);
+    setCustomProductAmount("");
     setStep("form");
-  }, [selectAmount, setCustomAmount, setStep]);
+  }, [selectProductAmount, setCustomProductAmount, setStep]);
 
   const handleBackToForm = useCallback(() => {
     setStep("form");
@@ -113,7 +122,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
           </Button>
           <Button type="button" className="w-full" disabled>
             Payment integration coming next
-            {total > 0 ? ` · ${formatNaira(total)}` : ""}
+            {payableAmount > 0 ? ` · ${formatNaira(payableAmount)}` : ""}
           </Button>
           <p className="text-center text-xs text-foreground/50">
             🔒 Secure payment · No registration required
@@ -137,17 +146,17 @@ function CheckoutEngine({ product }: { product: ProductType }) {
               <CheckoutForm
                 product={product}
                 fields={state.fields}
-                selectedAmount={selectedAmount}
-                customAmount={state.customAmount}
-                amount={amount}
+                selectedProductAmount={selectedProductAmount}
+                customProductAmount={state.customProductAmount}
+                productAmount={productAmount}
                 errors={fieldErrors}
                 isOverGuestLimit={isOverGuestLimit}
                 isVerifyingMeter={isVerifyingMeter}
                 onFieldChange={updateField}
-                onSelectAmount={selectAmount}
-                onCustomAmountChange={setCustomAmount}
+                onSelectProductAmount={selectProductAmount}
+                onCustomProductAmountChange={setCustomProductAmount}
                 onVerifyMeter={handleVerifyMeter}
-                onReduceAmount={handleReduceAmount}
+                onReduceProductAmount={handleReduceProductAmount}
               />
             </div>
           </>
@@ -155,11 +164,13 @@ function CheckoutEngine({ product }: { product: ProductType }) {
           <CheckoutSummaryCard
             product={product}
             fields={state.fields}
-            amount={amount}
-            fee={state.fee}
-            total={total}
+            productAmount={productAmount}
+            convenienceFee={convenienceFee}
+            gatewayFee={gatewayFee}
+            payableAmount={payableAmount}
+            transactionReference={state.transactionRef}
             isOverGuestLimit={isOverGuestLimit}
-            onReduceAmount={handleReduceAmount}
+            onReduceProductAmount={handleReduceProductAmount}
           />
         )}
       </CheckoutShell>

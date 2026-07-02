@@ -66,7 +66,7 @@ export function CheckoutShell({
             {schema.label}
           </h1>
           <p className="mt-2 text-sm text-foreground/60">
-            No account needed · Guest payments up to ₦10,000
+            No account needed · Guest product amount up to ₦10,000
           </p>
         </header>
 

@@ -1,7 +1,13 @@
 import type { DataPlan } from "./types";
 
-export const GUEST_MAX_AMOUNT = 10_000;
-export const MIN_AMOUNT = 50;
+export {
+  CONVENIENCE_FEE,
+  GATEWAY_FEE,
+  GUEST_MAX_PRODUCT_AMOUNT,
+  IS_GATEWAY_FEE_KNOWN,
+  MIN_PRODUCT_AMOUNT,
+} from "./pricing";
+
 export const CHECKOUT_STORAGE_KEY = "paylity-checkout-state";
 
 export const WHATSAPP_URL =

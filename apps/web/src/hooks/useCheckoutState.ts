@@ -4,9 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CHECKOUT_STORAGE_KEY,
+  CONVENIENCE_FEE,
   DATA_PLANS,
-  GUEST_MAX_AMOUNT,
+  GATEWAY_FEE,
 } from "@/lib/checkout/constants";
+import {
+  calculatePayableAmount,
+  isOverGuestProductLimit,
+} from "@/lib/checkout/pricing";
 import type {
   CheckoutFields,
   CheckoutState,
@@ -34,11 +39,47 @@ function createInitialState(product: ProductType): CheckoutState {
     product,
     step: "form",
     fields: defaultFields(),
-    amount: 0,
-    fee: 0,
-    total: 0,
-    customAmount: "",
+    productAmount: 0,
+    convenienceFee: CONVENIENCE_FEE,
+    gatewayFee: GATEWAY_FEE,
+    payableAmount: 0,
+    customProductAmount: "",
     transactionRef: null,
+  };
+}
+
+type LegacyCheckoutState = CheckoutState & {
+  amount?: number;
+  fee?: number;
+  total?: number;
+  customAmount?: string;
+};
+
+function normalizeStoredState(
+  parsed: LegacyCheckoutState,
+  product: ProductType,
+): CheckoutState {
+  if ("productAmount" in parsed && parsed.productAmount !== undefined) {
+    return {
+      ...parsed,
+      product,
+      convenienceFee: parsed.convenienceFee ?? CONVENIENCE_FEE,
+      gatewayFee: parsed.gatewayFee ?? GATEWAY_FEE,
+    };
+  }
+
+  const productAmount = parsed.amount ?? 0;
+
+  return {
+    product,
+    step: parsed.step ?? "form",
+    fields: parsed.fields ?? defaultFields(),
+    productAmount,
+    convenienceFee: parsed.fee ?? CONVENIENCE_FEE,
+    gatewayFee: GATEWAY_FEE,
+    payableAmount: parsed.total ?? calculatePayableAmount(productAmount),
+    customProductAmount: parsed.customAmount ?? "",
+    transactionRef: parsed.transactionRef ?? null,
   };
 }
 
@@ -48,35 +89,37 @@ function loadStoredState(product: ProductType): CheckoutState | null {
   try {
     const raw = sessionStorage.getItem(CHECKOUT_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as CheckoutState;
+    const parsed = JSON.parse(raw) as LegacyCheckoutState;
     if (parsed.product !== product) return null;
-    return parsed;
+    return normalizeStoredState(parsed, product);
   } catch {
     return null;
   }
 }
 
-function deriveSelectedAmount(stored: CheckoutState): number {
-  if (stored.product === "data" || stored.amount <= 0) return 0;
+function deriveSelectedProductAmount(stored: CheckoutState): number {
+  if (stored.product === "data" || stored.productAmount <= 0) return 0;
 
   const quickPickAmounts = [100, 200, 500, 1000, 2000, 5000, 10000];
-  return quickPickAmounts.includes(stored.amount) ? stored.amount : 0;
+  return quickPickAmounts.includes(stored.productAmount)
+    ? stored.productAmount
+    : 0;
 }
 
-function computeAmount(
+function computeProductAmount(
   product: ProductType,
   fields: CheckoutFields,
-  customAmount: string,
-  selectedAmount: number,
+  customProductAmount: string,
+  selectedProductAmount: number,
 ): number {
   if (product === "data") {
     const plan = DATA_PLANS.find((item) => item.id === fields.dataPlan);
     return plan?.price ?? 0;
   }
 
-  if (selectedAmount > 0) return selectedAmount;
+  if (selectedProductAmount > 0) return selectedProductAmount;
 
-  const parsed = parseInt(customAmount.replace(/\D/g, ""), 10);
+  const parsed = parseInt(customProductAmount.replace(/\D/g, ""), 10);
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
@@ -86,30 +129,42 @@ export function useCheckoutState(product: ProductType) {
   const [state, setState] = useState<CheckoutState>(() => {
     return loadStoredState(product) ?? createInitialState(product);
   });
-  const [selectedAmount, setSelectedAmount] = useState(() => {
+  const [selectedProductAmount, setSelectedProductAmount] = useState(() => {
     const stored = loadStoredState(product);
-    return stored ? deriveSelectedAmount(stored) : 0;
+    return stored ? deriveSelectedProductAmount(stored) : 0;
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const amount = useMemo(
+  const productAmount = useMemo(
     () =>
-      computeAmount(state.product, state.fields, state.customAmount, selectedAmount),
-    [state.product, state.fields, state.customAmount, selectedAmount],
+      computeProductAmount(
+        state.product,
+        state.fields,
+        state.customProductAmount,
+        selectedProductAmount,
+      ),
+    [state.product, state.fields, state.customProductAmount, selectedProductAmount],
   );
 
-  const total = useMemo(() => amount + state.fee, [amount, state.fee]);
+  const convenienceFee = CONVENIENCE_FEE;
+  const gatewayFee = GATEWAY_FEE;
+  const payableAmount = useMemo(
+    () => calculatePayableAmount(productAmount, gatewayFee),
+    [productAmount, gatewayFee],
+  );
 
   useEffect(() => {
     const nextState: CheckoutState = {
       ...state,
       product,
-      amount,
-      total,
+      productAmount,
+      convenienceFee,
+      gatewayFee,
+      payableAmount,
     };
 
     sessionStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify(nextState));
-  }, [state, product, amount, total]);
+  }, [state, product, productAmount, convenienceFee, gatewayFee, payableAmount]);
 
   const setProduct = useCallback(
     (nextProduct: ProductType) => {
@@ -142,14 +197,14 @@ export function useCheckoutState(product: ProductType) {
     setState((prev) => ({ ...prev, step }));
   }, []);
 
-  const setCustomAmount = useCallback((value: string) => {
-    setSelectedAmount(0);
-    setState((prev) => ({ ...prev, customAmount: value }));
+  const setCustomProductAmount = useCallback((value: string) => {
+    setSelectedProductAmount(0);
+    setState((prev) => ({ ...prev, customProductAmount: value }));
   }, []);
 
-  const selectAmount = useCallback((value: number) => {
-    setSelectedAmount(value);
-    setState((prev) => ({ ...prev, customAmount: "" }));
+  const selectProductAmount = useCallback((value: number) => {
+    setSelectedProductAmount(value);
+    setState((prev) => ({ ...prev, customProductAmount: "" }));
   }, []);
 
   const resetMeterVerification = useCallback(() => {
@@ -174,22 +229,24 @@ export function useCheckoutState(product: ProductType) {
     }));
   }, []);
 
-  const isOverGuestLimit = total > GUEST_MAX_AMOUNT;
+  const isOverGuestLimit = isOverGuestProductLimit(productAmount);
 
   return {
     product,
     state,
-    amount,
-    total,
-    selectedAmount,
+    productAmount,
+    convenienceFee,
+    gatewayFee,
+    payableAmount,
+    selectedProductAmount,
     fieldErrors,
     setFieldErrors,
     isOverGuestLimit,
     setProduct,
     updateField,
     setStep,
-    setCustomAmount,
-    selectAmount,
+    setCustomProductAmount,
+    selectProductAmount,
     resetMeterVerification,
     markMeterVerified,
   };

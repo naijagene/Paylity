@@ -5,19 +5,19 @@ export const PRODUCT_SCHEMAS: ProductSchema[] = [
     id: "airtime",
     label: "Buy Airtime",
     amountMode: "quick-picks",
-    guestMaxAmount: 10_000,
+    guestMaxProductAmount: 10_000,
   },
   {
     id: "data",
     label: "Buy Data",
     amountMode: "plan-picker",
-    guestMaxAmount: 10_000,
+    guestMaxProductAmount: 10_000,
   },
   {
     id: "electricity",
     label: "Pay Electricity",
     amountMode: "quick-picks",
-    guestMaxAmount: 10_000,
+    guestMaxProductAmount: 10_000,
   },
 ];
 

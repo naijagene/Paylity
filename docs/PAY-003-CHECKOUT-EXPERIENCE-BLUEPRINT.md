@@ -19,7 +19,7 @@ Build one **Universal Checkout Engine** that powers Airtime, Data, and Electrici
 **Success criteria for the business:**
 - One reusable checkout flow reduces build time for new services.
 - Guest checkout removes friction and increases conversion.
-- ₦10,000 guest cap limits fraud exposure until OTP is built.
+- ₦10,000 guest product amount cap limits fraud exposure until OTP is built (fees excluded).
 
 **Out of scope for v1:** Login, wallet, dashboard, betting checkout, backend integration (PAY-004 is UI + client-side validation only unless backend is ready).
 
@@ -34,7 +34,7 @@ Home → Select service → Checkout (fill form) → Review → Pay → Result (
 | Step | User action | System response |
 |------|-------------|-----------------|
 | 1 | Tap **Buy Airtime**, **Buy Data**, or **Pay Electricity** on homepage | Navigate to `/checkout?product={type}` |
-| 2 | Select network / disco, enter recipient details, choose amount or plan | Inline validation, live total update |
+| 2 | Select network / disco, enter recipient details, choose product amount or plan | Inline validation, live pricing breakdown |
 | 3 | Tap **Continue** | Show **Review** screen with editable summary |
 | 4 | Tap **Pay Now** | Show payment pending state; initiate payment (mock in PAY-004 if no API) |
 | 5a | Payment succeeds | Success page + receipt actions |
@@ -109,8 +109,8 @@ Five internal steps rendered as one continuous mobile flow (step indicator optio
 
 | Step | CTA | Validation |
 |------|-----|------------|
-| Form | **Continue to Review** | All required fields valid; amount within limits |
-| Review | **Pay ₦{total}** | Re-validate; block if over ₦10,000 guest limit |
+| Form | **Continue to Review** | All required fields valid; productAmount within guest limit |
+| Review | **Pay ₦{payableAmount}** | Re-validate; block if productAmount > ₦10,000 guest limit |
 | Pay | — | Full-screen pending overlay |
 | Result | **Done** / **Try Again** / **New Payment** | — |
 
@@ -121,13 +121,27 @@ CheckoutState = {
   product: 'airtime' | 'data' | 'electricity'
   step: 'form' | 'review' | 'processing' | 'success' | 'failed' | 'pending'
   fields: Record<string, string>
-  amount: number          // kobo not required in UI; store naira as number
-  fee: number             // v1: 0 or flat placeholder
-  total: number
+  productAmount: number     // airtime/data/electricity purchase amount (naira)
+  convenienceFee: number    // flat PAYLITY fee (₦100 in v1)
+  gatewayFee: number        // payment gateway charge (0 until Paystack)
+  payableAmount: number     // productAmount + convenienceFee + gatewayFee
   transactionRef: string | null
   error: CheckoutError | null
 }
 ```
+
+### Official money policy
+
+```
+productAmount + convenienceFee + gatewayFee = payableAmount
+```
+
+| Field | v1 value | Guest limit applies? |
+|-------|----------|----------------------|
+| `productAmount` | User-selected or plan price | **Yes — max ₦10,000** |
+| `convenienceFee` | ₦100 flat | No |
+| `gatewayFee` | 0 until Paystack; passed to customer | No |
+| `payableAmount` | Sum of above | No — may exceed ₦10,000 |
 
 Persist form state in **sessionStorage** so refresh on review step does not lose data.
 
@@ -187,16 +201,20 @@ Persist form state in **sessionStorage** so refresh on review step does not lose
 | Normalize | Strip spaces/dashes; convert `+234` prefix to `0` |
 | Error copy | "Enter a valid Nigerian phone number" |
 
-### Amount
+### Amount (productAmount)
 
 | Rule | Value |
 |------|-------|
-| Minimum | ₦50 (airtime/data plan minimum may override) |
-| Maximum (guest) | ₦10,000 |
-| Maximum (post-OTP, future) | Product-specific (TBD) |
+| Minimum productAmount | ₦50 (airtime/data plan minimum may override) |
+| Maximum productAmount (guest) | ₦10,000 |
+| Maximum productAmount (post-OTP, future) | Product-specific (TBD) |
 | Format | Whole naira only in v1 (no kobo input) |
 | Error (min) | "Minimum amount is ₦{min}" |
-| Error (max guest) | "Guest payments are limited to ₦10,000. Verify your number to pay more." |
+| Error (max guest) | "Guest checkout supports purchases up to ₦10,000. Please verify your phone number via OTP to continue." |
+
+**Not subject to guest limit:** `convenienceFee`, `gatewayFee`, `payableAmount`.
+
+**Allowed guest example:** ₦10,000 productAmount + ₦100 convenienceFee + gatewayFee = payableAmount above ₦10,000 ✓
 
 ### Meter number (electricity)
 
@@ -235,37 +253,40 @@ Persist form state in **sessionStorage** so refresh on review step does not lose
 
 ---
 
-## 7. ₦10,000 Guest Limit Behavior
+## 7. ₦10,000 Guest Product Amount Limit
 
 ### Rules
 
-1. Any transaction with `total > 10_000` is **blocked at Review** and **blocked at Pay**.
-2. No OTP flow in PAY-004 — show informational gate only.
-3. User can reduce amount or contact support via WhatsApp.
+1. Guest limit applies to **`productAmount` only** — not `payableAmount`.
+2. Block checkout when `productAmount > 10_000` and phone is unverified.
+3. `convenienceFee` (₦100) and `gatewayFee` never trigger the guest limit.
+4. `payableAmount` may exceed ₦10,000. Example: ₦10,000 + ₦100 + gateway = allowed.
+5. No OTP flow in v1 — show informational gate only.
+6. User can reduce productAmount or contact support via WhatsApp.
 
 ### UI treatment
 
-When amount exceeds limit:
+When productAmount exceeds limit:
 
 ```
 ┌──────────────────────────────────────────┐
 │ ⚠  Guest limit reached                   │
 │                                          │
-│ Payments above ₦10,000 require phone     │
-│ verification. This feature is coming     │
-│ soon.                                    │
+│ Guest checkout supports purchases up to  │
+│ ₦10,000. Please verify your phone number │
+│ via OTP to continue.                     │
 │                                          │
-│ [ Reduce amount ]  [ Chat on WhatsApp ]  │
+│ [ Reduce product amount ]  [ WhatsApp ]  │
 └──────────────────────────────────────────┘
 ```
 
-- **Pay button:** Disabled when over limit.
-- **Inline on amount field:** Show warning as user types/selects over ₦10,000.
-- **Fee inclusion:** `total = amount + fee` must respect limit (fee counts toward cap).
+- **Continue / Pay button:** Disabled when `productAmount > 10_000`.
+- **Inline on product amount field:** Show banner when `productAmount > 10_000`.
+- **Fees excluded:** Do not include convenienceFee or gatewayFee in limit check.
 
-### Future OTP hook (do not build in PAY-004)
+### Future OTP hook (do not build until backend ready)
 
-When OTP ships: amounts > ₦10,000 trigger OTP modal before Pay. Reserve component slot: `OtpVerificationGate`.
+When OTP ships: productAmount > ₦10,000 triggers OTP modal before Pay. Reserve component slot: `OtpVerificationGate`.
 
 ---
 
@@ -281,10 +302,11 @@ When OTP ships: amounts > ₦10,000 trigger OTP modal before Pay. Reserve compon
 │ │ Product badge: Buy Airtime      │ │
 │ │ Network: MTN                    │ │
 │ │ Recipient: 0803 XXX XXXX        │ │
-│ │ Amount: ₦1,000                  │ │
-│ │ Fee: ₦0                         │ │
+│ │ Product Amount: ₦1,000          │ │
+│ │ Convenience Fee: ₦100           │ │
+│ │ Gateway Charge: Calculated…     │ │
 │ │ ─────────────────────────────── │ │
-│ │ Total: ₦1,000                   │ │
+│ │ Total Payable: ₦1,100           │ │
 │ └─────────────────────────────────┘ │
 ├─────────────────────────────────────┤
 │ 🔒 Secure payment · Instant delivery│
@@ -298,16 +320,18 @@ When OTP ships: amounts > ₦10,000 trigger OTP modal before Pay. Reserve compon
 
 | Product | Show on review |
 |---------|----------------|
-| Airtime | Network, recipient phone, amount, fee, total |
-| Data | Network, recipient phone, plan name, validity, amount, total |
-| Electricity | Disco, meter type, meter number, customer name, amount, total |
+| Airtime | Network, recipient phone, productAmount, convenienceFee, gatewayFee, payableAmount |
+| Data | Network, recipient phone, plan name, validity, productAmount, convenienceFee, gatewayFee, payableAmount |
+| Electricity | Disco, meter type, meter number, customer name, productAmount, convenienceFee, gatewayFee, payableAmount |
+
+Gateway line shows amount when known, otherwise: **"Calculated securely during payment"**.
 
 ### Actions
 
 | Action | Behavior |
 |--------|----------|
 | **Edit details** | Return to form step; preserve entered values |
-| **Pay ₦{total}** | Primary CTA; full width; primary color `#F5B400` |
+| **Pay ₦{payableAmount}** | Primary CTA; full width; primary color `#F5B400` |
 | **Back** | Browser back or header back → form step |
 
 ---
@@ -344,7 +368,7 @@ Replace checkout content or navigate to `/checkout/success?ref={ref}` (either pa
 | Icon | Green check `#16A34A` |
 | Headline | "Payment successful" |
 | Subtext | Product-specific: "Airtime sent to 0803 XXX XXXX" |
-| Amount | "₦1,000 paid" |
+| Amount paid | "₦{payableAmount} paid" |
 | Reference | "Transaction ref: PAY-XXXX" |
 | Timestamp | Current date/time |
 
@@ -391,13 +415,16 @@ Do not auto-retry payment without user action.
 
 | Field | Source |
 |-------|--------|
-| PAYLITY NG logo text | Static |
-| Product type | checkout state |
-| Summary fields | Same as review screen |
-| Amount + total | checkout state |
-| Transaction reference | generated ref |
-| Date/time | payment completion time |
-| Status | Successful |
+| PAYLITY NG | Static |
+| Transaction reference | checkout / backend state |
+| Product | Product label |
+| Customer phone | checkout fields |
+| Product amount | `productAmount` |
+| Convenience fee | `convenienceFee` |
+| Gateway charge | `gatewayFee` or "Calculated securely during payment" |
+| Total paid | `payableAmount` |
+| Status | Transaction status |
+| Timestamp | Payment completion time |
 
 ### Delivery (v1 UI only)
 
@@ -424,8 +451,8 @@ Use these exact strings in PAY-004.
 |------|---------|
 | `PHONE_INVALID` | Enter a valid Nigerian phone number |
 | `EMAIL_INVALID` | Enter a valid email address |
-| `AMOUNT_MIN` | Minimum amount is ₦{min} |
-| `AMOUNT_MAX_GUEST` | Guest payments are limited to ₦10,000 |
+| `PRODUCT_AMOUNT_MIN` | Minimum amount is ₦{min} |
+| `PRODUCT_AMOUNT_MAX_GUEST` | Guest checkout supports purchases up to ₦10,000. Please verify your phone number via OTP to continue. |
 | `METER_INVALID` | Enter a valid meter number |
 | `PLAN_REQUIRED` | Select a data plan to continue |
 | `NETWORK_REQUIRED` | Select a network |
@@ -494,7 +521,7 @@ Place consistently across checkout — not only on homepage.
 | Secure badge | Below Pay button | 🔒 Secure payment |
 | Instant delivery | Trust strip on review | ⚡ Instant delivery |
 | No registration | Subtext under headline | No account needed |
-| Guest limit notice | Footer of amount section | Guest payments up to ₦10,000 |
+| Guest limit notice | Footer of product amount section | Guest product amount up to ₦10,000 |
 | Provider logos | Optional network/disco row | Static icons (MTN, etc.) — no official logos unless licensed |
 
 **Color usage:**
@@ -527,7 +554,7 @@ ProductSchema = {
   fields: FieldDefinition[]
   amountMode: 'quick-picks' | 'plan-picker' | 'custom'
   reviewFields: string[]
-  guestMaxAmount: number  // default 10_000
+  guestMaxProductAmount: number  // default 10_000 — applies to productAmount only
 }
 ```
 
@@ -621,13 +648,15 @@ ProductSchema = {
 - [ ] All fields from §5 render per product
 - [ ] All validation rules from §6 enforced with copy from §13
 - [ ] Phone normalization works for `080…` and `+234…` inputs
-- [ ] Data plan selection sets amount automatically
+- [ ] Data plan selection sets productAmount automatically
 - [ ] Electricity meter verify shows loading + success/fail states (mock OK)
 
 ### Guest limit
 
-- [ ] Amounts over ₦10,000 show `GuestLimitBanner`
-- [ ] Pay button disabled when total > ₦10,000
+- [ ] productAmount over ₦10,000 shows `GuestLimitBanner`
+- [ ] Continue / Pay disabled when productAmount > ₦10,000
+- [ ] ₦10,000 productAmount + ₦100 convenienceFee is allowed (payableAmount > ₦10,000)
+- [ ] convenienceFee and gatewayFee never trigger guest limit
 - [ ] WhatsApp CTA available from limit banner
 
 ### Flow

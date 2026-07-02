@@ -1,12 +1,19 @@
-import { DATA_PLANS, GUEST_MAX_AMOUNT, MIN_AMOUNT } from "./constants";
+import { DATA_PLANS } from "./constants";
+import {
+  GUEST_MAX_PRODUCT_AMOUNT,
+  MIN_PRODUCT_AMOUNT,
+  isOverGuestProductLimit,
+} from "./pricing";
 import { isValidNigerianPhone } from "./normalizePhone";
 import type { CheckoutFields, FieldErrors, ProductType } from "./types";
 
 export const ERROR_MESSAGES = {
   PHONE_INVALID: "Enter a valid Nigerian phone number",
   EMAIL_INVALID: "Enter a valid email address",
-  AMOUNT_MIN: (min: number) => `Minimum amount is ₦${min.toLocaleString("en-NG")}`,
-  AMOUNT_MAX_GUEST: "Guest payments are limited to ₦10,000",
+  PRODUCT_AMOUNT_MIN: (min: number) =>
+    `Minimum amount is ₦${min.toLocaleString("en-NG")}`,
+  PRODUCT_AMOUNT_MAX_GUEST:
+    "Guest checkout supports purchases up to ₦10,000. Please verify your phone number via OTP to continue.",
   METER_INVALID: "Enter a valid meter number",
   PLAN_REQUIRED: "Select a data plan to continue",
   NETWORK_REQUIRED: "Select a network",
@@ -31,12 +38,15 @@ function validatePhone(value: string): string | undefined {
   return undefined;
 }
 
-function validateAmount(amount: number, min = MIN_AMOUNT): string | undefined {
-  if (!amount || amount < min) {
-    return ERROR_MESSAGES.AMOUNT_MIN(min);
+function validateProductAmount(
+  productAmount: number,
+  min = MIN_PRODUCT_AMOUNT,
+): string | undefined {
+  if (!productAmount || productAmount < min) {
+    return ERROR_MESSAGES.PRODUCT_AMOUNT_MIN(min);
   }
-  if (amount > GUEST_MAX_AMOUNT) {
-    return ERROR_MESSAGES.AMOUNT_MAX_GUEST;
+  if (isOverGuestProductLimit(productAmount)) {
+    return ERROR_MESSAGES.PRODUCT_AMOUNT_MAX_GUEST;
   }
   return undefined;
 }
@@ -53,7 +63,7 @@ function validateMeterNumber(value: string): string | undefined {
 export function validateCheckoutForm(
   product: ProductType,
   fields: CheckoutFields,
-  amount: number,
+  productAmount: number,
 ): FieldErrors {
   const errors: FieldErrors = {};
 
@@ -78,8 +88,8 @@ export function validateCheckoutForm(
   }
 
   if (product === "airtime" || product === "electricity") {
-    const amountError = validateAmount(amount);
-    if (amountError) errors.amount = amountError;
+    const productAmountError = validateProductAmount(productAmount);
+    if (productAmountError) errors.productAmount = productAmountError;
   }
 
   if (product === "data") {
@@ -87,8 +97,8 @@ export function validateCheckoutForm(
       errors.dataPlan = ERROR_MESSAGES.PLAN_REQUIRED;
     } else {
       const plan = DATA_PLANS.find((item) => item.id === fields.dataPlan);
-      if (plan && plan.price > GUEST_MAX_AMOUNT) {
-        errors.amount = ERROR_MESSAGES.AMOUNT_MAX_GUEST;
+      if (plan && plan.price > GUEST_MAX_PRODUCT_AMOUNT) {
+        errors.productAmount = ERROR_MESSAGES.PRODUCT_AMOUNT_MAX_GUEST;
       }
     }
   }
@@ -114,6 +124,4 @@ export function validateCheckoutForm(
   return errors;
 }
 
-export function isOverGuestLimit(total: number): boolean {
-  return total > GUEST_MAX_AMOUNT;
-}
+export { isOverGuestProductLimit };
