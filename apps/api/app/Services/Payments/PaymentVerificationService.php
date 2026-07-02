@@ -1,0 +1,212 @@
+<?php
+
+namespace App\Services\Payments;
+
+use App\Enums\TransactionStatus;
+use App\Exceptions\PaymentVerificationException;
+use App\Models\Transaction;
+use App\Exceptions\PaystackException;
+
+class PaymentVerificationService
+{
+    public function __construct(
+        private readonly PaystackService $paystackService,
+    ) {
+    }
+
+    public function isConfigured(): bool
+    {
+        return $this->paystackService->isEnabled() && $this->paystackService->hasSecretKey();
+    }
+
+    /**
+     * @return array{
+     *     transaction: Transaction,
+     *     verification: array<string, mixed>|null,
+     *     configured: bool
+     * }
+     *
+     * @throws PaymentVerificationException
+     * @throws PaystackException
+     */
+    public function verify(string $reference): array
+    {
+        $transaction = Transaction::query()
+            ->where('reference', $reference)
+            ->first();
+
+        if (! $transaction) {
+            throw new PaymentVerificationException(
+                'Transaction not found.',
+                'TRANSACTION_NOT_FOUND',
+            );
+        }
+
+        if (! $this->isConfigured()) {
+            return [
+                'transaction' => $transaction,
+                'verification' => null,
+                'configured' => false,
+            ];
+        }
+
+        $verification = $this->paystackService->verifyTransaction($reference);
+
+        $this->assertReferenceMatches($transaction, $verification);
+        $this->assertAmountMatches($transaction, $verification);
+        $this->assertCurrencyMatches($verification);
+
+        $transaction = $this->applyVerificationResult($transaction, $verification);
+
+        return [
+            'transaction' => $transaction->fresh(),
+            'verification' => $verification,
+            'configured' => true,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $verification
+     * @return array<string, mixed>
+     */
+    public function toVerifyResponse(Transaction $transaction, ?array $verification = null, bool $configured = true): array
+    {
+        $response = [
+            'reference' => $transaction->reference,
+            'status' => $transaction->status,
+            'payment_status' => $this->paymentStatusLabel($transaction),
+            'product_type' => $transaction->product_type,
+            'product_amount' => $transaction->product_amount,
+            'convenience_fee' => $transaction->convenience_fee,
+            'gateway_fee' => $transaction->gateway_fee,
+            'payable_amount' => $transaction->payable_amount,
+            'currency' => $transaction->currency,
+            'verified_at' => $this->verifiedAt($transaction, $verification),
+            'fulfillment_status' => 'not_started',
+        ];
+
+        if ($transaction->failure_reason) {
+            $response['failure_reason'] = $transaction->failure_reason;
+        }
+
+        if (! $configured) {
+            $response['payment_status'] = 'Payment confirmation coming next.';
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param  array<string, mixed>  $verification
+     */
+    private function assertReferenceMatches(Transaction $transaction, array $verification): void
+    {
+        if ($verification['reference'] !== $transaction->reference) {
+            throw new PaymentVerificationException(
+                'Paystack reference does not match PAYLITY transaction reference.',
+                'REFERENCE_MISMATCH',
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $verification
+     */
+    private function assertAmountMatches(Transaction $transaction, array $verification): void
+    {
+        $expectedKobo = $transaction->payable_amount * 100;
+
+        if ((int) $verification['amount'] !== $expectedKobo) {
+            throw new PaymentVerificationException(
+                'Paystack amount does not match PAYLITY payable amount.',
+                'AMOUNT_MISMATCH',
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $verification
+     */
+    private function assertCurrencyMatches(array $verification): void
+    {
+        if (strtoupper((string) $verification['currency']) !== 'NGN') {
+            throw new PaymentVerificationException(
+                'Paystack currency must be NGN.',
+                'CURRENCY_MISMATCH',
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $verification
+     */
+    private function applyVerificationResult(Transaction $transaction, array $verification): Transaction
+    {
+        $paystackStatus = strtolower((string) $verification['status']);
+
+        if ($paystackStatus === 'success') {
+            $transaction->update([
+                'status' => TransactionStatus::PAYMENT_SUCCESS,
+                'payment_reference' => $verification['reference'],
+                'response_payload' => array_merge(
+                    (array) $transaction->response_payload,
+                    ['verify' => $verification['raw_response']],
+                ),
+                'failure_reason' => null,
+            ]);
+
+            return $transaction;
+        }
+
+        if (in_array($paystackStatus, ['failed', 'abandoned'], true)) {
+            $transaction->update([
+                'status' => TransactionStatus::PAYMENT_FAILED,
+                'failure_reason' => (string) ($verification['gateway_response'] ?: 'Payment failed.'),
+                'response_payload' => array_merge(
+                    (array) $transaction->response_payload,
+                    ['verify' => $verification['raw_response']],
+                ),
+            ]);
+
+            return $transaction;
+        }
+
+        $transaction->update([
+            'status' => TransactionStatus::PAYMENT_PENDING,
+            'response_payload' => array_merge(
+                (array) $transaction->response_payload,
+                ['verify' => $verification['raw_response']],
+            ),
+        ]);
+
+        return $transaction;
+    }
+
+    private function paymentStatusLabel(Transaction $transaction): string
+    {
+        return match ($transaction->status) {
+            TransactionStatus::PAYMENT_SUCCESS => 'Payment successful.',
+            TransactionStatus::PAYMENT_FAILED => $transaction->failure_reason ?: 'Payment failed.',
+            TransactionStatus::PAYMENT_PENDING => 'Payment pending.',
+            default => 'Payment confirmation in progress.',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $verification
+     */
+    private function verifiedAt(Transaction $transaction, ?array $verification): ?string
+    {
+        if ($transaction->status !== TransactionStatus::PAYMENT_SUCCESS) {
+            return null;
+        }
+
+        $paidAt = $verification['paid_at'] ?? null;
+
+        if (is_string($paidAt) && $paidAt !== '') {
+            return $paidAt;
+        }
+
+        return $transaction->updated_at?->toIso8601String();
+    }
+}

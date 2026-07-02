@@ -161,6 +161,7 @@ class PaystackCheckoutTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('data.reference', 'PYL-20260702-VERIFY')
-            ->assertJsonPath('data.payment_status', 'Payment confirmation coming next.');
+            ->assertJsonPath('data.payment_status', 'Payment confirmation coming next.')
+            ->assertJsonPath('data.fulfillment_status', 'not_started');
     }
 }

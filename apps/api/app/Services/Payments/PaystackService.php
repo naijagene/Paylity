@@ -26,6 +26,21 @@ class PaystackService
         }
     }
 
+    public function validateWebhookSignature(string $payload, ?string $signature): bool
+    {
+        if ($signature === null || $signature === '' || ! $this->hasSecretKey()) {
+            return false;
+        }
+
+        $computed = hash_hmac(
+            'sha512',
+            $payload,
+            (string) config('services.paystack.secret_key'),
+        );
+
+        return hash_equals($computed, $signature);
+    }
+
     /**
      * @return array{
      *     authorization_url: string,
@@ -73,7 +88,16 @@ class PaystackService
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{
+     *     status: string,
+     *     gateway_response: string|null,
+     *     amount: int,
+     *     reference: string,
+     *     paid_at: string|null,
+     *     channel: string|null,
+     *     currency: string,
+     *     raw_response: array<string, mixed>
+     * }
      */
     public function verifyTransaction(string $reference): array
     {
@@ -91,7 +115,24 @@ class PaystackService
             );
         }
 
-        return is_array($payload) ? $payload : [];
+        $data = data_get($payload, 'data', []);
+
+        return [
+            'status' => (string) data_get($data, 'status', ''),
+            'gateway_response' => data_get($data, 'gateway_response') !== null
+                ? (string) data_get($data, 'gateway_response')
+                : null,
+            'amount' => (int) data_get($data, 'amount', 0),
+            'reference' => (string) data_get($data, 'reference', $reference),
+            'paid_at' => data_get($data, 'paid_at') !== null
+                ? (string) data_get($data, 'paid_at')
+                : null,
+            'channel' => data_get($data, 'channel') !== null
+                ? (string) data_get($data, 'channel')
+                : null,
+            'currency' => (string) data_get($data, 'currency', 'NGN'),
+            'raw_response' => is_array($payload) ? $payload : [],
+        ];
     }
 
     private function endpoint(string $path): string
