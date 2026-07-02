@@ -38,19 +38,19 @@ export default function Home() {
           <ServiceCard
             title="Buy Airtime"
             description="Top up any Nigerian network instantly"
-            href="/airtime"
+            href="/checkout?product=airtime"
             icon={<span aria-hidden>📱</span>}
           />
           <ServiceCard
             title="Buy Data"
             description="Get data bundles for all networks"
-            href="/data"
+            href="/checkout?product=data"
             icon={<span aria-hidden>📶</span>}
           />
           <ServiceCard
             title="Pay Electricity"
             description="Pay your electricity bill in seconds"
-            href="/electricity"
+            href="/checkout?product=electricity"
             icon={<span aria-hidden>⚡</span>}
           />
         </section>

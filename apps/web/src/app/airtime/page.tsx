@@ -1,5 +1,5 @@
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import { redirect } from "next/navigation";
 
 export default function AirtimePage() {
-  return <PlaceholderPage title="Buy Airtime" />;
+  redirect("/checkout?product=airtime");
 }

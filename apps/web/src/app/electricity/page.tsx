@@ -1,5 +1,5 @@
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import { redirect } from "next/navigation";
 
 export default function ElectricityPage() {
-  return <PlaceholderPage title="Pay Electricity" />;
+  redirect("/checkout?product=electricity");
 }
