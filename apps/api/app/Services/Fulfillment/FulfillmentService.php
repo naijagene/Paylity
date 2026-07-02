@@ -72,9 +72,12 @@ class FulfillmentService
      */
     public function fulfill(Transaction $transaction): Transaction
     {
-        if ($transaction->status !== TransactionStatus::PAYMENT_SUCCESS) {
+        if (! in_array($transaction->status, [
+            TransactionStatus::PAYMENT_SUCCESS,
+            TransactionStatus::FAILED,
+        ], true)) {
             throw new FulfillmentException(
-                'Transaction must be payment_success before fulfillment.',
+                'Transaction must be payment_success or failed before fulfillment.',
                 'INVALID_TRANSACTION_STATUS',
             );
         }

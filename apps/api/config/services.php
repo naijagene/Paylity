@@ -54,4 +54,8 @@ return [
         'secret_key' => env('VTPASS_SECRET_KEY'),
     ],
 
+    'operator' => [
+        'access_key' => env('OPERATOR_ACCESS_KEY'),
+    ],
+
 ];

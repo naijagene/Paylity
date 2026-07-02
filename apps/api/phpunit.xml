@@ -35,5 +35,6 @@
         <env name="FEATURE_PAYSTACK" value="false"/>
         <env name="FEATURE_VTPASS" value="false"/>
         <env name="FEATURE_VTPASS_AUTO_FULFILL" value="false"/>
+        <env name="OPERATOR_ACCESS_KEY" value="test-operator-key"/>
     </php>
 </phpunit>

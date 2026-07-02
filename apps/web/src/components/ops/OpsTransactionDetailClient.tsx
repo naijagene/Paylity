@@ -1,0 +1,298 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { Button } from "@/components/Button";
+import { PageContainer } from "@/components/PageContainer";
+import { StatusBadge } from "@/components/transaction/StatusBadge";
+import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
+import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
+import {
+  fetchOpsTransaction,
+  fulfillOpsTransaction,
+  type OpsTransactionDetail,
+} from "@/lib/api/ops";
+import { ApiError, ApiOfflineError } from "@/lib/api/client";
+import {
+  getFulfillmentBadgeLabel,
+  getFulfillmentBadgeVariant,
+  getPaymentBadgeLabel,
+  getPaymentBadgeVariant,
+  getTimelinePhase,
+  PRODUCT_LABELS,
+} from "@/lib/transaction/display";
+
+function canManualFulfill(status: string): boolean {
+  return status === "payment_success" || status === "failed";
+}
+
+export function OpsTransactionDetailClient() {
+  const params = useParams<{ reference: string }>();
+  const reference = decodeURIComponent(params.reference ?? "");
+  const [transaction, setTransaction] = useState<OpsTransactionDetail | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [fulfilling, setFulfilling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  const loadTransaction = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await fetchOpsTransaction(reference);
+      setTransaction(data);
+    } catch (err) {
+      if (err instanceof ApiOfflineError) {
+        setError("Network unavailable. Check the API server and try again.");
+      } else if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Unable to load transaction details.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [reference]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchOpsTransaction(reference)
+      .then((data) => {
+        if (!cancelled) {
+          setTransaction(data);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (err instanceof ApiOfflineError) {
+          setError("Network unavailable. Check the API server and try again.");
+        } else if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError("Unable to load transaction details.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reference]);
+
+  const handleFulfill = async () => {
+    if (!transaction) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Only fulfill after payment_success is confirmed. Proceed with manual VTPass fulfillment?",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setFulfilling(true);
+    setActionMessage(null);
+    setError(null);
+
+    try {
+      const result = await fulfillOpsTransaction(transaction.reference);
+      setActionMessage(result.message);
+      await loadTransaction();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Manual fulfillment failed.");
+      }
+    } finally {
+      setFulfilling(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <PageContainer className="flex min-h-[40vh] items-center justify-center py-16">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+      </PageContainer>
+    );
+  }
+
+  if (error && !transaction) {
+    return (
+      <PageContainer className="py-16 text-center">
+        <p className="text-sm text-error">{error}</p>
+        <div className="mt-6 flex justify-center gap-3">
+          <Button onClick={() => void loadTransaction()}>Refresh</Button>
+          <Button href="/ops" variant="outline">
+            Back to Ops
+          </Button>
+        </div>
+      </PageContainer>
+    );
+  }
+
+  if (!transaction) {
+    return null;
+  }
+
+  const productLabel =
+    PRODUCT_LABELS[transaction.product_type] ?? transaction.product_type;
+
+  return (
+    <PageContainer className="py-8">
+      <div className="mx-auto w-full max-w-4xl space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Link
+              href="/ops"
+              className="text-sm font-semibold text-primary hover:underline"
+            >
+              ← Back to Ops
+            </Link>
+            <h1 className="mt-2 font-mono text-2xl font-black text-foreground sm:text-3xl">
+              {transaction.reference}
+            </h1>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <StatusBadge
+                label={getPaymentBadgeLabel(transaction.status)}
+                variant={getPaymentBadgeVariant(transaction.status)}
+              />
+              <StatusBadge
+                label={getFulfillmentBadgeLabel(transaction.status)}
+                variant={getFulfillmentBadgeVariant(transaction.status)}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button variant="outline" onClick={() => void loadTransaction()}>
+              Refresh
+            </Button>
+            {canManualFulfill(transaction.status) ? (
+              <Button onClick={() => void handleFulfill()} disabled={fulfilling}>
+                {fulfilling ? "Fulfilling..." : "Manual Fulfill"}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {canManualFulfill(transaction.status) ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Only fulfill after <strong>payment_success</strong> is confirmed.
+            Failed fulfillment retries are allowed from this console.
+          </div>
+        ) : null}
+
+        {error ? (
+          <p className="rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
+            {error}
+          </p>
+        ) : null}
+
+        {actionMessage ? (
+          <p className="rounded-2xl border border-success/20 bg-success/5 px-4 py-3 text-sm text-success">
+            {actionMessage}
+          </p>
+        ) : null}
+
+        <TransactionReceiptCard
+          reference={transaction.reference}
+          productLabel={productLabel}
+          customerPhone={transaction.customer_phone}
+          productAmount={transaction.product_amount}
+          convenienceFee={transaction.convenience_fee}
+          gatewayFee={transaction.gateway_fee}
+          payableAmount={transaction.payable_amount}
+          transactionStatus={transaction.status}
+          failureReason={transaction.failure_reason}
+        />
+
+        <section className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Customer Details
+          </h2>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-foreground/60">Phone</dt>
+              <dd className="font-semibold">{transaction.customer_phone}</dd>
+            </div>
+            <div>
+              <dt className="text-foreground/60">Email</dt>
+              <dd className="font-semibold">
+                {transaction.customer_email || "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-foreground/60">Name</dt>
+              <dd className="font-semibold">
+                {transaction.customer_name || "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-foreground/60">Verified Phone</dt>
+              <dd className="font-semibold">
+                {transaction.verified_phone ? "Yes" : "No"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Status Timeline
+          </h2>
+          <TransactionTimeline phase={getTimelinePhase(transaction.status)} />
+        </section>
+
+        <details className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+          <summary className="cursor-pointer text-sm font-semibold text-foreground">
+            Raw Payloads
+          </summary>
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+                Request Payload
+              </p>
+              <pre className="mt-2 overflow-x-auto rounded-2xl bg-dark/[0.03] p-4 text-xs">
+                {JSON.stringify(transaction.request_payload ?? {}, null, 2)}
+              </pre>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+                Response Payload
+              </p>
+              <pre className="mt-2 overflow-x-auto rounded-2xl bg-dark/[0.03] p-4 text-xs">
+                {JSON.stringify(transaction.response_payload ?? {}, null, 2)}
+              </pre>
+            </div>
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <p className="text-foreground/60">IP Address</p>
+                <p className="font-mono text-xs">{transaction.ip_address || "—"}</p>
+              </div>
+              <div>
+                <p className="text-foreground/60">User Agent</p>
+                <p className="break-all font-mono text-xs">
+                  {transaction.user_agent || "—"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </PageContainer>
+  );
+}
