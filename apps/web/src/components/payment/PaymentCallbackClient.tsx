@@ -13,15 +13,11 @@ import { SupportCard } from "@/components/support/SupportCard";
 import { verifyPaystackPayment } from "@/lib/api/payments";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import {
-  getCallbackPageHeading,
-  getFulfillmentBadgeLabel,
-  getFulfillmentBadgeVariant,
-  getPaymentBadgeLabel,
-  getPaymentBadgeVariant,
-  getTimelinePhase,
+  getBadgeState,
+  getHeroState,
+  getTimelineState,
   PRODUCT_LABELS,
-  shouldRenderCallbackPendingView,
-  shouldRenderCallbackSuccessView,
+  toTransactionLike,
 } from "@/lib/transaction/display";
 
 type VerificationState =
@@ -180,8 +176,12 @@ export function PaymentCallbackClient() {
 
   const productLabel =
     PRODUCT_LABELS[state.productType] ?? state.productType;
+  const transaction = toTransactionLike(state.status);
+  const hero = getHeroState(transaction);
+  const badges = getBadgeState(transaction);
+  const timeline = getTimelineState(transaction);
 
-  if (shouldRenderCallbackSuccessView(state.status)) {
+  if (hero.layout === "success_card") {
     return (
       <PageContainer className="py-8 sm:py-12">
         <PaymentSuccessCard
@@ -199,7 +199,7 @@ export function PaymentCallbackClient() {
     );
   }
 
-  if (state.status === "payment_failed") {
+  if (hero.layout === "failed_payment") {
     return (
       <PageContainer className="py-8 sm:py-12">
         <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6">
@@ -210,23 +210,27 @@ export function PaymentCallbackClient() {
             >
               ✕
             </div>
-            <h1 className="text-2xl font-black text-foreground">Payment Failed</h1>
+            <h1 className="text-2xl font-black text-foreground">{hero.title}</h1>
             <p className="mt-3 text-sm text-foreground/60">
-              {state.failureReason ?? state.paymentStatus}
+              {state.failureReason ?? state.paymentStatus ?? hero.subtitle}
             </p>
             <p className="mt-4 font-mono text-xs text-foreground/50">
               {state.reference}
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <StatusBadge
-                label={getPaymentBadgeLabel(state.status)}
-                variant={getPaymentBadgeVariant(state.status)}
+                label={badges.payment.label}
+                variant={badges.payment.variant}
+              />
+              <StatusBadge
+                label={badges.fulfillment.label}
+                variant={badges.fulfillment.variant}
               />
             </div>
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <TransactionTimeline phase={getTimelinePhase(state.status)} />
+            <TransactionTimeline phase={timeline.phase} />
           </section>
 
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -244,56 +248,32 @@ export function PaymentCallbackClient() {
     );
   }
 
-  if (shouldRenderCallbackPendingView(state.status)) {
-    const heading = getCallbackPageHeading(state.status);
-
-    return (
-      <PageContainer className="py-8 sm:py-12">
-        <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6 text-center">
+  return (
+    <PageContainer className="py-8 sm:py-12">
+      <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6 text-center">
+        {hero.showSpinner ? (
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-light">
             <div
               className="h-8 w-8 animate-spin rounded-full border-4 border-success/20 border-t-success"
               aria-hidden="true"
             />
           </div>
-          <h1 className="text-2xl font-black text-foreground">{heading.title}</h1>
-          <p className="text-sm text-foreground/60">{heading.subtitle}</p>
-          <p className="font-mono text-xs text-foreground/50">{state.reference}</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <StatusBadge
-              label={getPaymentBadgeLabel(state.status)}
-              variant={getPaymentBadgeVariant(state.status)}
-            />
-          </div>
-          <section className="rounded-2xl border border-border bg-card p-5 text-left shadow-sm">
-            <TransactionTimeline phase={getTimelinePhase(state.status)} />
-          </section>
-          <Button onClick={() => void checkAgain()}>Check Again</Button>
-        </div>
-      </PageContainer>
-    );
-  }
-
-  const heading = getCallbackPageHeading(state.status);
-
-  return (
-    <PageContainer className="py-8 sm:py-12">
-      <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6 text-center">
-        <h1 className="text-2xl font-black text-foreground">{heading.title}</h1>
-        <p className="text-sm text-foreground/60">{heading.subtitle}</p>
+        ) : null}
+        <h1 className="text-2xl font-black text-foreground">{hero.title}</h1>
+        <p className="text-sm text-foreground/60">{hero.subtitle}</p>
         <p className="font-mono text-xs text-foreground/50">{state.reference}</p>
         <div className="flex flex-wrap justify-center gap-2">
           <StatusBadge
-            label={getPaymentBadgeLabel(state.status)}
-            variant={getPaymentBadgeVariant(state.status)}
+            label={badges.payment.label}
+            variant={badges.payment.variant}
           />
           <StatusBadge
-            label={getFulfillmentBadgeLabel(state.status)}
-            variant={getFulfillmentBadgeVariant(state.status)}
+            label={badges.fulfillment.label}
+            variant={badges.fulfillment.variant}
           />
         </div>
         <section className="rounded-2xl border border-border bg-card p-5 text-left shadow-sm">
-          <TransactionTimeline phase={getTimelinePhase(state.status)} />
+          <TransactionTimeline phase={timeline.phase} />
         </section>
         <Button onClick={() => void checkAgain()}>Check Again</Button>
       </div>

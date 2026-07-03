@@ -43,6 +43,7 @@ describe("PaymentCallbackClient", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("shows completed success for fulfilled transactions without pending spinner", async () => {
@@ -113,8 +114,55 @@ describe("PaymentCallbackClient", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("VTPass timeout")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Unfortunately the service provider could not complete delivery.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("VTPass timeout").length).toBeGreaterThan(0);
     expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Status: Delivery Failed"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByLabelText("Status: Payment Successful").length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("shows retry delivery CTA when feature flag is enabled", async () => {
+    vi.stubEnv("NEXT_PUBLIC_FEATURE_RETRY_DELIVERY", "true");
+
+    mockedVerifyPaystackPayment.mockResolvedValue({
+      ...baseVerificationResult,
+      status: "failed",
+      fulfillment_status: "failed",
+    });
+
+    render(<PaymentCallbackClient />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("link", { name: /Retry Delivery/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("shows payment_failed badges consistently", async () => {
+    mockedVerifyPaystackPayment.mockResolvedValue({
+      ...baseVerificationResult,
+      status: "payment_failed",
+      payment_status: "failed",
+    });
+
+    render(<PaymentCallbackClient />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Status: Payment Failed"),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText("Status: Not Started")).toBeInTheDocument();
   });
 
   it("shows pending spinner only while payment is pending", async () => {

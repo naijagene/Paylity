@@ -1,0 +1,9 @@
+{
+  "name": "@paylity/shared",
+  "version": "1.0.0-rc1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./payment/statusMapper": "./payment/statusMapper.ts"
+  }
+}

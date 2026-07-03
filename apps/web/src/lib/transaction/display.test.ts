@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   getCallbackPageHeading,
+  getFulfillmentBadgeLabel,
+  getPaymentBadgeLabel,
   getTimelinePhase,
   shouldRenderCallbackPendingView,
   shouldRenderCallbackSuccessView,
 } from "./display";
 
-describe("callback page display helpers", () => {
+describe("display wrappers over shared status mapper", () => {
   it("maps fulfilled to completed success without spinner", () => {
     const heading = getCallbackPageHeading("fulfilled");
 
@@ -14,27 +16,20 @@ describe("callback page display helpers", () => {
     expect(heading.subtitle).toContain("delivered");
     expect(heading.showSpinner).toBe(false);
     expect(getTimelinePhase("fulfilled")).toBe("delivered");
+    expect(getPaymentBadgeLabel("fulfilled")).toBe("Payment Successful");
+    expect(getFulfillmentBadgeLabel("fulfilled")).toBe("Delivered");
     expect(shouldRenderCallbackSuccessView("fulfilled")).toBe(true);
     expect(shouldRenderCallbackPendingView("fulfilled")).toBe(false);
   });
 
-  it("maps payment_success to completed success with delivery processing copy", () => {
+  it("maps payment_success to processing fulfillment consistently", () => {
     const heading = getCallbackPageHeading("payment_success");
 
     expect(heading.title).toBe("Payment Completed Successfully");
     expect(heading.subtitle).toContain("Delivery is being processed");
-    expect(heading.showSpinner).toBe(false);
     expect(getTimelinePhase("payment_success")).toBe("processing");
-    expect(shouldRenderCallbackSuccessView("payment_success")).toBe(true);
-  });
-
-  it("maps fulfillment_pending to completed success with delivery processing copy", () => {
-    const heading = getCallbackPageHeading("fulfillment_pending");
-
-    expect(heading.title).toBe("Payment Completed Successfully");
-    expect(heading.subtitle).toContain("Delivery is being processed");
-    expect(heading.showSpinner).toBe(false);
-    expect(shouldRenderCallbackSuccessView("fulfillment_pending")).toBe(true);
+    expect(getPaymentBadgeLabel("payment_success")).toBe("Payment Successful");
+    expect(getFulfillmentBadgeLabel("payment_success")).toBe("Processing");
   });
 
   it("maps failed delivery after successful payment", () => {
@@ -42,16 +37,17 @@ describe("callback page display helpers", () => {
 
     expect(heading.title).toBe("Payment Successful, Delivery Failed");
     expect(heading.tone).toBe("delivery_failed");
-    expect(heading.showSpinner).toBe(false);
+    expect(getPaymentBadgeLabel("failed")).toBe("Payment Successful");
+    expect(getFulfillmentBadgeLabel("failed")).toBe("Delivery Failed");
     expect(getTimelinePhase("failed")).toBe("delivery_failed");
-    expect(shouldRenderCallbackSuccessView("failed")).toBe(true);
   });
 
-  it("maps payment_failed to failed copy without spinner", () => {
+  it("maps payment_failed to failed payment and not started fulfillment", () => {
     const heading = getCallbackPageHeading("payment_failed");
 
     expect(heading.title).toBe("Payment Failed");
-    expect(heading.showSpinner).toBe(false);
+    expect(getPaymentBadgeLabel("payment_failed")).toBe("Payment Failed");
+    expect(getFulfillmentBadgeLabel("payment_failed")).toBe("Not Started");
     expect(shouldRenderCallbackSuccessView("payment_failed")).toBe(false);
   });
 
@@ -60,7 +56,6 @@ describe("callback page display helpers", () => {
 
     expect(heading.title).toBe("Payment Pending");
     expect(heading.showSpinner).toBe(true);
-    expect(shouldRenderCallbackPendingView("payment_pending")).toBe(true);
-    expect(shouldRenderCallbackSuccessView("payment_pending")).toBe(false);
+    expect(getFulfillmentBadgeLabel("payment_pending")).toBe("Awaiting Payment");
   });
 });

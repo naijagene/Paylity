@@ -6,8 +6,9 @@ import { TransactionReceiptCard } from "@/components/transaction/TransactionRece
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
 import { SupportCard } from "@/components/support/SupportCard";
 import {
-  getCallbackPageHeading,
-  getTimelinePhase,
+  getHeroState,
+  getTimelineState,
+  toTransactionLike,
 } from "@/lib/transaction/display";
 
 type PaymentSuccessCardProps = {
@@ -37,12 +38,14 @@ export function PaymentSuccessCard({
     window.print();
   };
 
-  const heading = getCallbackPageHeading(transactionStatus);
+  const transaction = toTransactionLike(transactionStatus);
+  const hero = getHeroState(transaction);
+  const timeline = getTimelineState(transaction);
   const heroIconClass =
-    heading.tone === "delivery_failed"
+    hero.tone === "delivery_failed"
       ? "bg-accent text-dark"
       : "bg-success text-white shadow-lg shadow-success/20";
-  const heroIconContent = heading.tone === "delivery_failed" ? "!" : "✓";
+  const heroIconContent = hero.tone === "delivery_failed" ? "!" : "✓";
 
   return (
     <div className={`animate-fade-in mx-auto w-full ${CONTENT_MAX_WIDTH_CLASS} space-y-6`}>
@@ -64,15 +67,18 @@ export function PaymentSuccessCard({
           id="payment-success-title"
           className="font-display text-2xl font-extrabold tracking-tight text-dark sm:text-3xl"
         >
-          {heading.title}
+          {hero.title}
         </h1>
-        <p className="mt-3 text-sm leading-relaxed text-muted">
-          {heading.subtitle}
-        </p>
-        {heading.detail ? (
-          <p className="mt-2 text-sm text-muted">{heading.detail}</p>
+        <p className="mt-3 text-sm leading-relaxed text-muted">{hero.subtitle}</p>
+        {hero.paragraphs.map((paragraph) => (
+          <p key={paragraph} className="mt-2 text-sm leading-relaxed text-muted">
+            {paragraph}
+          </p>
+        ))}
+        {hero.detail ? (
+          <p className="mt-2 text-sm text-muted">{hero.detail}</p>
         ) : null}
-        {failureReason && heading.tone === "delivery_failed" ? (
+        {failureReason && hero.tone === "delivery_failed" ? (
           <p className="mt-3 text-sm font-medium text-error">{failureReason}</p>
         ) : null}
         <p className="mt-5 font-mono text-sm font-bold text-dark">{reference}</p>
@@ -87,7 +93,7 @@ export function PaymentSuccessCard({
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted">
           Order Progress
         </h2>
-        <TransactionTimeline phase={getTimelinePhase(transactionStatus)} />
+        <TransactionTimeline phase={timeline.phase} />
       </section>
 
       <TransactionReceiptCard
@@ -99,10 +105,19 @@ export function PaymentSuccessCard({
         gatewayFee={gatewayFee}
         payableAmount={payableAmount}
         transactionStatus={transactionStatus}
+        failureReason={failureReason}
         printable
       />
 
       <div className="space-y-3 print:hidden">
+        {hero.showRetryDelivery ? (
+          <Button
+            href={`/transaction/${encodeURIComponent(reference)}`}
+            className="w-full"
+          >
+            Retry Delivery
+          </Button>
+        ) : null}
         <Button
           href={`/transaction/${encodeURIComponent(reference)}`}
           className="w-full"

@@ -19,7 +19,11 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@paylity/shared/*": ["../../packages/shared/*"],
+      "@paylity/shared/payment/statusMapper": [
+        "../../packages/shared/payment/statusMapper.ts"
+      ]
     }
   },
   "include": [

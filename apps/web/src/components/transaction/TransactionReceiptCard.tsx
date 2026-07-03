@@ -3,10 +3,9 @@ import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
 import {
-  getFulfillmentBadgeLabel,
-  getFulfillmentBadgeVariant,
-  getPaymentBadgeLabel,
-  getPaymentBadgeVariant,
+  getBadgeState,
+  getReceiptStatuses,
+  toTransactionLike,
 } from "@/lib/transaction/display";
 
 type ReceiptSectionProps = {
@@ -75,6 +74,10 @@ export function TransactionReceiptCard({
   failureReason,
   printable = false,
 }: TransactionReceiptCardProps) {
+  const transaction = toTransactionLike(transactionStatus);
+  const badges = getBadgeState(transaction);
+  const receiptStatuses = getReceiptStatuses(transaction);
+
   return (
     <article
       id={printable ? "transaction-receipt" : undefined}
@@ -91,12 +94,12 @@ export function TransactionReceiptCard({
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <StatusBadge
-            label={getPaymentBadgeLabel(transactionStatus)}
-            variant={getPaymentBadgeVariant(transactionStatus)}
+            label={badges.payment.label}
+            variant={badges.payment.variant}
           />
           <StatusBadge
-            label={getFulfillmentBadgeLabel(transactionStatus)}
-            variant={getFulfillmentBadgeVariant(transactionStatus)}
+            label={badges.fulfillment.label}
+            variant={badges.fulfillment.variant}
           />
         </div>
       </div>
@@ -136,14 +139,8 @@ export function TransactionReceiptCard({
 
       <ReceiptSection title="Status">
         <dl>
-          <ReceiptRow
-            label="Payment"
-            value={getPaymentBadgeLabel(transactionStatus)}
-          />
-          <ReceiptRow
-            label="Fulfillment"
-            value={getFulfillmentBadgeLabel(transactionStatus)}
-          />
+          <ReceiptRow label="Payment" value={receiptStatuses.payment} />
+          <ReceiptRow label="Fulfillment" value={receiptStatuses.fulfillment} />
           {failureReason ? (
             <ReceiptRow label="Failure Reason" value={failureReason} />
           ) : null}
