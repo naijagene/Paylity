@@ -10,23 +10,26 @@ class PaylityPreflightCommand extends Command
 {
     protected $signature = 'paylity:preflight';
 
-    protected $description = 'Run PAYLITY NG pre-launch environment checks';
+    protected $description = 'Run PAYLITY NG release and staging readiness checks';
 
     /** @var list<array{status: string, check: string, detail: string}> */
     private array $results = [];
 
     public function handle(): int
     {
-        $this->info('PAYLITY NG — Pre-Launch Preflight');
+        $this->info('PAYLITY NG — Release Preflight');
         $this->newLine();
 
         $this->checkAppEnv();
         $this->checkAppDebug();
+        $this->checkAppVersion();
         $this->checkAppUrl();
+        $this->checkFrontendUrl();
         $this->checkAppKey();
         $this->checkDatabase();
         $this->checkPaystack();
         $this->checkVtpass();
+        $this->checkAutoFulfill();
         $this->checkOperatorAccessKey();
         $this->checkCors();
         $this->checkQueueConnection();
@@ -39,6 +42,11 @@ class PaylityPreflightCommand extends Command
         return $failCount > 0 ? self::FAILURE : self::SUCCESS;
     }
 
+    private function isDeployedEnvironment(): bool
+    {
+        return in_array((string) config('app.env'), ['production', 'staging'], true);
+    }
+
     private function checkAppEnv(): void
     {
         $env = (string) config('app.env');
@@ -49,28 +57,32 @@ class PaylityPreflightCommand extends Command
             return;
         }
 
-        if ($env === 'production') {
-            $this->record('PASS', 'APP_ENV', 'APP_ENV=production');
+        if (in_array($env, ['production', 'staging'], true)) {
+            $this->record('PASS', 'APP_ENV', "APP_ENV={$env}");
 
             return;
         }
 
-        $this->record('WARN', 'APP_ENV', "APP_ENV={$env} (not production)");
+        $this->record('WARN', 'APP_ENV', "APP_ENV={$env} (local/dev — not staging/production)");
     }
 
     private function checkAppDebug(): void
     {
         $debug = (bool) config('app.debug');
-        $isProduction = config('app.env') === 'production';
+        $env = (string) config('app.env');
 
-        if ($isProduction && $debug) {
-            $this->record('FAIL', 'APP_DEBUG', 'APP_DEBUG must be false in production.');
+        if ($this->isDeployedEnvironment() && $debug) {
+            $this->record(
+                'FAIL',
+                'APP_DEBUG',
+                "APP_DEBUG must be false when APP_ENV={$env}.",
+            );
 
             return;
         }
 
         if ($debug) {
-            $this->record('WARN', 'APP_DEBUG', 'APP_DEBUG=true (acceptable for local/staging only)');
+            $this->record('WARN', 'APP_DEBUG', 'APP_DEBUG=true (acceptable for local development only)');
 
             return;
         }
@@ -78,21 +90,93 @@ class PaylityPreflightCommand extends Command
         $this->record('PASS', 'APP_DEBUG', 'APP_DEBUG=false');
     }
 
-    private function checkAppUrl(): void
+    private function checkAppVersion(): void
     {
-        $url = (string) config('app.url');
+        $version = (string) config('app.version');
+        $build = (string) config('app.build');
 
-        if ($url === '' || $url === 'http://localhost') {
+        if ($version === '' || $build === '') {
+            $this->record('FAIL', 'Release identity', 'APP_VERSION and APP_BUILD must be set.');
+
+            return;
+        }
+
+        if (str_contains($version, 'beta') && $this->isDeployedEnvironment()) {
             $this->record(
-                config('app.env') === 'production' ? 'FAIL' : 'WARN',
-                'APP_URL',
-                $url === '' ? 'APP_URL is not set.' : "APP_URL={$url}",
+                'WARN',
+                'Release identity',
+                "APP_VERSION={$version} still contains beta on a deployed environment.",
             );
 
             return;
         }
 
+        $this->record('PASS', 'Release identity', "APP_VERSION={$version}, APP_BUILD={$build}");
+    }
+
+    private function checkAppUrl(): void
+    {
+        $url = rtrim((string) config('app.url'), '/');
+
+        if ($url === '') {
+            $this->record(
+                $this->isDeployedEnvironment() ? 'FAIL' : 'WARN',
+                'APP_URL',
+                'APP_URL is not set.',
+            );
+
+            return;
+        }
+
+        if ($this->isDeployedEnvironment() && $this->isLocalUrl($url)) {
+            $this->record('FAIL', 'APP_URL', "APP_URL={$url} is not valid for staging/production.");
+
+            return;
+        }
+
+        if ($this->isLocalUrl($url)) {
+            $this->record('WARN', 'APP_URL', "APP_URL={$url}");
+
+            return;
+        }
+
         $this->record('PASS', 'APP_URL', "APP_URL={$url}");
+    }
+
+    private function checkFrontendUrl(): void
+    {
+        $url = rtrim((string) config('app.frontend_url'), '/');
+
+        if ($url === '') {
+            $this->record(
+                $this->isDeployedEnvironment() ? 'FAIL' : 'WARN',
+                'FRONTEND_URL',
+                'FRONTEND_URL is not set.',
+            );
+
+            return;
+        }
+
+        if ($this->isDeployedEnvironment() && $this->isLocalUrl($url)) {
+            $this->record('FAIL', 'FRONTEND_URL', "FRONTEND_URL={$url} is not valid for staging/production.");
+
+            return;
+        }
+
+        if ($this->isLocalUrl($url)) {
+            $this->record('WARN', 'FRONTEND_URL', "FRONTEND_URL={$url}");
+
+            return;
+        }
+
+        $this->record('PASS', 'FRONTEND_URL', "FRONTEND_URL={$url}");
+    }
+
+    private function isLocalUrl(string $url): bool
+    {
+        return in_array($url, ['http://localhost', 'http://localhost:3000', 'http://127.0.0.1', 'http://127.0.0.1:3000'], true)
+            || str_contains($url, 'localhost')
+            || str_contains($url, '127.0.0.1');
     }
 
     private function checkAppKey(): void
@@ -188,6 +272,37 @@ class PaylityPreflightCommand extends Command
         $this->record('PASS', 'VTPass', 'VTPass credentials are configured.');
     }
 
+    private function checkAutoFulfill(): void
+    {
+        if (! config('services.vtpass.auto_fulfill')) {
+            $this->record('PASS', 'Auto-fulfillment', 'FEATURE_VTPASS_AUTO_FULFILL=false (default/manual).');
+
+            return;
+        }
+
+        if (config('app.env') === 'staging') {
+            $this->record(
+                'WARN',
+                'Auto-fulfillment',
+                'FEATURE_VTPASS_AUTO_FULFILL=true on staging — enable only for intentional delivery testing.',
+            );
+
+            return;
+        }
+
+        if (config('app.env') === 'production') {
+            $this->record(
+                'WARN',
+                'Auto-fulfillment',
+                'FEATURE_VTPASS_AUTO_FULFILL=true in production — confirm VTPass live certification before launch.',
+            );
+
+            return;
+        }
+
+        $this->record('PASS', 'Auto-fulfillment', 'FEATURE_VTPASS_AUTO_FULFILL=true (local/dev).');
+    }
+
     private function checkOperatorAccessKey(): void
     {
         if (empty(config('services.operator.access_key'))) {
@@ -202,16 +317,15 @@ class PaylityPreflightCommand extends Command
     private function checkCors(): void
     {
         $origins = CorsOriginResolver::allowedOrigins();
-        $isProduction = config('app.env') === 'production';
 
-        if ($isProduction && in_array('*', $origins, true)) {
-            $this->record('FAIL', 'CORS', 'Wildcard origin is not allowed in production.');
+        if ($this->isDeployedEnvironment() && in_array('*', $origins, true)) {
+            $this->record('FAIL', 'CORS', 'Wildcard origin is not allowed in staging/production.');
 
             return;
         }
 
-        if ($isProduction && empty(config('app.frontend_url'))) {
-            $this->record('FAIL', 'CORS', 'FRONTEND_URL must be set in production.');
+        if ($this->isDeployedEnvironment() && empty(config('app.frontend_url'))) {
+            $this->record('FAIL', 'CORS', 'FRONTEND_URL must be set in staging/production.');
 
             return;
         }
@@ -234,7 +348,7 @@ class PaylityPreflightCommand extends Command
         $connection = (string) config('queue.default');
 
         if ($connection === '' || $connection === 'sync') {
-            $status = config('app.env') === 'production' ? 'WARN' : 'PASS';
+            $status = $this->isDeployedEnvironment() ? 'WARN' : 'PASS';
             $this->record(
                 $status,
                 'Queue',
@@ -287,9 +401,9 @@ class PaylityPreflightCommand extends Command
         $this->line("Summary: {$pass} PASS, {$warn} WARN, {$fail} FAIL");
 
         if ($fail > 0) {
-            $this->error('Preflight failed. Resolve FAIL items before production launch.');
+            $this->error('Preflight failed. Resolve FAIL items before staging/production deployment.');
         } elseif ($warn > 0) {
-            $this->warn('Preflight passed with warnings. Review before launch.');
+            $this->warn('Preflight passed with warnings. Review before deployment.');
         } else {
             $this->info('Preflight passed.');
         }

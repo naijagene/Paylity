@@ -27,7 +27,7 @@ class HealthEndpointTest extends TestCase
                 ],
             ])
             ->assertJsonPath('data.status', 'ok')
-            ->assertJsonPath('data.version', '1.0.0-beta')
-            ->assertJsonPath('data.build', '2026.07.03');
+            ->assertJsonPath('data.version', config('app.version'))
+            ->assertJsonPath('data.build', config('app.build'));
     }
 }

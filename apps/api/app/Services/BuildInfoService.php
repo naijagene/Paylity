@@ -18,8 +18,8 @@ class BuildInfoService
 
         return [
             'application' => str_ends_with($appName, ' API') ? $appName : $appName.' API',
-            'version' => (string) config('app.version', '1.0.0-beta'),
-            'build' => (string) config('app.build', '2026.07.03'),
+            'version' => (string) config('app.version', '1.0.0-rc1'),
+            'build' => (string) config('app.build', '2026.07.03-rc1'),
             'environment' => strtolower((string) config('app.env', 'local')),
         ];
     }

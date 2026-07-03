@@ -1,0 +1,154 @@
+# PAYLITY NG — RC1 Readiness Report
+
+**Release:** 1.0.0-rc1 · **Build:** 2026.07.03-rc1 · **Date:** July 2026
+
+---
+
+## Executive summary
+
+PAYLITY NG Release Candidate 1 (RC1) packages the completed customer checkout experience, Paystack payment flow, VTPass fulfillment foundation, ops console, approved brand UI, and staging deployment documentation into a deployable baseline for **controlled staging validation**.
+
+RC1 is **ready for staging deployment** once infrastructure, secrets, and DNS are provisioned. It is **not ready for unrestricted public live vending**.
+
+---
+
+## RC1 scope summary
+
+| Area | RC1 status |
+|------|------------|
+| Guest checkout (Airtime, Data, Electricity) | ✅ Complete |
+| Paystack init + verify + webhook | ✅ Complete |
+| Transaction engine + status UX | ✅ Complete |
+| VTPass fulfillment (manual + auto diagnostics) | ✅ Complete |
+| Ops console | ✅ Complete |
+| Brand theme + official logo | ✅ Complete |
+| Pre-launch hardening + rate limits | ✅ Complete |
+| Staging deployment docs | ✅ Added in PAY-016 |
+| Customer login / wallet / referral | ❌ Out of scope |
+
+---
+
+## What is certified (sandbox)
+
+Per [VTPass Certification Report](../integrations/VTPASS-CERTIFICATION-REPORT.md):
+
+| Product / flow | Sandbox status |
+|----------------|----------------|
+| Airtime purchase | **Certified** |
+| Electricity merchant verify | **Certified** |
+| Electricity purchase | **Certified** |
+| Data purchase | **Pending** (VTPass code 016) |
+| Invalid network rejection | **Certified** |
+
+Paystack test-mode payment initialization and backend verification are implemented and covered by automated tests.
+
+---
+
+## What remains sandbox / not live-ready
+
+| Item | RC1 state |
+|------|-----------|
+| Paystack | Test keys in templates; live keys not configured |
+| VTPass | Sandbox URL and credentials in staging template |
+| Auto-fulfillment | **Disabled by default** (`FEATURE_VTPASS_AUTO_FULFILL=false`) |
+| Data vending | Not certified — treat as blocked for public launch |
+| Customer accounts | Not built |
+| Wallet / referral | Not built |
+| Live electricity meter verify at scale | Sandbox certified; live catalog/credentials TBD |
+| WhatsApp support | Requires real `NEXT_PUBLIC_WHATSAPP_URL` on staging |
+
+---
+
+## Deployment requirements
+
+### Infrastructure
+
+- Frontend: `https://staging.paylity.ng` (Next.js)
+- API: `https://api-staging.paylity.ng` (Laravel)
+- MySQL/PostgreSQL (not SQLite)
+- SSL on both domains
+- Queue worker + scheduler
+- Writable `storage/` and `bootstrap/cache/`
+
+### Configuration
+
+- Backend: see [STAGING-ENV-TEMPLATE.md](../deployment/STAGING-ENV-TEMPLATE.md)
+- Frontend: staging public env vars at build time
+- Paystack callback + webhook URLs registered
+- VTPass sandbox credentials
+- Strong `OPERATOR_ACCESS_KEY`
+
+### Verification
+
+```bash
+php artisan paylity:preflight   # no FAIL
+php artisan migrate --force
+# Run docs/deployment/STAGING-SMOKE-TESTS.md
+```
+
+---
+
+## Known risks
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Data product not VTPass-certified | Failed deliveries for data purchases | Block/limit data on staging; do not promote to public until certified |
+| Auto-fulfill disabled | Manual ops step required | Expected for RC1; ops runbook + console available |
+| Staging uses Paystack test mode | No real money | Acceptable for RC1 staging |
+| WhatsApp unset | “Coming Soon” card shown | Configure real URL before soft launch |
+| Queue on `sync` | Jobs run inline | Use database/redis queue on staging |
+
+---
+
+## Go / No-Go
+
+### Staging deployment
+
+| Decision | Recommendation |
+|----------|----------------|
+| **Go** | ✅ **Yes**, after checklist + smoke tests pass |
+| Conditions | DNS/SSL live, secrets set, preflight clean, ops key rotated |
+
+### Public launch
+
+| Decision | Recommendation |
+|----------|----------------|
+| **Go** | ❌ **No-Go** for unrestricted public live vending |
+| Blockers | Live Paystack + VTPass credentials, data certification, auto-fulfill decision, ops staffing, monitoring |
+
+---
+
+## Next milestone recommendation
+
+**PAY-017 — Staging validation & data certification**
+
+1. Deploy RC1 to staging using deployment checklist
+2. Execute full smoke test matrix and record results
+3. Complete VTPass data sandbox certification (resolve code 016)
+4. Decide auto-fulfill policy for soft launch
+5. Configure live support channels (email + WhatsApp)
+6. Re-run preflight on staging with production-like queue/logging
+7. Produce soft-launch go/no-go from staging evidence
+
+---
+
+## QA baseline (RC1)
+
+| Suite | Expected |
+|-------|----------|
+| `php artisan test` | Pass |
+| `npm run test` | Pass |
+| `npm run lint` | Pass |
+| `npm run build` | Pass |
+| `php artisan paylity:preflight` | Pass on valid staging config |
+
+---
+
+## Version identity
+
+| Layer | Version | Build |
+|-------|---------|-------|
+| Backend (`APP_VERSION` / `APP_BUILD`) | 1.0.0-rc1 | 2026.07.03-rc1 |
+| Frontend (`NEXT_PUBLIC_*`) | 1.0.0-rc1 | 2026.07.03-rc1 |
+
+Updated in `.env.example` / `.env.local.example` only — local secrets unchanged.

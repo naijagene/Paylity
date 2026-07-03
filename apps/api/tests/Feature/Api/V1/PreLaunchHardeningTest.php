@@ -93,6 +93,40 @@ class PreLaunchHardeningTest extends TestCase
             ->assertExitCode(1);
     }
 
+    public function test_preflight_command_fails_on_staging_debug_enabled(): void
+    {
+        config([
+            'app.env' => 'staging',
+            'app.debug' => true,
+            'app.url' => 'https://api-staging.paylity.ng',
+            'app.frontend_url' => 'https://staging.paylity.ng',
+            'app.version' => '1.0.0-rc1',
+            'app.build' => '2026.07.03-rc1',
+            'services.operator.access_key' => self::OPERATOR_KEY,
+        ]);
+
+        $this->artisan('paylity:preflight')
+            ->assertExitCode(1);
+    }
+
+    public function test_preflight_command_passes_for_valid_staging_configuration(): void
+    {
+        config([
+            'app.env' => 'staging',
+            'app.debug' => false,
+            'app.url' => 'https://api-staging.paylity.ng',
+            'app.frontend_url' => 'https://staging.paylity.ng',
+            'app.version' => '1.0.0-rc1',
+            'app.build' => '2026.07.03-rc1',
+            'services.operator.access_key' => self::OPERATOR_KEY,
+            'services.paystack.enabled' => false,
+            'services.vtpass.enabled' => false,
+        ]);
+
+        $this->artisan('paylity:preflight')
+            ->assertExitCode(0);
+    }
+
     public function test_cors_config_includes_frontend_url(): void
     {
         config([

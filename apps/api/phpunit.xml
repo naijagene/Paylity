@@ -40,5 +40,7 @@
         <env name="FEATURE_VTPASS_AUTO_FULFILL" value="false"/>
         <env name="VTPASS_SANDBOX_TESTS" value="false"/>
         <env name="OPERATOR_ACCESS_KEY" value="test-operator-key"/>
+        <env name="APP_VERSION" value="1.0.0-rc1"/>
+        <env name="APP_BUILD" value="2026.07.03-rc1"/>
     </php>
 </phpunit>

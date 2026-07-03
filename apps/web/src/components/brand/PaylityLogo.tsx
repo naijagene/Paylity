@@ -23,9 +23,9 @@ const sizeStyles: Record<
     heightClass: string;
   }
 > = {
-  sm: { heightClass: "h-9 w-auto" },
-  md: { heightClass: "h-9 w-auto sm:h-11" },
-  lg: { heightClass: "h-9 w-auto sm:h-12" },
+  sm: { heightClass: "h-9 w-auto sm:h-10" },
+  md: { heightClass: "h-10 w-auto sm:h-12" },
+  lg: { heightClass: "h-11 w-auto sm:h-[3rem]" },
 };
 
 export function PaylityLogo({
