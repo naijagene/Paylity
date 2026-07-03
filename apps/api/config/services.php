@@ -58,6 +58,9 @@ return [
         'test_disco' => env('VTPASS_TEST_DISCO'),
         'test_meter_number' => env('VTPASS_TEST_METER_NUMBER'),
         'test_meter_type' => env('VTPASS_TEST_METER_TYPE', 'prepaid'),
+        'test_data_service_id' => env('VTPASS_TEST_DATA_SERVICE_ID'),
+        'test_data_variation_code' => env('VTPASS_TEST_DATA_VARIATION_CODE'),
+        'test_data_phone' => env('VTPASS_TEST_DATA_PHONE'),
     ],
 
     'operator' => [

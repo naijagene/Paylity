@@ -1,16 +1,14 @@
 # VTPass Certification Report — PAYLITY NG
 
-**Document status:** Template — update after sandbox testing  
+**Document status:** Partial sandbox certification recorded  
 **Last updated:** July 2026  
-**Ticket:** PAY-015
+**Ticket:** PAY-015 / PAY-015C
 
 ---
 
 ## Certification result
 
-> **NOT CERTIFIED**
-
-Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox test steps and recording evidence below.
+> **PARTIALLY CERTIFIED (sandbox)**
 
 | Result | Criteria |
 |--------|----------|
@@ -20,17 +18,29 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 ---
 
+## Product certification status (sandbox)
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Airtime purchase | **CERTIFIED in sandbox** | Sandbox purchase fulfilled successfully |
+| Electricity merchant verify | **CERTIFIED in sandbox** | Test meter verify succeeded |
+| Data purchase | **PENDING valid variation code** | Failed with `VARIATION CODE DOES NOT EXIST FOR SELECTED PRODUCT` using frontend plan ID; set `VTPASS_TEST_DATA_VARIATION_CODE` from VTPass API |
+| Invalid meter rejection | **SANDBOX-INCONCLUSIVE** | Sandbox may return verified for arbitrary meters; use `test_empty_meter_is_rejected_before_vtpass_api_call` for local validation |
+| Invalid network | **CERTIFIED in sandbox** | Unsupported disco rejected before/at API |
+
+---
+
 ## Environment
 
 | Item | Value |
 |------|-------|
-| API environment | _local / staging_ |
+| API environment | Local / staging |
 | VTPass environment | Sandbox |
 | Base URL | `https://sandbox.vtpass.com` |
-| `FEATURE_VTPASS` | _true / false_ |
-| `FEATURE_VTPASS_AUTO_FULFILL` | _false (required for launch)_ |
-| Tester | _name_ |
-| Test date | _YYYY-MM-DD_ |
+| `FEATURE_VTPASS` | true (when running integration tests) |
+| `FEATURE_VTPASS_AUTO_FULFILL` | false |
+| Tester | _engineering_ |
+| Test date | July 2026 |
 
 ---
 
@@ -38,10 +48,10 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Username configured | ☐ | |
-| Password configured | ☐ | Not logged |
-| API key configured | ☐ | Not logged |
-| `paylity:vtpass-check` PASS | ☐ | |
+| Username configured | ☑ | |
+| Password configured | ☑ | Not logged |
+| API key configured | ☑ | Not logged |
+| `paylity:vtpass-check` PASS | ☑ | Merchant verify passes with test meter |
 
 ---
 
@@ -49,9 +59,9 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Base URL reachable | ☐ | |
-| HTTP timeout configured | ☐ | Default 30s |
-| Retry policy configured | ☐ | Default 2 retries |
+| Base URL reachable | ☑ | |
+| HTTP timeout configured | ☑ | Default 30s |
+| Retry policy configured | ☑ | Default 2 retries |
 
 ---
 
@@ -59,8 +69,8 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Merchant verify accepted | ☐ | Test meter: _number_ |
-| Invalid credentials rejected | ☐ | |
+| Merchant verify accepted | ☑ | Test meter configured via `VTPASS_TEST_*` |
+| Invalid credentials rejected | ☑ | 401 diagnostics via `paylity:vtpass-check` |
 
 ---
 
@@ -68,11 +78,11 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Valid meter returns customer name | ☐ | |
-| Meter number returned | ☐ | |
-| Disco mapped correctly | ☐ | |
-| Status mapped via `VTPassResponseMapper` | ☐ | |
-| Unavailable when credentials missing | ☐ | Clear message shown |
+| Valid meter returns customer name | ☑ | Sandbox test meter |
+| Meter number returned | ☑ | |
+| Disco mapped correctly | ☑ | |
+| Status mapped via `VTPassResponseMapper` | ☑ | |
+| Unavailable when credentials missing | ☑ | Clear message shown |
 
 ---
 
@@ -80,9 +90,9 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Check | Status | Reference | Notes |
 |-------|--------|-----------|-------|
-| Payload maps MTN → `mtn` | ☐ | | |
-| Sandbox purchase via ops fulfill | ☐ | | |
-| Status → `fulfilled` | ☐ | | |
+| Payload maps MTN → `mtn` | ☑ | | Unit tests |
+| Sandbox purchase via ops fulfill | ☑ | PYL-SBOX-AIR-* | Integration test |
+| Status → `fulfilled` | ☑ | | **CERTIFIED in sandbox** |
 
 ---
 
@@ -90,9 +100,11 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Check | Status | Reference | Notes |
 |-------|--------|-----------|-------|
-| Variation code sent | ☐ | | Confirm sandbox catalog match |
-| Sandbox purchase via ops fulfill | ☐ | | |
-| Status → `fulfilled` | ☐ | | |
+| Variation code sent | ☐ | | Must use VTPass catalog code, not frontend plan ID |
+| Sandbox purchase via ops fulfill | ☐ | | **PENDING** — set `VTPASS_TEST_DATA_VARIATION_CODE` |
+| Status → `fulfilled` | ☐ | | Do not certify until integration test passes |
+
+**Blocker:** `VARIATION CODE DOES NOT EXIST FOR SELECTED PRODUCT` when using `mtn-1gb-daily`. Resolve via `docs/integrations/VTPASS-SANDBOX-TEST-STEPS.md` (Obtain valid data variation codes).
 
 ---
 
@@ -100,10 +112,10 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Check | Status | Reference | Notes |
 |-------|--------|-----------|-------|
-| Merchant verify before fulfill | ☐ | | Backend service ready |
-| Purchase payload includes meter fields | ☐ | | |
-| Sandbox purchase via ops fulfill | ☐ | | |
-| Status → `fulfilled` | ☐ | | |
+| Merchant verify before fulfill | ☑ | | Backend service ready |
+| Purchase payload includes meter fields | ☑ | | Unit tests |
+| Sandbox purchase via ops fulfill | ☐ | | Not yet recorded in this run |
+| Status → `fulfilled` | ☐ | | Merchant verify **CERTIFIED in sandbox** |
 
 ---
 
@@ -111,10 +123,11 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Scenario | Status | Notes |
 |----------|--------|-------|
-| Invalid meter → failed | ☐ | |
-| Invalid disco → failed | ☐ | |
-| Unpaid transaction → rejected | ☐ | Ops fulfill guard |
-| Timeout handled safely | ☐ | Feature test with Http fake |
+| Invalid meter → failed | **SANDBOX-INCONCLUSIVE** | Sandbox may verify `00000000000` |
+| Empty meter → rejected locally | ☑ | No VTPass API call |
+| Invalid disco → failed | ☑ | **CERTIFIED in sandbox** |
+| Unpaid transaction → rejected | ☑ | Ops fulfill guard (feature tests) |
+| Timeout handled safely | ☑ | Feature test with Http fake |
 
 ---
 
@@ -122,27 +135,27 @@ Update to **PARTIALLY CERTIFIED** or **CERTIFIED** only after completing sandbox
 
 | Metric | Target | Observed |
 |--------|--------|----------|
-| Merchant verify latency | < 10s | _ms_ |
-| Purchase latency | < 30s | _ms_ |
-| Retry on transient failure | Yes | _observed / not observed_ |
+| Merchant verify latency | < 10s | Within target (sandbox) |
+| Purchase latency | < 30s | Airtime within target |
+| Retry on transient failure | Yes | Configured |
 
 ---
 
 ## Observations
 
-_Document sandbox quirks, variation code mismatches, unsupported test numbers, or VTPass account limits._
-
-- 
-- 
-- 
+- Airtime sandbox fulfillment works end-to-end.
+- Electricity merchant verify works with configured sandbox test meter.
+- Data requires env-driven variation codes from VTPass `/api/service-variations` — frontend plan IDs are not valid VTPass codes.
+- Invalid meter negative testing is unreliable in sandbox; local empty-meter validation covers malformed input.
 
 ---
 
 ## Known issues (at time of report)
 
-1. Frontend checkout still uses mock meter verification UI — backend `ElectricityMeterVerificationService` is ready but not wired to checkout (by design for PAY-015 scope).
-2. Data plan IDs in frontend must be mapped to live VTPass variation codes before production.
+1. Frontend checkout still uses mock meter verification UI — backend service ready but not wired to checkout.
+2. Frontend `data_plan_id` values must be mapped to VTPass variation codes before production data launch.
 3. Integration tests skip in CI unless `VTPASS_SANDBOX_TESTS=true`.
+4. Data certification blocked until `VTPASS_TEST_DATA_VARIATION_CODE` is set and integration test passes.
 
 ---
 
@@ -150,7 +163,7 @@ _Document sandbox quirks, variation code mismatches, unsupported test numbers, o
 
 | Role | Name | Date | Result |
 |------|------|------|--------|
-| Engineering | | | NOT CERTIFIED |
+| Engineering | | July 2026 | PARTIALLY CERTIFIED (sandbox) |
 | Operations | | | |
 | Founder | | | |
 

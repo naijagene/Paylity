@@ -45,6 +45,9 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | `VTPASS_TEST_DISCO` | Sandbox verify test disco |
 | `VTPASS_TEST_METER_NUMBER` | Sandbox verify test meter |
 | `VTPASS_TEST_METER_TYPE` | `prepaid` or `postpaid` (default `prepaid`) |
+| `VTPASS_TEST_DATA_SERVICE_ID` | Sandbox data service ID (e.g. `mtn-data`) |
+| `VTPASS_TEST_DATA_VARIATION_CODE` | Valid sandbox data variation code |
+| `VTPASS_TEST_DATA_PHONE` | Phone number for sandbox data purchase test |
 | `VTPASS_SANDBOX_TESTS` | Enable integration test suite (default false) |
 
 ---
@@ -69,7 +72,37 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | Glo | `glo-data` |
 | 9mobile | `etisalat-data` |
 
-Variation code comes from checkout `data_plan_id` (e.g. `mtn-1gb-daily`). Map to live VTPass catalog before production.
+Variation codes are **not** the same as PAYLITY frontend `data_plan_id` values. Obtain valid sandbox codes from VTPass before running data certification.
+
+#### How to obtain sandbox data variation codes
+
+1. Log in to the [VTPass sandbox dashboard](https://sandbox.vtpass.com) and confirm your account is active.
+2. Query the service variations API for your target network:
+
+```bash
+curl -X POST https://sandbox.vtpass.com/api/service-variations \
+  -u "VTPASS_USERNAME:VTPASS_PASSWORD" \
+  -H "api-key: VTPASS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"serviceID":"mtn-data"}'
+```
+
+3. From the response, copy a valid `variation_code` (and note the matching `serviceID` and amount).
+4. Set in `apps/api/.env`:
+
+```env
+VTPASS_TEST_DATA_SERVICE_ID=mtn-data
+VTPASS_TEST_DATA_VARIATION_CODE=<variation_code_from_vtpass>
+VTPASS_TEST_DATA_PHONE=08011111111
+```
+
+5. Re-run integration tests:
+
+```bash
+php artisan test --testsuite=Integration
+```
+
+Do **not** mark Data as certified until `test_sandbox_data_purchase` passes with `status=fulfilled`.
 
 ### Electricity
 

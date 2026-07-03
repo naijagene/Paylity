@@ -29,6 +29,9 @@ VTPASS_PUBLIC_KEY=your_sandbox_public_key
 VTPASS_TEST_DISCO=IKEDC
 VTPASS_TEST_METER_NUMBER=45053854956
 VTPASS_TEST_METER_TYPE=prepaid
+VTPASS_TEST_DATA_SERVICE_ID=mtn-data
+VTPASS_TEST_DATA_VARIATION_CODE=
+VTPASS_TEST_DATA_PHONE=08011111111
 OPERATOR_ACCESS_KEY=your_ops_key
 ```
 
@@ -122,6 +125,40 @@ Passwords, API keys, secrets, and auth headers are **never** printed.
 php artisan config:clear
 php artisan paylity:vtpass-check
 ```
+
+---
+
+## Obtaining valid data variation codes
+
+PAYLITY frontend plan IDs (e.g. `mtn-1gb-daily`) are **not** VTPass variation codes. Sandbox data certification requires real codes from VTPass.
+
+1. Confirm sandbox credentials work: `php artisan paylity:vtpass-check`
+2. Query variations for your target data service:
+
+```bash
+curl -X POST https://sandbox.vtpass.com/api/service-variations \
+  -u "VTPASS_USERNAME:VTPASS_PASSWORD" \
+  -H "api-key: VTPASS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"serviceID":"mtn-data"}'
+```
+
+3. Pick a `variation_code` from the response (note amount and validity).
+4. Set env values:
+
+```env
+VTPASS_TEST_DATA_SERVICE_ID=mtn-data
+VTPASS_TEST_DATA_VARIATION_CODE=<code_from_vtpass>
+VTPASS_TEST_DATA_PHONE=08011111111
+```
+
+5. Run `php artisan test --testsuite=Integration`
+
+If `VTPASS_TEST_DATA_VARIATION_CODE` is unset, the data purchase test skips with:
+
+`Set VTPASS_TEST_DATA_VARIATION_CODE to a valid sandbox variation code.`
+
+Do not mark Data as **CERTIFIED** until that test passes with `fulfilled` status.
 
 ---
 

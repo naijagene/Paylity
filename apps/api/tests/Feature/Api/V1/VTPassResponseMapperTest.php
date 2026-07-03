@@ -156,6 +156,30 @@ class VTPassResponseMapperTest extends TestCase
         }
     }
 
+    public function test_empty_meter_is_rejected_before_vtpass_api_call(): void
+    {
+        config([
+            'services.vtpass.enabled' => true,
+            'services.vtpass.username' => 'sandbox-user',
+            'services.vtpass.password' => 'sandbox-pass',
+            'services.vtpass.api_key' => 'sandbox-key',
+        ]);
+
+        Http::fake();
+
+        $result = app(ElectricityMeterVerificationService::class)->verify(
+            'IKEDC',
+            '',
+            'prepaid',
+        );
+
+        $this->assertFalse($result['verified']);
+        $this->assertSame(VTPassResponseMapper::STATUS_FAILED, $result['status']);
+        $this->assertStringContainsString('Meter number is required', $result['message']);
+
+        Http::assertNothingSent();
+    }
+
     public function test_timeout_handling_returns_vtpass_timeout(): void
     {
         config([
