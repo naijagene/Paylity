@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AboutModal } from "@/components/system/AboutModal";
 import { PaylityLogo } from "@/components/brand/PaylityLogo";
+import { CONTENT_MAX_WIDTH_CLASS } from "@/components/PageContainer";
 import { getBuildInfo } from "@/lib/system/buildInfo";
 
 type AppFooterProps = {
@@ -30,7 +31,7 @@ export function AppFooter({ className = "" }: AppFooterProps) {
         className={`mt-auto border-t border-border bg-card py-8 ${className}`}
         aria-label="Site footer"
       >
-        <div className="mx-auto max-w-[52rem] px-4 sm:px-6">
+        <div className={`mx-auto ${CONTENT_MAX_WIDTH_CLASS} px-4 sm:px-6`}>
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <PaylityLogo size="sm" href="/" />
 

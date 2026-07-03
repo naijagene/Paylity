@@ -12,11 +12,11 @@ export default function Home() {
       <PageContainer>
         <SiteHeader />
 
-        <section className="mb-8 text-center sm:text-left">
-          <h1 className="font-display text-4xl font-extrabold leading-tight tracking-tight text-dark sm:text-5xl lg:text-[3.35rem]">
+        <section className="mb-10 text-center sm:text-left">
+          <h1 className="font-display text-[2.75rem] font-extrabold leading-[1.05] tracking-tight text-dark sm:text-6xl lg:text-[4.25rem]">
             Fast <span className="text-success">Utility</span> Payments
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
+          <p className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed text-muted sm:text-xl sm:leading-8">
             Buy Airtime, Data and Electricity in less than 30 seconds. No
             registration required.
           </p>

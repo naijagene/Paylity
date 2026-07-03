@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { SystemIdentity } from "@/components/system/SystemIdentity";
 import { getBuildInfo } from "@/lib/system/buildInfo";
 
@@ -44,8 +45,8 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
         onClick={(event) => event.stopPropagation()}
       >
         <div className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-lg font-black text-dark">
-            P
+          <div className="mx-auto mb-4 flex justify-center">
+            <PaylityLogo size="md" href={undefined} />
           </div>
           <h2
             id="about-modal-title"

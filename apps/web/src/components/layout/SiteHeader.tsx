@@ -22,7 +22,7 @@ export function SiteHeader({ className = "" }: SiteHeaderProps) {
     <header
       className={`mb-8 flex flex-col gap-4 border-b border-border/80 pb-5 sm:flex-row sm:items-center sm:justify-between ${className}`}
     >
-      <PaylityLogo size="md" />
+      <PaylityLogo size="md" priority />
 
       <nav
         aria-label="Primary"

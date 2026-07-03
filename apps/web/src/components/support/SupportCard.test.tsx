@@ -20,7 +20,7 @@ describe("SupportCard", () => {
     expect(screen.getByText("support@paylity.ng")).toBeInTheDocument();
   });
 
-  it("shows WhatsApp support only when configured", () => {
+  it("shows WhatsApp link when configured", () => {
     vi.stubEnv(
       "NEXT_PUBLIC_WHATSAPP_URL",
       "https://wa.me/2348012345678",
@@ -31,9 +31,22 @@ describe("SupportCard", () => {
     expect(
       screen.getByRole("link", { name: /Chat with PAYLITY Support on WhatsApp/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Chat on WhatsApp")).toBeInTheDocument();
   });
 
-  it("hides WhatsApp support when placeholder number is configured", () => {
+  it("shows WhatsApp coming soon card when URL is not configured", () => {
+    vi.stubEnv("NEXT_PUBLIC_WHATSAPP_URL", "");
+
+    render(<SupportCard reference="PYL-20260702-ABC123" />);
+
+    expect(
+      screen.getByLabelText(/WhatsApp Support coming soon/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Coming Soon")).toBeInTheDocument();
+    expect(screen.getByText("WhatsApp Support")).toBeInTheDocument();
+  });
+
+  it("shows WhatsApp coming soon card when placeholder number is configured", () => {
     vi.stubEnv(
       "NEXT_PUBLIC_WHATSAPP_URL",
       "https://wa.me/2348000000000",
@@ -42,7 +55,10 @@ describe("SupportCard", () => {
     render(<SupportCard reference="PYL-20260702-ABC123" />);
 
     expect(
-      screen.queryByRole("link", { name: /WhatsApp Support/i }),
+      screen.getByLabelText(/WhatsApp Support coming soon/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Chat with PAYLITY Support on WhatsApp/i }),
     ).not.toBeInTheDocument();
   });
 });

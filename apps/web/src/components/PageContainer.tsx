@@ -1,5 +1,7 @@
 import { type ReactNode } from "react";
 
+export const CONTENT_MAX_WIDTH_CLASS = "max-w-[61.25rem]";
+
 type PageContainerProps = {
   children: ReactNode;
   className?: string;
@@ -14,7 +16,7 @@ export function PageContainer({
   return (
     <div
       className={`mx-auto w-full px-4 py-6 sm:px-6 sm:py-8 ${
-        narrow ? "max-w-[52rem]" : "max-w-6xl"
+        narrow ? CONTENT_MAX_WIDTH_CLASS : "max-w-6xl"
       } ${className}`}
     >
       {children}

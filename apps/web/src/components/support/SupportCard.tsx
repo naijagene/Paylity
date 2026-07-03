@@ -40,6 +40,9 @@ function EmailIcon() {
   );
 }
 
+const actionCardClassName =
+  "flex min-h-[4.5rem] flex-1 items-center gap-3 rounded-2xl px-4 py-3";
+
 export function SupportCard({
   reference,
   className = "",
@@ -72,13 +75,13 @@ export function SupportCard({
           </div>
         </div>
 
-        <div className="flex w-full flex-col gap-3 sm:flex-row lg:max-w-xl lg:justify-end">
+        <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-xl lg:justify-end">
           <Link
             href={getSupportEmailHref(reference)}
-            className="flex min-h-[4.5rem] flex-1 items-center gap-3 rounded-2xl border border-border-green bg-card px-4 py-3 transition-colors hover:border-success hover:bg-success-light/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2"
+            className={`${actionCardClassName} border border-border-green bg-card transition-colors hover:border-success hover:bg-success-light/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2`}
             aria-label={`Email PAYLITY Support at ${SUPPORT_EMAIL}`}
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-light text-success">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-success-light text-success">
               <EmailIcon />
             </span>
             <span>
@@ -92,13 +95,26 @@ export function SupportCard({
               href={buildWhatsAppHref(whatsappUrl, message)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex min-h-[4.5rem] flex-1 items-center justify-center gap-2 rounded-2xl bg-success px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-success-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2"
+              className={`${actionCardClassName} justify-center bg-success text-white transition-colors hover:bg-success-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2`}
               aria-label="Chat with PAYLITY Support on WhatsApp"
             >
               <WhatsAppIcon />
-              Chat on WhatsApp
+              <span className="text-sm font-semibold">Chat on WhatsApp</span>
             </Link>
-          ) : null}
+          ) : (
+            <div
+              className={`${actionCardClassName} border border-border-green bg-success-light/30 text-dark`}
+              aria-label="WhatsApp Support coming soon"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-success/15 text-success">
+                <WhatsAppIcon />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-dark">WhatsApp Support</span>
+                <span className="block text-sm text-muted">Coming Soon</span>
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

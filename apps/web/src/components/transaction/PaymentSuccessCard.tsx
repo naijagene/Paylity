@@ -1,5 +1,6 @@
 import { Button } from "@/components/Button";
 import { AdSlot } from "@/components/ads/AdSlot";
+import { CONTENT_MAX_WIDTH_CLASS } from "@/components/PageContainer";
 import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
@@ -32,7 +33,7 @@ export function PaymentSuccessCard({
   };
 
   return (
-    <div className="animate-fade-in mx-auto w-full max-w-[52rem] space-y-6">
+    <div className={`animate-fade-in mx-auto w-full ${CONTENT_MAX_WIDTH_CLASS} space-y-6`}>
       <header className="border-b border-border pb-5">
         <PaylityLogo size="md" href="/" />
       </header>
