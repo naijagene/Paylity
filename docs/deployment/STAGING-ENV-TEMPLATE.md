@@ -1,10 +1,18 @@
 # Staging Environment Templates — PAYLITY NG RC1
 
-Use these templates when provisioning **staging**. Copy values into your deployment secrets manager or server `.env` files. Do **not** commit real credentials.
+Use these templates when provisioning **staging** on the **hybrid stack** (Vercel frontend + cPanel API). Copy values into Vercel env settings and the cPanel API `.env`. Do **not** commit real credentials.
+
+**Deployment guides**
+
+- [HYBRID-STAGING-DEPLOYMENT.md](./HYBRID-STAGING-DEPLOYMENT.md) — overview
+- [CPANEL-LARAVEL-API-DEPLOYMENT.md](./CPANEL-LARAVEL-API-DEPLOYMENT.md) — backend on cPanel VPS
+- [VERCEL-FRONTEND-DEPLOYMENT.md](./VERCEL-FRONTEND-DEPLOYMENT.md) — frontend on Vercel
 
 ---
 
-## Backend — `.env.staging`
+## Backend — `.env` on cPanel VPS
+
+File location: `/home/<user>/paylity/apps/api/.env`
 
 ```env
 APP_NAME=PAYLITY NG
@@ -72,29 +80,33 @@ VTPASS_SANDBOX_TESTS=false
 VTPASS_SKIP_DATA_CERTIFICATION=false
 ```
 
-### Backend notes
+### Backend notes (cPanel)
 
 | Variable | Staging guidance |
 |----------|------------------|
 | `APP_DEBUG` | Must be `false` |
+| `DB_HOST` | Usually `127.0.0.1` on cPanel; use full cPanel-prefixed DB name/user |
 | `FEATURE_VTPASS_AUTO_FULFILL` | Keep `false` unless running intentional auto-delivery tests |
-| `PAYSTACK_CALLBACK_URL` | Must match the **frontend** callback route on staging |
+| `PAYSTACK_CALLBACK_URL` | Frontend URL on Vercel — not the API domain |
+| `FRONTEND_URL` | Must be `https://staging.paylity.ng` for CORS |
 | `OPERATOR_ACCESS_KEY` | Required for ops console; rotate if leaked |
-| `QUEUE_CONNECTION` | Use `database` or `redis`; run a queue worker |
-| `LOG_LEVEL` | `info` or `warning` on staging |
+| `QUEUE_CONNECTION` | Use `database`; configure cron worker on cPanel |
 
-After configuring:
+After configuring (SSH on VPS):
 
 ```bash
+cd /home/<user>/paylity/apps/api
+composer install --no-dev --optimize-autoloader
 php artisan migrate --force
-php artisan config:cache
-php artisan route:cache
+php artisan optimize
 php artisan paylity:preflight
 ```
 
 ---
 
-## Frontend — `.env.staging`
+## Frontend — Vercel environment variables
+
+Set in **Vercel → Project → Settings → Environment Variables** (Production scope for `staging.paylity.ng`).
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=https://api-staging.paylity.ng/api/v1
@@ -110,27 +122,35 @@ NEXT_PUBLIC_SUPPORT_EMAIL=support@paylity.ng
 NEXT_PUBLIC_WHATSAPP_URL=https://wa.me/234XXXXXXXXXX
 ```
 
-### Frontend notes
+### Frontend notes (Vercel)
 
 | Variable | Staging guidance |
 |----------|------------------|
-| `NEXT_PUBLIC_SITE_URL` | Used for SEO metadata base URL |
-| `NEXT_PUBLIC_ENVIRONMENT` | Displayed in footer/build panel as **Staging** |
-| `NEXT_PUBLIC_WHATSAPP_URL` | Omit placeholder numbers; leave empty to show “Coming Soon” card |
-| Build | Run `npm run build` with these vars injected at build time |
+| `NEXT_PUBLIC_SITE_URL` | SEO metadata base URL |
+| `NEXT_PUBLIC_ENVIRONMENT` | Footer/build panel shows **Staging** |
+| `NEXT_PUBLIC_WHATSAPP_URL` | Leave empty for “Coming Soon” card; no placeholder numbers |
+| Build | Redeploy after changing any `NEXT_PUBLIC_*` value |
 
 ---
 
-## Paystack dashboard (staging)
-
-Configure in Paystack test mode:
+## Paystack dashboard (staging / test mode)
 
 | Setting | Value |
 |---------|-------|
 | Callback URL | `https://staging.paylity.ng/payment/callback` |
 | Webhook URL | `https://api-staging.paylity.ng/api/v1/payments/paystack/webhook` |
 
-Confirm webhook secret matches `PAYSTACK_SECRET_KEY` verification in Laravel.
+Webhook is handled by Laravel on cPanel. Callback lands on Vercel frontend.
+
+---
+
+## VTPass (staging / sandbox)
+
+| Setting | Value |
+|---------|-------|
+| Base URL | `https://sandbox.vtpass.com` |
+| Credentials | Sandbox username / password / API key in API `.env` only |
+| Auto-fulfill | `FEATURE_VTPASS_AUTO_FULFILL=false` initially |
 
 ---
 

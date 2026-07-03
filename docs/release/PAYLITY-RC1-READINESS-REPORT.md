@@ -61,14 +61,17 @@ Paystack test-mode payment initialization and backend verification are implement
 
 ## Deployment requirements
 
-### Infrastructure
+### Infrastructure (hybrid staging — PAY-017)
 
-- Frontend: `https://staging.paylity.ng` (Next.js)
-- API: `https://api-staging.paylity.ng` (Laravel)
-- MySQL/PostgreSQL (not SQLite)
-- SSL on both domains
-- Queue worker + scheduler
-- Writable `storage/` and `bootstrap/cache/`
+| Component | Platform | URL |
+|-----------|----------|-----|
+| Frontend | **Vercel** | `https://staging.paylity.ng` |
+| API | **cPanel VPS** | `https://api-staging.paylity.ng` |
+| Database | **cPanel VPS** (MySQL/PostgreSQL) | localhost |
+| DNS | **cPanel Zone Editor** | CNAME staging → Vercel; A api-staging → VPS |
+| SSL | Vercel (frontend) + cPanel AutoSSL (API) | Required |
+
+**Deployment guide:** [HYBRID-STAGING-DEPLOYMENT.md](../deployment/HYBRID-STAGING-DEPLOYMENT.md)
 
 ### Configuration
 
@@ -120,15 +123,16 @@ php artisan migrate --force
 
 ## Next milestone recommendation
 
-**PAY-017 — Staging validation & data certification**
+**PAY-017 — Hybrid staging provisioning** (this ticket)
 
-1. Deploy RC1 to staging using deployment checklist
-2. Execute full smoke test matrix and record results
-3. Complete VTPass data sandbox certification (resolve code 016)
-4. Decide auto-fulfill policy for soft launch
-5. Configure live support channels (email + WhatsApp)
-6. Re-run preflight on staging with production-like queue/logging
-7. Produce soft-launch go/no-go from staging evidence
+1. Provision DNS in cPanel (CNAME + A records)
+2. Deploy API to cPanel following [CPANEL-LARAVEL-API-DEPLOYMENT.md](../deployment/CPANEL-LARAVEL-API-DEPLOYMENT.md)
+3. Deploy frontend to Vercel following [VERCEL-FRONTEND-DEPLOYMENT.md](../deployment/VERCEL-FRONTEND-DEPLOYMENT.md)
+4. Execute full smoke test matrix and record results
+5. Complete VTPass data sandbox certification (resolve code 016)
+6. Decide auto-fulfill policy for soft launch
+7. Configure live support channels (email + WhatsApp)
+8. Produce soft-launch go/no-go from staging evidence
 
 ---
 

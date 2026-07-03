@@ -2,6 +2,9 @@
 
 Step-by-step guide for staging and production deployment.
 
+> **Staging (RC1):** Use the **hybrid path** — Vercel frontend + cPanel API.  
+> Start here: [docs/deployment/HYBRID-STAGING-DEPLOYMENT.md](../deployment/HYBRID-STAGING-DEPLOYMENT.md)
+
 ---
 
 ## Production server requirements
@@ -69,6 +72,9 @@ php artisan migrate --force
 ---
 
 ## Web server (Nginx)
+
+> **Optional — not used for hybrid staging.** Staging frontend is on Vercel; staging API is on cPanel (Apache/LiteSpeed).  
+> For raw VPS deployments, see [docs/deployment/VPS-ONLY-REFERENCE.md](../deployment/VPS-ONLY-REFERENCE.md).
 
 Example API upstream:
 

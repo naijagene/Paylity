@@ -1,114 +1,143 @@
 # Staging Deployment Checklist — PAYLITY NG RC1
 
-Use this checklist when deploying **Release Candidate 1** to staging.
+Use this checklist when deploying **Release Candidate 1** to staging on the **hybrid stack**:
 
-**Target URLs**
+| Component | Platform | URL |
+|-----------|----------|-----|
+| Frontend | **Vercel** | `https://staging.paylity.ng` |
+| API | **cPanel VPS** | `https://api-staging.paylity.ng` |
+| Database | **cPanel VPS** | MySQL or PostgreSQL |
 
-- Frontend: `https://staging.paylity.ng`
-- API: `https://api-staging.paylity.ng`
+**Primary guide:** [HYBRID-STAGING-DEPLOYMENT.md](./HYBRID-STAGING-DEPLOYMENT.md)
 
 ---
 
-## 1. Domain & DNS
+## 1. DNS (cPanel Zone Editor)
 
-- [ ] `staging.paylity.ng` A/AAAA or CNAME points to web server
-- [ ] `api-staging.paylity.ng` A/AAAA or CNAME points to API server
+- [ ] **CNAME** `staging` → Vercel target (e.g. `cname.vercel-dns.com`)
+- [ ] **A** record `api-staging` → VPS public IP
+- [ ] DNS propagated (check with `dig` or online DNS tool)
 - [ ] TTL appropriate for rollback window
+
+Reference: [HYBRID-STAGING-DEPLOYMENT.md § DNS](./HYBRID-STAGING-DEPLOYMENT.md#1-dns-records-cpanel-zone-editor)
+
+---
 
 ## 2. SSL / TLS
 
-- [ ] Valid certificate on frontend domain
-- [ ] Valid certificate on API domain
-- [ ] HTTPS redirect enforced
-- [ ] HSTS considered (optional for staging)
+- [ ] `staging.paylity.ng` — SSL issued by **Vercel** (after CNAME validates)
+- [ ] `api-staging.paylity.ng` — SSL issued by **cPanel** AutoSSL / Let’s Encrypt
+- [ ] HTTPS loads on both URLs without certificate warnings
 
-## 3. API server (Laravel)
+---
 
+## 3. cPanel — Laravel API
+
+Full guide: [CPANEL-LARAVEL-API-DEPLOYMENT.md](./CPANEL-LARAVEL-API-DEPLOYMENT.md)
+
+- [ ] Subdomain `api-staging.paylity.ng` created
+- [ ] Document root → `.../apps/api/public`
 - [ ] PHP 8.2+ with required extensions
-- [ ] Composer install (`--no-dev` for staging)
-- [ ] `.env` populated from [STAGING-ENV-TEMPLATE.md](./STAGING-ENV-TEMPLATE.md)
+- [ ] Code deployed (`apps/api` via Git/SFTP)
+- [ ] `.env` from [STAGING-ENV-TEMPLATE.md](./STAGING-ENV-TEMPLATE.md)
+- [ ] `composer install --no-dev --optimize-autoloader`
 - [ ] `php artisan key:generate` (first deploy only)
 - [ ] `php artisan migrate --force`
-- [ ] `php artisan config:cache` and `route:cache`
-- [ ] `php artisan paylity:preflight` passes (no FAIL items)
-- [ ] Web server document root → `public/`
+- [ ] `php artisan optimize`
+- [ ] `php artisan paylity:preflight` — no FAIL items
 - [ ] `storage/` and `bootstrap/cache/` writable
+- [ ] Health check: `curl https://api-staging.paylity.ng/api/v1/health`
 
-## 4. Web server (Next.js)
+---
 
-- [ ] Node.js LTS installed on build host
-- [ ] Frontend `.env.staging` values injected at build time
-- [ ] `npm ci && npm run build`
-- [ ] Process manager (PM2/systemd) or platform deploy configured
-- [ ] Static assets served (`public/brand/paylity-logo.png`, favicons)
+## 4. cPanel — Database
 
-## 5. Database
-
-- [ ] MySQL/PostgreSQL provisioned (avoid SQLite on staging)
-- [ ] Credentials rotated from template placeholders
-- [ ] Backups enabled
+- [ ] MySQL or PostgreSQL database created
+- [ ] Database user created with privileges
+- [ ] Credentials in API `.env` (use cPanel-prefixed names)
 - [ ] Migrations applied successfully
+- [ ] Backup schedule enabled in cPanel
 
-## 6. Queue worker
+---
 
-- [ ] `QUEUE_CONNECTION` not `sync`
-- [ ] Worker process running (`php artisan queue:work`)
-- [ ] Failed jobs table monitored
-- [ ] Restart worker after deploy
+## 5. cPanel — Cron & queue
 
-## 7. Scheduler / cron
+- [ ] Scheduler cron: `* * * * * php .../artisan schedule:run`
+- [ ] Queue worker cron or long-running process configured
+- [ ] `QUEUE_CONNECTION=database` (not `sync`)
+- [ ] Failed jobs monitored in `failed_jobs` table
 
-- [ ] Cron entry: `* * * * * php /path/to/artisan schedule:run`
-- [ ] Scheduled tasks verified (if any)
+Reference: [CPANEL-LARAVEL-API-DEPLOYMENT.md § Queue](./CPANEL-LARAVEL-API-DEPLOYMENT.md#10-queue-worker-cpanel-options)
 
-## 8. Storage & logs
+---
 
-- [ ] Log rotation configured
-- [ ] Disk space alerts set
-- [ ] No sensitive payloads logged in production mode
+## 6. Vercel — Next.js frontend
 
-## 9. Environment configuration
+Full guide: [VERCEL-FRONTEND-DEPLOYMENT.md](./VERCEL-FRONTEND-DEPLOYMENT.md)
 
-- [ ] `APP_ENV=staging`
-- [ ] `APP_DEBUG=false`
-- [ ] `APP_VERSION=1.0.0-rc1`
-- [ ] `APP_BUILD=2026.07.03-rc1`
-- [ ] `FRONTEND_URL` matches frontend domain
+- [ ] GitHub repo imported
+- [ ] Root directory: `apps/web`
+- [ ] Build command: `npm run build`
+- [ ] All `NEXT_PUBLIC_*` vars set from [STAGING-ENV-TEMPLATE.md](./STAGING-ENV-TEMPLATE.md)
+- [ ] Custom domain `staging.paylity.ng` added and verified
+- [ ] Production deployment successful
+- [ ] Homepage and favicon load
+
+---
+
+## 7. Environment configuration
+
+- [ ] `APP_ENV=staging` (API)
+- [ ] `APP_DEBUG=false` (API)
+- [ ] `APP_VERSION=1.0.0-rc1` / `APP_BUILD=2026.07.03-rc1`
+- [ ] `FRONTEND_URL=https://staging.paylity.ng`
+- [ ] `APP_URL=https://api-staging.paylity.ng`
 - [ ] `OPERATOR_ACCESS_KEY` set and stored securely
 - [ ] `FEATURE_VTPASS_AUTO_FULFILL=false` unless testing auto-delivery
+- [ ] `NEXT_PUBLIC_ENVIRONMENT=Staging` (Vercel)
 
-## 10. Paystack (test mode)
+---
 
-- [ ] Test public/secret keys configured
-- [ ] Callback URL → staging frontend `/payment/callback`
-- [ ] Webhook URL → staging API webhook route
+## 8. Paystack (test mode)
+
+- [ ] Test public/secret keys in API `.env`
+- [ ] Callback URL → `https://staging.paylity.ng/payment/callback`
+- [ ] Webhook URL → `https://api-staging.paylity.ng/api/v1/payments/paystack/webhook`
 - [ ] Test payment completes end-to-end
 
-## 11. VTPass (sandbox)
+---
 
-- [ ] Sandbox username/password/API key configured
+## 9. VTPass (sandbox)
+
+- [ ] `VTPASS_BASE_URL=https://sandbox.vtpass.com`
+- [ ] Sandbox credentials in API `.env`
 - [ ] `FEATURE_VTPASS=true`
-- [ ] `php artisan paylity:vtpass-check` passes (if available)
+- [ ] `php artisan paylity:vtpass-check` passes (when available)
 - [ ] Manual ops fulfillment tested
 
-## 12. Operator / Ops console
+---
 
-- [ ] Ops URL reachable: `/ops`
+## 10. Operator / Ops console
+
+- [ ] `https://staging.paylity.ng/ops` reachable
 - [ ] Operator key works for list + detail + manual fulfill
-- [ ] Ops banner visible for sandbox/staging
+- [ ] Ops banner visible for staging/sandbox
 
-## 13. Smoke tests
+---
+
+## 11. Smoke tests
 
 - [ ] Run [STAGING-SMOKE-TESTS.md](./STAGING-SMOKE-TESTS.md)
 - [ ] Record results with date and tester name
 
-## 14. Rollback plan
+---
 
-- [ ] Previous release tag/build number documented
-- [ ] Database migration rollback strategy documented
-- [ ] Frontend rollback = redeploy previous build artifact
-- [ ] API rollback = redeploy previous release + `config:cache`
-- [ ] Paystack webhook/callback URLs can be reverted quickly
+## 12. Rollback plan
+
+- [ ] **Vercel:** previous deployment ID documented for promote/rollback
+- [ ] **cPanel API:** previous code tag/snapshot documented
+- [ ] **Database:** cPanel backup taken before first migration
+- [ ] Paystack callback/webhook URLs documented for revert
 
 ---
 
@@ -120,3 +149,9 @@ Use this checklist when deploying **Release Candidate 1** to staging.
 | Operations | | | |
 
 **Staging Go:** All critical items checked, smoke tests pass, preflight clean.
+
+---
+
+## Optional reference
+
+Nginx/systemd self-hosted setup: [VPS-ONLY-REFERENCE.md](./VPS-ONLY-REFERENCE.md) — **not required** for hybrid staging.

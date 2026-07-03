@@ -1,17 +1,28 @@
 # Staging Smoke Tests — PAYLITY NG RC1
 
-Run after each staging deployment. Record pass/fail, tester, date, and notes.
+Run after each staging deployment on the **hybrid stack** (Vercel frontend + cPanel API). Record pass/fail, tester, date, and notes.
 
 **Environment:** Staging · **Version:** 1.0.0-rc1 · **Build:** 2026.07.03-rc1
+
+**URLs**
+
+| Service | URL |
+|---------|-----|
+| Frontend (Vercel) | `https://staging.paylity.ng` |
+| API (cPanel) | `https://api-staging.paylity.ng` |
+
+**Deployment guide:** [HYBRID-STAGING-DEPLOYMENT.md](./HYBRID-STAGING-DEPLOYMENT.md)
 
 ---
 
 ## Prerequisites
 
-- [ ] Backend `.env` matches [STAGING-ENV-TEMPLATE.md](./STAGING-ENV-TEMPLATE.md)
-- [ ] Frontend built with staging public env vars
-- [ ] `php artisan paylity:preflight` — no FAIL items
-- [ ] Queue worker running (if async jobs used)
+- [ ] cPanel API `.env` matches [STAGING-ENV-TEMPLATE.md](./STAGING-ENV-TEMPLATE.md)
+- [ ] Vercel env vars match [STAGING-ENV-TEMPLATE.md](./STAGING-ENV-TEMPLATE.md) and deployment rebuilt
+- [ ] DNS: `staging` CNAME → Vercel, `api-staging` A → VPS
+- [ ] SSL valid on both domains
+- [ ] `php artisan paylity:preflight` — no FAIL items (run on cPanel via SSH)
+- [ ] Queue worker running on cPanel (if async jobs used)
 
 ---
 
