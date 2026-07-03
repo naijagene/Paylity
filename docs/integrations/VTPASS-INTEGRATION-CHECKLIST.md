@@ -42,9 +42,9 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | `VTPASS_TIMEOUT` | HTTP timeout seconds (default 30) |
 | `VTPASS_RETRY_TIMES` | Retry attempts (default 2) |
 | `VTPASS_RETRY_SLEEP_MS` | Delay between retries (default 500) |
-| `VTPASS_TEST_DISCO` | Sandbox verify test disco |
-| `VTPASS_TEST_METER_NUMBER` | Sandbox verify test meter |
-| `VTPASS_TEST_METER_TYPE` | `prepaid` or `postpaid` (default `prepaid`) |
+| `VTPASS_TEST_DISCO` | Legacy sandbox verify test disco (fallback when `VTPASS_TEST_ELECTRICITY_DISCO` is unset) |
+| `VTPASS_TEST_METER_NUMBER` | Legacy sandbox verify test meter (fallback when `VTPASS_TEST_ELECTRICITY_METER_NUMBER` is unset) |
+| `VTPASS_TEST_METER_TYPE` | Legacy `prepaid` or `postpaid` (fallback when `VTPASS_TEST_ELECTRICITY_METER_TYPE` is unset) |
 | `VTPASS_TEST_DATA_SERVICE_ID` | Sandbox data service ID (e.g. `mtn-data`) |
 | `VTPASS_TEST_DATA_VARIATION_CODE` | Valid sandbox data variation code |
 | `VTPASS_TEST_DATA_VARIATION_CODE_ALT` | Optional alternate sandbox data variation code |
@@ -54,6 +54,7 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | `VTPASS_TEST_ELECTRICITY_METER_TYPE` | `prepaid` or `postpaid` (default `prepaid`) |
 | `VTPASS_TEST_ELECTRICITY_PHONE` | Phone number for sandbox electricity purchase test |
 | `VTPASS_TEST_ELECTRICITY_AMOUNT` | Purchase amount in NGN for sandbox electricity test (default `1000`) |
+| `VTPASS_SKIP_DATA_CERTIFICATION` | Skip live data purchase integration test while documenting Data as PENDING (default `false`) |
 | `VTPASS_SANDBOX_TESTS` | Enable integration test suite (default false) |
 
 ---

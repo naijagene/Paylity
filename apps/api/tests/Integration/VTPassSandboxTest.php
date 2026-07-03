@@ -6,6 +6,7 @@ use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Services\Fulfillment\ElectricityMeterVerificationService;
 use App\Services\Fulfillment\FulfillmentService;
+use App\Services\Fulfillment\VTPassElectricityTestConfig;
 use App\Services\Fulfillment\VTPassResponseMapper;
 use App\Services\Fulfillment\VTPassService;
 use App\Services\Fulfillment\VTPassRequestIdGenerator;
@@ -23,7 +24,7 @@ use Tests\TestCase;
  * - Airtime purchase: CERTIFIED in sandbox when test_sandbox_airtime_purchase passes
  * - Electricity merchant verify: CERTIFIED in sandbox when test_sandbox_electricity_merchant_verify passes
  * - Electricity purchase: CERTIFIED in sandbox when test_sandbox_electricity_purchase passes
- * - Data purchase: PENDING until test_sandbox_data_purchase passes (diagnostics printed on failure)
+ * - Data purchase: PENDING until test_sandbox_data_purchase passes (skip with VTPASS_SKIP_DATA_CERTIFICATION=true)
  * - Invalid meter rejection: SANDBOX-INCONCLUSIVE (sandbox may verify unexpected meters)
  */
 class VTPassSandboxTest extends TestCase
@@ -91,6 +92,12 @@ class VTPassSandboxTest extends TestCase
 
     public function test_sandbox_data_purchase(): void
     {
+        if (filter_var(config('services.vtpass.skip_data_certification'), FILTER_VALIDATE_BOOLEAN)) {
+            $this->markTestSkipped(
+                'Data certification skipped (VTPASS_SKIP_DATA_CERTIFICATION=true). Status remains PENDING in VTPASS-CERTIFICATION-REPORT.md.',
+            );
+        }
+
         $variationCodes = $this->dataVariationCodesToTry();
 
         if ($variationCodes === []) {
@@ -133,10 +140,14 @@ class VTPassSandboxTest extends TestCase
 
     public function test_sandbox_electricity_merchant_verify(): void
     {
+        if (! VTPassElectricityTestConfig::isConfigured()) {
+            $this->markTestSkipped(VTPassElectricityTestConfig::missingConfigMessage());
+        }
+
         $result = app(ElectricityMeterVerificationService::class)->verify(
-            (string) config('services.vtpass.test_disco', 'IKEDC'),
-            (string) config('services.vtpass.test_meter_number', '45053854956'),
-            (string) config('services.vtpass.test_meter_type', 'prepaid'),
+            VTPassElectricityTestConfig::disco(),
+            VTPassElectricityTestConfig::meterNumber(),
+            VTPassElectricityTestConfig::meterType(),
         );
 
         $this->assertTrue($result['available']);
@@ -149,16 +160,13 @@ class VTPassSandboxTest extends TestCase
 
     public function test_sandbox_electricity_purchase(): void
     {
-        $meterNumber = trim((string) config('services.vtpass.test_electricity_meter_number', ''));
-
-        if ($meterNumber === '') {
-            $this->markTestSkipped(
-                'Set VTPASS_TEST_ELECTRICITY_METER_NUMBER to a valid sandbox prepaid/postpaid meter.',
-            );
+        if (! VTPassElectricityTestConfig::isConfigured()) {
+            $this->markTestSkipped(VTPassElectricityTestConfig::missingConfigMessage());
         }
 
-        $disco = trim((string) config('services.vtpass.test_electricity_disco', 'IKEDC'));
-        $meterType = strtolower(trim((string) config('services.vtpass.test_electricity_meter_type', 'prepaid'))) ?: 'prepaid';
+        $meterNumber = VTPassElectricityTestConfig::meterNumber();
+        $disco = VTPassElectricityTestConfig::disco();
+        $meterType = VTPassElectricityTestConfig::meterType();
         $phone = trim((string) config('services.vtpass.test_electricity_phone', '')) ?: '08011111111';
         $amount = (int) config('services.vtpass.test_electricity_amount', 1000);
 
@@ -293,13 +301,17 @@ class VTPassSandboxTest extends TestCase
 
     private function dataCertificationStatus(): string
     {
+        if (filter_var(config('services.vtpass.skip_data_certification'), FILTER_VALIDATE_BOOLEAN)) {
+            return 'PENDING (skipped in integration suite — VTPASS_SKIP_DATA_CERTIFICATION=true)';
+        }
+
         $variationCode = trim((string) config('services.vtpass.test_data_variation_code', ''));
 
         if ($variationCode === '') {
             return 'PENDING valid variation code (set VTPASS_TEST_DATA_VARIATION_CODE)';
         }
 
-        return 'PENDING until test_sandbox_data_purchase passes (diagnostics printed on failure)';
+        return 'PENDING — VTPass code 016 TRANSACTION FAILED (see certification report)';
     }
 
     /**
@@ -484,9 +496,7 @@ class VTPassSandboxTest extends TestCase
 
     private function electricityPurchaseCertificationStatus(): string
     {
-        $meterNumber = trim((string) config('services.vtpass.test_electricity_meter_number', ''));
-
-        if ($meterNumber === '') {
+        if (! VTPassElectricityTestConfig::isConfigured()) {
             return 'PENDING valid test meter (set VTPASS_TEST_ELECTRICITY_METER_NUMBER)';
         }
 

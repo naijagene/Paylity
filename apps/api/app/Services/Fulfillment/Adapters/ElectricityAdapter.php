@@ -4,33 +4,15 @@ namespace App\Services\Fulfillment\Adapters;
 
 use App\Exceptions\FulfillmentException;
 use App\Models\Transaction;
+use App\Services\Fulfillment\ElectricityDiscoMapper;
 use App\Services\Fulfillment\VTPassRequestIdGenerator;
 
 class ElectricityAdapter implements FulfillmentAdapterInterface
 {
-    public const DISCO_SERVICE_IDS = [
-        'aedc' => 'abuja-electric',
-        'ekedc' => 'ekedc',
-        'ikedc' => 'ikeja-electric',
-        'phed' => 'phed',
-        'ibedc' => 'ibedc',
-        'kedco' => 'kedco',
-    ];
-
-    /** @var array<string, string> */
-    private const DISCO_ALIASES = [
-        'aedc' => 'aedc',
-        'abuja-electric' => 'aedc',
-        'ekedc' => 'ekedc',
-        'eko-electric' => 'ekedc',
-        'ikedc' => 'ikedc',
-        'ikeja-electric' => 'ikedc',
-        'phed' => 'phed',
-        'ibedc' => 'ibedc',
-        'ibadan-electric' => 'ibedc',
-        'kedco' => 'kedco',
-        'kano-electric' => 'kedco',
-    ];
+    public function __construct(
+        private readonly ElectricityDiscoMapper $discoMapper,
+    ) {
+    }
 
     public function supports(string $productType): bool
     {
@@ -40,7 +22,7 @@ class ElectricityAdapter implements FulfillmentAdapterInterface
     public function buildPayload(Transaction $transaction): array
     {
         $payload = (array) $transaction->request_payload;
-        $discoKey = $this->resolveDiscoKey((string) ($payload['disco'] ?? ''));
+        $discoKey = $this->discoMapper->resolveDiscoKey((string) ($payload['disco'] ?? ''));
         $meterNumber = (string) ($payload['meter_number'] ?? '');
         $meterType = strtolower((string) ($payload['meter_type'] ?? ''));
 
@@ -48,7 +30,7 @@ class ElectricityAdapter implements FulfillmentAdapterInterface
 
         return [
             'request_id' => VTPassRequestIdGenerator::forTransaction($transaction),
-            'serviceID' => self::DISCO_SERVICE_IDS[$discoKey],
+            'serviceID' => $this->discoMapper->resolveServiceId($discoKey),
             'billersCode' => $meterNumber,
             'variation_code' => $meterType,
             'amount' => $transaction->product_amount,
@@ -67,13 +49,13 @@ class ElectricityAdapter implements FulfillmentAdapterInterface
      */
     public function buildVerifyPayload(string $disco, string $meterNumber, string $meterType): array
     {
-        $discoKey = $this->resolveDiscoKey($disco);
+        $discoKey = $this->discoMapper->resolveDiscoKey($disco);
         $normalizedMeterType = strtolower(trim($meterType));
 
         $this->assertMeterInput($discoKey, trim($meterNumber), $normalizedMeterType);
 
         return [
-            'serviceID' => self::DISCO_SERVICE_IDS[$discoKey],
+            'serviceID' => $this->discoMapper->resolveServiceId($discoKey),
             'billersCode' => trim($meterNumber),
             'type' => $normalizedMeterType,
         ];
@@ -84,40 +66,22 @@ class ElectricityAdapter implements FulfillmentAdapterInterface
      */
     public function supportedDiscos(): array
     {
-        return array_keys(self::DISCO_SERVICE_IDS);
+        return $this->discoMapper->supportedDiscos();
     }
 
     public function normalizeDisco(string $disco): string
     {
-        $normalized = strtolower(trim(str_replace(['_', ' '], '-', $disco)));
-
-        return self::DISCO_ALIASES[$normalized] ?? $normalized;
+        return $this->discoMapper->normalizeDisco($disco);
     }
 
     public function resolveServiceId(string $disco): string
     {
-        $discoKey = $this->resolveDiscoKey($disco);
-
-        return self::DISCO_SERVICE_IDS[$discoKey];
-    }
-
-    private function resolveDiscoKey(string $disco): string
-    {
-        $discoKey = $this->normalizeDisco($disco);
-
-        if (! isset(self::DISCO_SERVICE_IDS[$discoKey])) {
-            throw new FulfillmentException(
-                'Unsupported electricity disco for VTPass fulfillment.',
-                'UNSUPPORTED_DISCO',
-            );
-        }
-
-        return $discoKey;
+        return $this->discoMapper->resolveServiceId($disco);
     }
 
     private function assertMeterInput(string $discoKey, string $meterNumber, string $meterType): void
     {
-        if (! isset(self::DISCO_SERVICE_IDS[$discoKey])) {
+        if (! in_array($discoKey, $this->discoMapper->supportedDiscos(), true)) {
             throw new FulfillmentException(
                 'Unsupported electricity disco for VTPass fulfillment.',
                 'UNSUPPORTED_DISCO',

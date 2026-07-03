@@ -2,7 +2,7 @@
 
 **Document status:** Partial sandbox certification recorded  
 **Last updated:** July 2026  
-**Ticket:** PAY-015 / PAY-015C–H
+**Ticket:** PAY-015 / PAY-015C–K
 
 ---
 
@@ -23,9 +23,9 @@
 | Area | Status | Notes |
 |------|--------|-------|
 | Airtime purchase | **CERTIFIED in sandbox** | Sandbox purchase fulfilled successfully |
-| Electricity merchant verify | **CERTIFIED in sandbox** | Test meter verify succeeded |
+| Electricity merchant verify | **CERTIFIED in sandbox** | Uses `VTPASS_TEST_ELECTRICITY_*` (legacy `VTPASS_TEST_DISCO` / `VTPASS_TEST_METER_NUMBER` fallback); same normalized disco mapping as purchase via `ElectricityDiscoMapper` |
 | Electricity purchase | **CERTIFIED in sandbox** | `test_sandbox_electricity_purchase` passes with token/unit fields logged |
-| Data purchase | **PENDING** | Latest failure: `TRANSACTION FAILED` — use integration test diagnostics to inspect variation code, phone, sandbox balance |
+| Data purchase | **PENDING** | VTPass code `016` / `TRANSACTION FAILED` — not certified; see observed payload below |
 | Invalid meter rejection | **SANDBOX-INCONCLUSIVE** | Sandbox may return verified for arbitrary meters; use `test_empty_meter_is_rejected_before_vtpass_api_call` for local validation |
 | Invalid network | **CERTIFIED in sandbox** | Unsupported disco rejected before/at API |
 
@@ -52,7 +52,7 @@
 | Username configured | ☑ | |
 | Password configured | ☑ | Not logged |
 | API key configured | ☑ | Not logged |
-| `paylity:vtpass-check` PASS | ☑ | Merchant verify passes with test meter |
+| `paylity:vtpass-check` PASS | ☑ | Merchant verify passes with `VTPASS_TEST_ELECTRICITY_*` test meter |
 
 ---
 
@@ -70,7 +70,7 @@
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Merchant verify accepted | ☑ | Test meter configured via `VTPASS_TEST_*` |
+| Merchant verify accepted | ☑ | Test meter configured via `VTPASS_TEST_ELECTRICITY_*` (legacy fallback supported) |
 | Invalid credentials rejected | ☑ | 401 diagnostics via `paylity:vtpass-check` |
 
 ---
@@ -107,7 +107,21 @@
 | Status → `fulfilled` | ☐ | | Do not certify until integration test passes |
 | Failure diagnostics | ☑ | | Integration test prints sanitized `response_payload`, codes, and content errors |
 
-**Latest failure reason:** `TRANSACTION FAILED` (VTPass code `016`). Run `test_sandbox_data_purchase` with sandbox flags enabled to print sanitized diagnostics including `serviceID`, `variation_code`, `phone`, `request_id`, and nested `content` errors. Try `VTPASS_TEST_DATA_VARIATION_CODE_ALT` if the primary code fails. Investigate variation catalog match, recipient phone validity, and sandbox wallet balance.
+**Latest observed failure (July 2026 sandbox run):**
+
+| Field | Value |
+|-------|-------|
+| `serviceID` | `mtn-data` |
+| `variation_code` | `mtn-10mb-100` |
+| `code` | `016` |
+| `status` | `failed` |
+| `response_description` | `TRANSACTION FAILED` |
+
+**Conclusion:** Payload structure is valid (service ID and variation code sent correctly), but VTPass sandbox returns generic code `016`. Needs VTPass support confirmation or an alternative sandbox variation, product catalog match, recipient phone rule, or sandbox wallet balance rule. **Do not mark Data as certified** until `test_sandbox_data_purchase` passes.
+
+Set `VTPASS_SKIP_DATA_CERTIFICATION=true` to run Airtime + Electricity integration certification without failing the suite on Data. Integration test still prints sanitized diagnostics when Data is not skipped.
+
+**Diagnostics:** Run `test_sandbox_data_purchase` with sandbox flags enabled to print sanitized `response_payload`, nested `content` errors, `request_id`, and phone. Optional `VTPASS_TEST_DATA_VARIATION_CODE_ALT` may be tried when not skipping Data certification.
 
 ---
 
@@ -147,7 +161,7 @@ Exact nesting varies by disco; integration test logs matching paths without hard
 |-------|--------|-----------|-------|
 | Merchant verify before fulfill | ☑ | | Backend service ready |
 | Purchase payload includes meter fields | ☑ | | Unit tests |
-| Merchant verify in sandbox | ☑ | | **CERTIFIED in sandbox** |
+| Merchant verify in sandbox | ☑ | **CERTIFIED in sandbox** — `test_sandbox_electricity_merchant_verify` uses same `VTPASS_TEST_ELECTRICITY_*` config and `ElectricityDiscoMapper` as purchase pre-verify |
 
 ---
 
@@ -160,7 +174,7 @@ Exact nesting varies by disco; integration test logs matching paths without hard
 | Invalid disco → failed | ☑ | **CERTIFIED in sandbox** |
 | Unpaid transaction → rejected | ☑ | Ops fulfill guard (feature tests) |
 | Timeout handled safely | ☑ | Feature test with Http fake |
-| Data purchase generic failure | **PENDING** | Diagnostics added in PAY-015H |
+| Data purchase generic failure | **PENDING** | Code `016` / `TRANSACTION FAILED` for `mtn-data` + `mtn-10mb-100`; skip with `VTPASS_SKIP_DATA_CERTIFICATION=true` |
 
 ---
 
@@ -178,7 +192,8 @@ Exact nesting varies by disco; integration test logs matching paths without hard
 
 - Airtime sandbox fulfillment works end-to-end.
 - Electricity merchant verify and purchase work with configured sandbox test meter; token/unit fields returned on success.
-- Data sandbox purchase still fails with generic `TRANSACTION FAILED`; integration test now prints sanitized diagnostics and supports an alternate variation code env var.
+- Data sandbox purchase fails with VTPass code `016` / `TRANSACTION FAILED` for `serviceID=mtn-data`, `variation_code=mtn-10mb-100`; integration suite can skip Data via `VTPASS_SKIP_DATA_CERTIFICATION=true` while Airtime and Electricity certify cleanly.
+- Merchant verify and electricity purchase share `VTPASS_TEST_ELECTRICITY_*` config and `ElectricityDiscoMapper` normalization (legacy `VTPASS_TEST_DISCO` / `VTPASS_TEST_METER_NUMBER` fallback only when electricity-specific values are unset).
 - `VTPassResponseMapper` prefers nested `content.error` details over generic failure descriptions when available.
 - Invalid meter negative testing is unreliable in sandbox; local empty-meter validation covers malformed input.
 
@@ -189,7 +204,7 @@ Exact nesting varies by disco; integration test logs matching paths without hard
 1. Frontend checkout still uses mock meter verification UI — backend service ready but not wired to checkout.
 2. Frontend `data_plan_id` values must be mapped to VTPass variation codes before production data launch.
 3. Integration tests skip in CI unless `VTPASS_SANDBOX_TESTS=true`.
-4. Data certification blocked until `test_sandbox_data_purchase` passes — use printed diagnostics to resolve variation code, phone, or sandbox balance issues.
+4. Data certification blocked until VTPass sandbox accepts a data variation — observed failure is code `016` for `mtn-data` / `mtn-10mb-100`. Use `VTPASS_SKIP_DATA_CERTIFICATION=true` to certify Airtime + Electricity without failing the integration suite on Data.
 
 ---
 

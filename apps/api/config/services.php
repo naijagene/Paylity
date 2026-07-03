@@ -67,6 +67,7 @@ return [
         'test_electricity_meter_type' => env('VTPASS_TEST_ELECTRICITY_METER_TYPE', 'prepaid'),
         'test_electricity_phone' => env('VTPASS_TEST_ELECTRICITY_PHONE'),
         'test_electricity_amount' => env('VTPASS_TEST_ELECTRICITY_AMOUNT', 1000),
+        'skip_data_certification' => env('VTPASS_SKIP_DATA_CERTIFICATION', false),
     ],
 
     'operator' => [

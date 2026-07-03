@@ -38,6 +38,7 @@ VTPASS_TEST_ELECTRICITY_METER_NUMBER=
 VTPASS_TEST_ELECTRICITY_METER_TYPE=prepaid
 VTPASS_TEST_ELECTRICITY_PHONE=08011111111
 VTPASS_TEST_ELECTRICITY_AMOUNT=1000
+VTPASS_SKIP_DATA_CERTIFICATION=false
 OPERATOR_ACCESS_KEY=your_ops_key
 ```
 
@@ -85,7 +86,15 @@ The command **never crashes**. It always prints a PASS/WARN/FAIL table and exits
 
 ### Configure test meter values
 
-Set these in `apps/api/.env` before running the check:
+Prefer electricity-specific sandbox values (shared by merchant verify and purchase tests):
+
+```env
+VTPASS_TEST_ELECTRICITY_DISCO=IKEDC
+VTPASS_TEST_ELECTRICITY_METER_NUMBER=45053854956
+VTPASS_TEST_ELECTRICITY_METER_TYPE=prepaid
+```
+
+Legacy fallback (used only when electricity-specific values above are unset):
 
 ```env
 VTPASS_TEST_DISCO=IKEDC
@@ -93,7 +102,9 @@ VTPASS_TEST_METER_NUMBER=45053854956
 VTPASS_TEST_METER_TYPE=prepaid
 ```
 
-If either `VTPASS_TEST_DISCO` or `VTPASS_TEST_METER_NUMBER` is empty, merchant verify is **skipped** with WARN.
+If no meter number is configured, merchant verify is **skipped** with WARN.
+
+Merchant verify and purchase both use `ElectricityDiscoMapper` for disco normalization (e.g. `IKEDC` → `ikeja-electric`).
 
 ### Read FAIL diagnostics safely
 
@@ -115,7 +126,7 @@ Passwords, API keys, secrets, and auth headers are **never** printed.
 | `Non-JSON response received from VTPass` | Wrong base URL, HTML error page, or sandbox outage | Confirm `VTPASS_BASE_URL=https://sandbox.vtpass.com` and inspect `safe_body_preview` |
 | `Unable to parse JSON response from VTPass` with `content_type=application/json` | Empty/invalid JSON body from VTPass | Inspect `safe_body_preview`; retry after confirming account status |
 | `vtpass_code=016` | Invalid test meter or auth rejected at API layer | Use a valid sandbox meter for the selected disco |
-| `VTPASS_TEST_DISCO ... not set` | Test values missing | Set `VTPASS_TEST_DISCO` and `VTPASS_TEST_METER_NUMBER` |
+| `VTPASS_TEST_ELECTRICITY_METER_NUMBER ... not set` | Test values missing | Set `VTPASS_TEST_ELECTRICITY_METER_NUMBER` (or legacy `VTPASS_TEST_METER_NUMBER`) |
 | Reachability FAIL | Network/DNS/firewall | Confirm server can reach `sandbox.vtpass.com` |
 
 **401 troubleshooting notes**
@@ -190,6 +201,16 @@ VTPASS_TEST_DATA_VARIATION_CODE_ALT=<another_code_from_vtpass>
 ```
 
 The integration test tries the primary code first, then the alternate if configured, and prints sanitized diagnostics for each failed attempt (`vtpass_code`, `response_description`, `content_errors`, `serviceID`, `variation_code`, `phone`, `request_id`, and redacted `response_payload`). Credentials are never printed.
+
+### Skip Data certification while certifying Airtime + Electricity
+
+If Data consistently fails with VTPass code `016` / `TRANSACTION FAILED` (observed for `serviceID=mtn-data`, `variation_code=mtn-10mb-100`), set:
+
+```env
+VTPASS_SKIP_DATA_CERTIFICATION=true
+```
+
+This skips `test_sandbox_data_purchase` with an explicit message while keeping Data **PENDING** in `VTPASS-CERTIFICATION-REPORT.md`. Airtime and Electricity integration tests can still pass.
 
 ---
 

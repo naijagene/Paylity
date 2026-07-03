@@ -172,6 +172,7 @@ class PaylityVtpassCheckCommandTest extends TestCase
         $this->configureVtpass([
             'test_disco' => null,
             'test_meter_number' => null,
+            'test_electricity_meter_number' => null,
         ]);
 
         Http::fake([
@@ -183,9 +184,36 @@ class PaylityVtpassCheckCommandTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString(
-            'VTPASS_TEST_DISCO or VTPASS_TEST_METER_NUMBER is not set',
+            'VTPASS_TEST_ELECTRICITY_METER_NUMBER',
             $output,
         );
+    }
+
+    public function test_vtpass_check_uses_electricity_test_config_when_legacy_values_missing(): void
+    {
+        $this->configureVtpass([
+            'test_disco' => null,
+            'test_meter_number' => null,
+            'test_electricity_disco' => 'IKEDC',
+            'test_electricity_meter_number' => '45053854956',
+            'test_electricity_meter_type' => 'prepaid',
+        ]);
+
+        Http::fake([
+            'https://sandbox.vtpass.com' => Http::response('OK', 200),
+            'https://sandbox.vtpass.com/api/merchant-verify' => Http::response([
+                'code' => '000',
+                'content' => [
+                    'Customer_Name' => 'Sandbox Customer',
+                ],
+            ]),
+        ]);
+
+        $exitCode = Artisan::call('paylity:vtpass-check');
+        $output = Artisan::output();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Verify succeeded', $output);
     }
 
     /**
@@ -202,6 +230,9 @@ class PaylityVtpassCheckCommandTest extends TestCase
             'services.vtpass.test_disco' => 'IKEDC',
             'services.vtpass.test_meter_number' => '45053854956',
             'services.vtpass.test_meter_type' => 'prepaid',
+            'services.vtpass.test_electricity_disco' => 'IKEDC',
+            'services.vtpass.test_electricity_meter_number' => '45053854956',
+            'services.vtpass.test_electricity_meter_type' => 'prepaid',
             'services.vtpass.retry_times' => 1,
         ];
 

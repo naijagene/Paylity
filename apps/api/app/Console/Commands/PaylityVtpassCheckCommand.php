@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Fulfillment\ElectricityMeterVerificationService;
+use App\Services\Fulfillment\VTPassElectricityTestConfig;
 use App\Services\Fulfillment\VTPassResponseMapper;
 use App\Services\Fulfillment\VTPassService;
 use Illuminate\Console\Command;
@@ -131,15 +132,15 @@ class PaylityVtpassCheckCommand extends Command
             return;
         }
 
-        $disco = trim((string) config('services.vtpass.test_disco', ''));
-        $meterNumber = trim((string) config('services.vtpass.test_meter_number', ''));
-        $meterType = trim((string) config('services.vtpass.test_meter_type', 'prepaid')) ?: 'prepaid';
+        $disco = VTPassElectricityTestConfig::disco();
+        $meterNumber = VTPassElectricityTestConfig::meterNumber();
+        $meterType = VTPassElectricityTestConfig::meterType();
 
-        if ($disco === '' || $meterNumber === '') {
+        if (! VTPassElectricityTestConfig::isConfigured()) {
             $this->record(
                 'WARN',
                 'Merchant verify',
-                'Skipped because VTPASS_TEST_DISCO or VTPASS_TEST_METER_NUMBER is not set.',
+                'Skipped because '.VTPassElectricityTestConfig::missingConfigMessage(),
             );
 
             return;
@@ -183,7 +184,7 @@ class PaylityVtpassCheckCommand extends Command
     {
         $electricityDiscos = array_map(
             'strtoupper',
-            (new \App\Services\Fulfillment\Adapters\ElectricityAdapter())->supportedDiscos(),
+            app(\App\Services\Fulfillment\ElectricityDiscoMapper::class)->supportedDiscos(),
         );
 
         $this->record(
