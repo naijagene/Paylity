@@ -9,14 +9,28 @@ use App\Exceptions\PaystackException;
 use App\Services\Fulfillment\AutoFulfillmentRecorder;
 use App\Services\Fulfillment\FulfillmentService;
 use App\Services\Fulfillment\VTPassService;
+use App\Services\Notifications\TransactionNotificationService;
+use App\Services\ReceiptService;
+use App\Services\TransactionEventService;
 
 class PaymentVerificationService
 {
+    private const TERMINAL_PAYMENT_STATUSES = [
+        TransactionStatus::PAYMENT_SUCCESS,
+        TransactionStatus::PAYMENT_FAILED,
+        TransactionStatus::FULFILLED,
+        TransactionStatus::FULFILLMENT_PENDING,
+        TransactionStatus::FAILED,
+    ];
+
     public function __construct(
         private readonly PaystackService $paystackService,
         private readonly VTPassService $vtpassService,
         private readonly FulfillmentService $fulfillmentService,
         private readonly AutoFulfillmentRecorder $autoFulfillmentRecorder,
+        private readonly TransactionEventService $transactionEventService,
+        private readonly TransactionNotificationService $transactionNotificationService,
+        private readonly ReceiptService $receiptService,
     ) {
     }
 
@@ -56,6 +70,14 @@ class PaymentVerificationService
             ];
         }
 
+        if ($this->isPaymentAlreadyVerified($transaction)) {
+            return [
+                'transaction' => $transaction->fresh(),
+                'verification' => data_get($transaction->response_payload, 'verify'),
+                'configured' => true,
+            ];
+        }
+
         $verification = $this->paystackService->verifyTransaction($reference);
 
         $this->assertReferenceMatches($transaction, $verification);
@@ -70,6 +92,15 @@ class PaymentVerificationService
             'verification' => $verification,
             'configured' => true,
         ];
+    }
+
+    private function isPaymentAlreadyVerified(Transaction $transaction): bool
+    {
+        if (! in_array($transaction->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+            return false;
+        }
+
+        return data_get($transaction->response_payload, 'verify') !== null;
     }
 
     /**
@@ -162,6 +193,14 @@ class PaymentVerificationService
                 'failure_reason' => null,
             ]);
 
+            $this->transactionEventService->record(
+                $transaction->fresh(),
+                TransactionEventService::TYPE_PAYMENT_SUCCESS,
+                'Payment verified successfully.',
+            );
+            $this->receiptService->ensureVerificationToken($transaction->fresh());
+            $this->transactionNotificationService->sendReceipt($transaction->fresh());
+
             return $transaction;
         }
 
@@ -175,6 +214,14 @@ class PaymentVerificationService
                 ),
             ]);
 
+            $this->transactionEventService->record(
+                $transaction->fresh(),
+                TransactionEventService::TYPE_PAYMENT_FAILED,
+                'Payment failed.',
+                'system',
+                ['reason' => $transaction->fresh()->failure_reason],
+            );
+
             return $transaction;
         }
 
@@ -185,6 +232,12 @@ class PaymentVerificationService
                 ['verify' => $verification['raw_response']],
             ),
         ]);
+
+        $this->transactionEventService->record(
+            $transaction->fresh(),
+            TransactionEventService::TYPE_PAYMENT_PENDING,
+            'Payment is pending.',
+        );
 
         return $transaction;
     }

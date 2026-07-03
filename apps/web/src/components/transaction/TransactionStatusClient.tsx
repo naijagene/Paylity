@@ -140,6 +140,10 @@ export function TransactionStatusClient() {
 
   const transactionStatus =
     state.kind === "loaded" ? state.transaction.status : null;
+  const pollIntervalMs =
+    state.kind === "loaded" && state.transaction.poll_interval_seconds
+      ? state.transaction.poll_interval_seconds * 1000
+      : POLL_INTERVAL_MS;
 
   useEffect(() => {
     if (!isValidReference || !transactionStatus) {
@@ -191,17 +195,13 @@ export function TransactionStatusClient() {
         });
     };
 
-    intervalId = window.setInterval(runPoll, POLL_INTERVAL_MS);
+    intervalId = window.setInterval(runPoll, pollIntervalMs);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isValidReference, reference, transactionStatus, pollingGeneration]);
-
-  const handlePrint = () => {
-    window.print();
-  };
+  }, [isValidReference, reference, transactionStatus, pollingGeneration, pollIntervalMs]);
 
   if (state.kind === "invalid_reference") {
     return (
@@ -396,7 +396,10 @@ export function TransactionStatusClient() {
           payableAmount={transaction.payable_amount}
           transactionStatus={transaction.status}
           failureReason={transaction.failure_reason}
+          timestamp={transaction.receipt?.timestamp ?? transaction.updated_at}
+          verificationUrl={transaction.receipt?.verification_url}
           printable
+          showActions
         />
 
         {showElectricityToken ? (
@@ -417,14 +420,8 @@ export function TransactionStatusClient() {
         </section>
 
         <div className="space-y-3 print:hidden">
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={handlePrint}
-            aria-label="Download receipt using print dialog"
-          >
-            Download Receipt
+          <Button href="/transactions" variant="outline" className="w-full">
+            View Transaction History
           </Button>
           <Button href="/" className="w-full">
             Back Home

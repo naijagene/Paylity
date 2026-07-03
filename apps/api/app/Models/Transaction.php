@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Transaction extends Model
 {
@@ -32,6 +33,8 @@ class Transaction extends Model
         'ip_address',
         'user_agent',
         'verified_phone',
+        'receipt_verification_token',
+        'fulfilled_at',
     ];
 
     protected function casts(): array
@@ -44,6 +47,22 @@ class Transaction extends Model
             'request_payload' => 'array',
             'response_payload' => 'array',
             'verified_phone' => 'boolean',
+            'fulfilled_at' => 'datetime',
         ];
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(TransactionEvent::class);
+    }
+
+    public function fulfillmentAttempts(): HasMany
+    {
+        return $this->hasMany(FulfillmentAttempt::class);
+    }
+
+    public function opsNotes(): HasMany
+    {
+        return $this->hasMany(OpsNote::class);
     }
 }

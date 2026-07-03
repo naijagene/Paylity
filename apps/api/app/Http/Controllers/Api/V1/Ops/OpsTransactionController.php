@@ -81,11 +81,69 @@ class OpsTransactionController extends Controller
         }
 
         try {
-            $transaction = $this->fulfillmentService->fulfillByReference($reference);
+            $transaction = Transaction::query()
+                ->where('reference', $reference)
+                ->first();
+
+            if (! $transaction) {
+                return ApiResponse::error(
+                    message: 'Transaction not found.',
+                    errors: ['code' => 'TRANSACTION_NOT_FOUND'],
+                    status: 404,
+                );
+            }
+
+            $transaction = $this->fulfillmentService->fulfill($transaction, 'operator');
 
             return ApiResponse::success(
                 data: $this->fulfillmentService->toResponse($transaction),
                 message: 'Fulfillment completed successfully.',
+            );
+        } catch (FulfillmentException $exception) {
+            $status = $exception->errorCode === 'TRANSACTION_NOT_FOUND' ? 404 : 422;
+
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+                errors: ['code' => $exception->errorCode],
+                status: $status,
+            );
+        } catch (VTPassConfigurationException|VTPassException $exception) {
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+                errors: ['code' => $exception->errorCode],
+                status: 502,
+            );
+        }
+    }
+
+    public function retry(string $reference): JsonResponse
+    {
+        if (! $this->fulfillmentService->isEnabled()) {
+            return ApiResponse::error(
+                message: 'VTPass fulfillment is disabled.',
+                errors: ['code' => 'VTPASS_DISABLED'],
+                status: 503,
+            );
+        }
+
+        try {
+            $transaction = Transaction::query()
+                ->where('reference', $reference)
+                ->first();
+
+            if (! $transaction) {
+                return ApiResponse::error(
+                    message: 'Transaction not found.',
+                    errors: ['code' => 'TRANSACTION_NOT_FOUND'],
+                    status: 404,
+                );
+            }
+
+            $transaction = $this->fulfillmentService->retryFulfillment($transaction, 'operator');
+
+            return ApiResponse::success(
+                data: $this->fulfillmentService->toResponse($transaction),
+                message: 'Fulfillment retry completed successfully.',
             );
         } catch (FulfillmentException $exception) {
             $status = $exception->errorCode === 'TRANSACTION_NOT_FOUND' ? 404 : 422;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
 import { ErrorStatePage } from "@/components/transaction/ErrorStatePage";
@@ -76,6 +76,7 @@ function mapVerificationError(error: unknown): VerificationState {
 
 export function PaymentCallbackClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const reference =
     searchParams.get("reference") ?? searchParams.get("trxref");
   const [state, setState] = useState<VerificationState>(() =>
@@ -107,8 +108,21 @@ export function PaymentCallbackClient() {
 
     verifyPaystackPayment(reference)
       .then((result) => {
-        if (!cancelled) {
-          setState(mapVerificationResult(result));
+        if (cancelled) {
+          return;
+        }
+
+        const mapped = mapVerificationResult(result);
+        setState(mapped);
+
+        if (
+          mapped.kind === "verified" &&
+          (mapped.status === "payment_success" ||
+            mapped.status === "fulfillment_pending" ||
+            mapped.status === "fulfilled" ||
+            mapped.status === "failed")
+        ) {
+          router.replace(`/transaction/${encodeURIComponent(mapped.reference)}`);
         }
       })
       .catch((error) => {
@@ -120,7 +134,7 @@ export function PaymentCallbackClient() {
     return () => {
       cancelled = true;
     };
-  }, [reference]);
+  }, [reference, router]);
 
   if (state.kind === "missing_reference") {
     return (

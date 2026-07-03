@@ -138,6 +138,33 @@ export type OpsTransactionDetail = {
   verified_phone?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
+  fulfilled_at?: string | null;
+  timeline?: Array<{
+    event_type: string;
+    actor: string;
+    summary: string;
+    metadata?: Record<string, unknown> | null;
+    occurred_at?: string | null;
+  }>;
+  fulfillment_attempts?: Array<{
+    attempt_number: number;
+    provider: string;
+    request_id?: string | null;
+    outcome: string;
+    duration_ms?: number | null;
+    failure_reason?: string | null;
+    actor: string;
+    request_payload?: Record<string, unknown> | null;
+    response_payload?: Record<string, unknown> | null;
+    attempted_at?: string | null;
+  }>;
+  webhook_history?: Array<{
+    provider: string;
+    event_id: string;
+    event_type: string;
+    status: string;
+    created_at?: string | null;
+  }>;
 };
 
 export type OpsSummary = {
@@ -147,6 +174,24 @@ export type OpsSummary = {
   failed_today: number;
   pending_fulfillment: number;
   total_convenience_fees_today: number;
+  revenue_today?: number;
+};
+
+export type OpsMonitoringSummary = {
+  revenue: number;
+  transactions: number;
+  failures: number;
+  pending: number;
+  average_fulfillment_seconds: number | null;
+  date_from: string;
+  date_to: string;
+};
+
+export type OpsNote = {
+  id: number;
+  body: string;
+  author: string;
+  created_at?: string | null;
 };
 
 export type OpsSearchParams = {
@@ -195,6 +240,57 @@ export async function fulfillOpsTransaction(reference: string) {
   const { data, message } = await opsRequest<Record<string, unknown>>(
     `/ops/transactions/${encodeURIComponent(reference)}/fulfill`,
     { method: "POST" },
+  );
+
+  return { data, message };
+}
+
+export async function retryOpsFulfillment(reference: string) {
+  const { data, message } = await opsRequest<Record<string, unknown>>(
+    `/ops/transactions/${encodeURIComponent(reference)}/retry-fulfillment`,
+    { method: "POST" },
+  );
+
+  return { data, message };
+}
+
+export async function fetchOpsMonitoring(params?: {
+  date_from?: string;
+  date_to?: string;
+}) {
+  const query = new URLSearchParams();
+
+  if (params?.date_from) {
+    query.set("date_from", params.date_from);
+  }
+
+  if (params?.date_to) {
+    query.set("date_to", params.date_to);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const { data } = await opsRequest<OpsMonitoringSummary>(
+    `/ops/monitoring${suffix}`,
+  );
+
+  return data;
+}
+
+export async function fetchOpsNotes(reference: string) {
+  const { data } = await opsRequest<OpsNote[]>(
+    `/ops/transactions/${encodeURIComponent(reference)}/notes`,
+  );
+
+  return data;
+}
+
+export async function createOpsNote(reference: string, body: string) {
+  const { data, message } = await opsRequest<OpsNote>(
+    `/ops/transactions/${encodeURIComponent(reference)}/notes`,
+    {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    },
   );
 
   return { data, message };

@@ -7,6 +7,8 @@ use App\Exceptions\PaystackException;
 use App\Http\Controllers\Controller;
 use App\Services\Payments\PaymentVerificationService;
 use App\Services\Payments\PaystackService;
+use App\Services\TransactionEventService;
+use App\Services\WebhookEventService;
 use App\Support\ApiResponse;
 use App\Support\ProviderErrorSanitizer;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +20,8 @@ class PaystackController extends Controller
     public function __construct(
         private readonly PaystackService $paystackService,
         private readonly PaymentVerificationService $paymentVerificationService,
+        private readonly WebhookEventService $webhookEventService,
+        private readonly TransactionEventService $transactionEventService,
     ) {
     }
 
@@ -93,8 +97,38 @@ class PaystackController extends Controller
 
         if (data_get($event, 'event') === 'charge.success') {
             $reference = (string) data_get($event, 'data.reference');
+            $eventId = (string) (data_get($event, 'id') ?: hash('sha256', $payload));
+
+            if ($this->webhookEventService->hasBeenProcessed('paystack', $eventId)) {
+                return ApiResponse::success(
+                    data: ['status' => 'duplicate'],
+                    message: 'Paystack webhook already processed.',
+                );
+            }
+
+            $this->webhookEventService->record(
+                provider: 'paystack',
+                eventId: $eventId,
+                eventType: (string) data_get($event, 'event', 'unknown'),
+                reference: $reference !== '' ? $reference : null,
+                payload: $event,
+            );
 
             if ($reference !== '') {
+                $transaction = \App\Models\Transaction::query()
+                    ->where('reference', $reference)
+                    ->first();
+
+                if ($transaction) {
+                    $this->transactionEventService->record(
+                        $transaction,
+                        TransactionEventService::TYPE_WEBHOOK_RECEIVED,
+                        'Paystack webhook received.',
+                        'webhook',
+                        ['event' => data_get($event, 'event')],
+                    );
+                }
+
                 try {
                     $this->paymentVerificationService->verify($reference);
                 } catch (PaymentVerificationException|PaystackException $exception) {

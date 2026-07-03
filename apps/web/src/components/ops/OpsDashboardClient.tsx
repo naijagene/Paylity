@@ -7,8 +7,10 @@ import { PageContainer } from "@/components/PageContainer";
 import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
 import {
+  fetchOpsMonitoring,
   fetchOpsSummary,
   searchOpsTransactions,
+  type OpsMonitoringSummary,
   type OpsSummary,
   type OpsTransactionListItem,
 } from "@/lib/api/ops";
@@ -60,6 +62,7 @@ export function OpsDashboardClient() {
     product_type: "",
   });
   const [summary, setSummary] = useState<OpsSummary | null>(null);
+  const [monitoring, setMonitoring] = useState<OpsMonitoringSummary | null>(null);
   const [transactions, setTransactions] = useState<OpsTransactionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,8 +72,9 @@ export function OpsDashboardClient() {
     setError(null);
 
     try {
-      const [summaryData, searchResult] = await Promise.all([
+      const [summaryData, monitoringData, searchResult] = await Promise.all([
         fetchOpsSummary(),
+        fetchOpsMonitoring(),
         searchOpsTransactions({
           reference: searchFilters.reference || undefined,
           phone: searchFilters.phone || undefined,
@@ -81,6 +85,7 @@ export function OpsDashboardClient() {
       ]);
 
       setSummary(summaryData);
+      setMonitoring(monitoringData);
       setTransactions(searchResult.items);
     } catch (err) {
       if (err instanceof ApiOfflineError) {
@@ -100,11 +105,13 @@ export function OpsDashboardClient() {
 
     Promise.all([
       fetchOpsSummary(),
+      fetchOpsMonitoring(),
       searchOpsTransactions({ per_page: 20 }),
     ])
-      .then(([summaryData, searchResult]) => {
+      .then(([summaryData, monitoringData, searchResult]) => {
         if (!cancelled) {
           setSummary(summaryData);
+          setMonitoring(monitoringData);
           setTransactions(searchResult.items);
         }
       })
@@ -155,18 +162,30 @@ export function OpsDashboardClient() {
         {summary ? (
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <SummaryCard
-              label="Transactions Today"
-              value={summary.total_transactions_today}
+              label="Revenue Today"
+              value={formatNaira(
+                monitoring?.revenue ?? summary.revenue_today ?? 0,
+              )}
             />
             <SummaryCard
-              label="Successful Payments Today"
-              value={summary.successful_payments_today}
+              label="Transactions Today"
+              value={monitoring?.transactions ?? summary.total_transactions_today}
             />
-            <SummaryCard label="Fulfilled Today" value={summary.fulfilled_today} />
-            <SummaryCard label="Failed Today" value={summary.failed_today} />
+            <SummaryCard
+              label="Failures Today"
+              value={monitoring?.failures ?? summary.failed_today}
+            />
             <SummaryCard
               label="Pending Fulfillment"
-              value={summary.pending_fulfillment}
+              value={monitoring?.pending ?? summary.pending_fulfillment}
+            />
+            <SummaryCard
+              label="Avg Fulfillment Time"
+              value={
+                monitoring?.average_fulfillment_seconds != null
+                  ? `${monitoring.average_fulfillment_seconds}s`
+                  : "—"
+              }
             />
             <SummaryCard
               label="Convenience Fees Today"

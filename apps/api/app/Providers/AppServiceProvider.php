@@ -41,6 +41,14 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($operatorKey !== '' ? $operatorKey : $request->ip());
         });
 
+        RateLimiter::for('receipt-verify', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
+        RateLimiter::for('webhook', function (Request $request) {
+            return Limit::perMinute(120)->by($request->ip());
+        });
+
         config(['cors.allowed_origins' => CorsOriginResolver::allowedOrigins()]);
     }
 }

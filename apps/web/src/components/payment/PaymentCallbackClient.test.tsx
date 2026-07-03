@@ -6,6 +6,9 @@ import { verifyPaystackPayment } from "@/lib/api/payments";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: vi.fn(),
+  useRouter: vi.fn(() => ({
+    replace: vi.fn(),
+  })),
 }));
 
 vi.mock("@/lib/api/payments", () => ({

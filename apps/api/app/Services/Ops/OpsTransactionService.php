@@ -5,11 +5,21 @@ namespace App\Services\Ops;
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Services\Fulfillment\AutoFulfillmentRecorder;
+use App\Services\Fulfillment\FulfillmentAttemptRecorder;
+use App\Services\TransactionEventService;
+use App\Services\WebhookEventService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 class OpsTransactionService
 {
+    public function __construct(
+        private readonly TransactionEventService $transactionEventService,
+        private readonly FulfillmentAttemptRecorder $fulfillmentAttemptRecorder,
+        private readonly WebhookEventService $webhookEventService,
+    ) {
+    }
+
     /**
      * @param  array<string, mixed>  $filters
      */
@@ -93,6 +103,10 @@ class OpsTransactionService
             'verified_phone' => $transaction->verified_phone,
             'created_at' => $transaction->created_at?->toIso8601String(),
             'updated_at' => $transaction->updated_at?->toIso8601String(),
+            'fulfilled_at' => $transaction->fulfilled_at?->toIso8601String(),
+            'timeline' => $this->transactionEventService->timelineFor($transaction)->values()->all(),
+            'fulfillment_attempts' => $this->fulfillmentAttemptRecorder->historyFor($transaction),
+            'webhook_history' => $this->webhookEventService->historyForReference($transaction->reference),
         ], AutoFulfillmentRecorder::summaryFromResponsePayload(
             is_array($transaction->response_payload) ? $transaction->response_payload : null,
         ));
@@ -126,6 +140,9 @@ class OpsTransactionService
                 ->where('status', TransactionStatus::PAYMENT_SUCCESS)
                 ->count(),
             'total_convenience_fees_today' => (int) $todayQuery()->sum('convenience_fee'),
+            'revenue_today' => (int) $todayQuery()
+                ->whereIn('status', $successfulPaymentStatuses)
+                ->sum('payable_amount'),
         ];
     }
 }

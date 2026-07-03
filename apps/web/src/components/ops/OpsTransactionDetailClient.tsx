@@ -10,8 +10,12 @@ import { StatusBadge } from "@/components/transaction/StatusBadge";
 import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
 import {
+  createOpsNote,
+  fetchOpsNotes,
   fetchOpsTransaction,
   fulfillOpsTransaction,
+  retryOpsFulfillment,
+  type OpsNote,
   type OpsTransactionDetail,
 } from "@/lib/api/ops";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
@@ -36,6 +40,10 @@ export function OpsTransactionDetailClient() {
   );
   const [loading, setLoading] = useState(true);
   const [fulfilling, setFulfilling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [notes, setNotes] = useState<OpsNote[]>([]);
+  const [noteBody, setNoteBody] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -44,8 +52,12 @@ export function OpsTransactionDetailClient() {
     setError(null);
 
     try {
-      const data = await fetchOpsTransaction(reference);
+      const [data, noteData] = await Promise.all([
+        fetchOpsTransaction(reference),
+        fetchOpsNotes(reference),
+      ]);
       setTransaction(data);
+      setNotes(noteData);
     } catch (err) {
       if (err instanceof ApiOfflineError) {
         setError("Network unavailable. Check the API server and try again.");
@@ -91,6 +103,70 @@ export function OpsTransactionDetailClient() {
       cancelled = true;
     };
   }, [reference]);
+
+  useEffect(() => {
+    fetchOpsNotes(reference)
+      .then(setNotes)
+      .catch(() => {
+        // Notes are optional in the UI if the request fails.
+      });
+  }, [reference, actionMessage]);
+
+  const handleRetry = async () => {
+    if (!transaction) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Retry fulfillment for this transaction?",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setRetrying(true);
+    setActionMessage(null);
+    setError(null);
+
+    try {
+      const result = await retryOpsFulfillment(transaction.reference);
+      setActionMessage(result.message);
+      await loadTransaction();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Fulfillment retry failed.");
+      }
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!transaction || !noteBody.trim()) {
+      return;
+    }
+
+    setSavingNote(true);
+    setError(null);
+
+    try {
+      await createOpsNote(transaction.reference, noteBody.trim());
+      setNoteBody("");
+      setNotes(await fetchOpsNotes(transaction.reference));
+      setActionMessage("Note added.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Unable to save note.");
+      }
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   const handleFulfill = async () => {
     if (!transaction) {
@@ -186,6 +262,15 @@ export function OpsTransactionDetailClient() {
             {canManualFulfill(transaction.status) ? (
               <Button onClick={() => void handleFulfill()} disabled={fulfilling}>
                 {fulfilling ? "Fulfilling..." : "Manual Fulfill"}
+              </Button>
+            ) : null}
+            {transaction.status === "failed" ? (
+              <Button
+                variant="secondary"
+                onClick={() => void handleRetry()}
+                disabled={retrying}
+              >
+                {retrying ? "Retrying..." : "Retry Fulfillment"}
               </Button>
             ) : null}
           </div>
@@ -286,6 +371,131 @@ export function OpsTransactionDetailClient() {
               </dd>
             </div>
           </dl>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Event Timeline
+          </h2>
+          <div className="space-y-3">
+            {(transaction.timeline ?? []).length > 0 ? (
+              transaction.timeline?.map((event) => (
+                <div
+                  key={`${event.event_type}-${event.occurred_at}`}
+                  className="rounded-xl border border-border px-4 py-3 text-sm"
+                >
+                  <p className="font-semibold text-dark">{event.summary}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {event.actor} · {event.event_type}
+                    {event.occurred_at
+                      ? ` · ${new Date(event.occurred_at).toLocaleString("en-NG")}`
+                      : ""}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted">No audit events recorded yet.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Retry History
+          </h2>
+          <div className="space-y-3">
+            {(transaction.fulfillment_attempts ?? []).length > 0 ? (
+              transaction.fulfillment_attempts?.map((attempt) => (
+                <div
+                  key={`${attempt.attempt_number}-${attempt.attempted_at}`}
+                  className="rounded-xl border border-border px-4 py-3 text-sm"
+                >
+                  <p className="font-semibold text-dark">
+                    Attempt {attempt.attempt_number} · {attempt.outcome}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {attempt.actor}
+                    {attempt.request_id ? ` · ${attempt.request_id}` : ""}
+                    {attempt.duration_ms != null
+                      ? ` · ${attempt.duration_ms}ms`
+                      : ""}
+                  </p>
+                  {attempt.failure_reason ? (
+                    <p className="mt-2 text-xs text-error">
+                      {attempt.failure_reason}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted">No fulfillment attempts recorded.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Webhook History
+          </h2>
+          <div className="space-y-3">
+            {(transaction.webhook_history ?? []).length > 0 ? (
+              transaction.webhook_history?.map((event) => (
+                <div
+                  key={event.event_id}
+                  className="rounded-xl border border-border px-4 py-3 text-sm"
+                >
+                  <p className="font-semibold text-dark">
+                    {event.provider} · {event.event_type}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {event.status}
+                    {event.created_at
+                      ? ` · ${new Date(event.created_at).toLocaleString("en-NG")}`
+                      : ""}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted">No webhook events recorded.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Manual Notes
+          </h2>
+          <div className="space-y-3">
+            {notes.map((note) => (
+              <div
+                key={note.id}
+                className="rounded-xl border border-border px-4 py-3 text-sm"
+              >
+                <p>{note.body}</p>
+                <p className="mt-2 text-xs text-muted">
+                  {note.author}
+                  {note.created_at
+                    ? ` · ${new Date(note.created_at).toLocaleString("en-NG")}`
+                    : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 space-y-3">
+            <textarea
+              value={noteBody}
+              onChange={(event) => setNoteBody(event.target.value)}
+              rows={3}
+              placeholder="Add an operator note..."
+              className="w-full rounded-xl border border-border px-4 py-3 text-sm"
+            />
+            <Button
+              onClick={() => void handleAddNote()}
+              disabled={savingNote || !noteBody.trim()}
+            >
+              {savingNote ? "Saving..." : "Add Note"}
+            </Button>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">

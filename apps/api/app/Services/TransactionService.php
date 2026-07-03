@@ -13,12 +13,21 @@ use Illuminate\Support\Facades\DB;
 
 class TransactionService
 {
+    private const TERMINAL_STATUSES = [
+        TransactionStatus::PAYMENT_FAILED,
+        TransactionStatus::FULFILLED,
+        TransactionStatus::FAILED,
+        TransactionStatus::CANCELLED,
+    ];
+
     public function __construct(
         private readonly TransactionReferenceGenerator $referenceGenerator,
         private readonly FeeService $feeService,
         private readonly FraudService $fraudService,
         private readonly PaystackService $paystackService,
         private readonly FulfillmentPayloadExtractor $fulfillmentPayloadExtractor,
+        private readonly ReceiptService $receiptService,
+        private readonly TransactionEventService $transactionEventService,
     ) {
     }
 
@@ -57,7 +66,7 @@ class TransactionService
                 $reference = $this->referenceGenerator->generate();
             }
 
-            return Transaction::query()->create([
+            $transaction = Transaction::query()->create([
                 'reference' => $reference,
                 'product_type' => $productType,
                 'customer_phone' => $input['customer_phone'],
@@ -74,6 +83,14 @@ class TransactionService
                 'user_agent' => $userAgent,
                 'verified_phone' => false,
             ]);
+
+            $this->transactionEventService->record(
+                $transaction,
+                TransactionEventService::TYPE_CREATED,
+                'Transaction created.',
+            );
+
+            return $transaction;
         });
 
         if ($this->paystackService->isEnabled()) {
@@ -166,6 +183,19 @@ class TransactionService
         if ($fulfillmentDetails !== null) {
             $response['fulfillment_details'] = $fulfillmentDetails;
         }
+
+        $receipt = $this->receiptService->buildReceiptPayload($transaction);
+
+        if ($receipt !== null) {
+            $response['receipt'] = $receipt;
+        }
+
+        $response['timeline'] = $this->transactionEventService
+            ->timelineFor($transaction)
+            ->values()
+            ->all();
+        $response['is_terminal'] = in_array($transaction->status, self::TERMINAL_STATUSES, true);
+        $response['poll_interval_seconds'] = 5;
 
         return $response;
     }

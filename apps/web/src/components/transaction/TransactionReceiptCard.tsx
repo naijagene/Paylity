@@ -7,6 +7,8 @@ import {
   getReceiptStatuses,
   toTransactionLike,
 } from "@/lib/transaction/display";
+import { ReceiptActions } from "@/components/receipt/ReceiptActions";
+import { ReceiptQrCode } from "@/components/receipt/ReceiptQrCode";
 
 type ReceiptSectionProps = {
   title: string;
@@ -59,7 +61,10 @@ export type TransactionReceiptCardProps = {
   payableAmount: number;
   transactionStatus: string;
   failureReason?: string | null;
+  timestamp?: string | null;
+  verificationUrl?: string | null;
   printable?: boolean;
+  showActions?: boolean;
 };
 
 export function TransactionReceiptCard({
@@ -72,7 +77,10 @@ export function TransactionReceiptCard({
   payableAmount,
   transactionStatus,
   failureReason,
+  timestamp,
+  verificationUrl,
   printable = false,
+  showActions = false,
 }: TransactionReceiptCardProps) {
   const transaction = toTransactionLike(transactionStatus);
   const badges = getBadgeState(transaction);
@@ -108,6 +116,12 @@ export function TransactionReceiptCard({
         <dl>
           <ReceiptRow label="Reference" value={reference} />
           <ReceiptRow label="Product" value={productLabel} />
+          {timestamp ? (
+            <ReceiptRow
+              label="Timestamp"
+              value={new Date(timestamp).toLocaleString("en-NG")}
+            />
+          ) : null}
         </dl>
       </ReceiptSection>
 
@@ -146,6 +160,20 @@ export function TransactionReceiptCard({
           ) : null}
         </dl>
       </ReceiptSection>
+
+      {verificationUrl ? (
+        <ReceiptSection title="Verification">
+          <ReceiptQrCode verificationUrl={verificationUrl} />
+        </ReceiptSection>
+      ) : null}
+
+      {showActions ? (
+        <ReceiptActions
+          reference={reference}
+          verificationUrl={verificationUrl}
+          className="print:hidden"
+        />
+      ) : null}
     </article>
   );
 }
