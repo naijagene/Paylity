@@ -8,8 +8,10 @@ use App\Services\Fulfillment\ElectricityMeterVerificationService;
 use App\Services\Fulfillment\FulfillmentService;
 use App\Services\Fulfillment\VTPassResponseMapper;
 use App\Services\Fulfillment\VTPassService;
+use App\Services\Fulfillment\VTPassRequestIdGenerator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -69,7 +71,6 @@ class VTPassSandboxTest extends TestCase
     public function test_sandbox_airtime_purchase(): void
     {
         $transaction = $this->createPaidTransaction([
-            'reference' => 'PYL-SBOX-AIR-'.now()->format('His'),
             'product_type' => 'airtime',
             'product_amount' => 100,
             'payable_amount' => 200,
@@ -109,7 +110,6 @@ class VTPassSandboxTest extends TestCase
         $network = $this->networkForDataServiceId($serviceId);
 
         $transaction = $this->createPaidTransaction([
-            'reference' => 'PYL-SBOX-DATA-'.now()->format('His'),
             'product_type' => 'data',
             'customer_phone' => $phone,
             'product_amount' => 100,
@@ -156,7 +156,7 @@ class VTPassSandboxTest extends TestCase
             );
         }
 
-        $disco = strtoupper(trim((string) config('services.vtpass.test_electricity_disco', 'IKEDC')));
+        $disco = trim((string) config('services.vtpass.test_electricity_disco', 'IKEDC'));
         $meterType = strtolower(trim((string) config('services.vtpass.test_electricity_meter_type', 'prepaid'))) ?: 'prepaid';
         $phone = trim((string) config('services.vtpass.test_electricity_phone', '')) ?: '08011111111';
         $amount = (int) config('services.vtpass.test_electricity_amount', 1000);
@@ -188,7 +188,6 @@ class VTPassSandboxTest extends TestCase
         );
 
         $transaction = $this->createPaidTransaction([
-            'reference' => 'PYL-SBOX-ELEC-'.now()->format('His'),
             'product_type' => 'electricity',
             'customer_phone' => $phone,
             'product_amount' => $amount,
@@ -367,8 +366,11 @@ class VTPassSandboxTest extends TestCase
      */
     private function createPaidTransaction(array $overrides = []): Transaction
     {
-        return Transaction::query()->create(array_merge([
-            'reference' => 'PYL-SBOX-'.now()->format('Ymd-His'),
+        $uniqueSuffix = now()->format('YmdHisv').'-'.Str::lower(Str::random(6));
+        $requestId = VTPassRequestIdGenerator::generate();
+
+        $defaults = [
+            'reference' => 'PYL-SBOX-'.$uniqueSuffix,
             'product_type' => 'airtime',
             'customer_phone' => '08031234567',
             'product_amount' => 1000,
@@ -380,8 +382,24 @@ class VTPassSandboxTest extends TestCase
             'request_payload' => [
                 'network' => 'MTN',
                 'recipient_phone' => '08031234567',
+                'request_id' => $requestId,
             ],
             'verified_phone' => false,
-        ], $overrides));
+        ];
+
+        $merged = array_merge($defaults, $overrides);
+
+        if (isset($overrides['request_payload'])) {
+            $merged['request_payload'] = array_merge(
+                $defaults['request_payload'],
+                $overrides['request_payload'],
+            );
+
+            if (trim((string) ($merged['request_payload']['request_id'] ?? '')) === '') {
+                $merged['request_payload']['request_id'] = VTPassRequestIdGenerator::generate();
+            }
+        }
+
+        return Transaction::query()->create($merged);
     }
 }

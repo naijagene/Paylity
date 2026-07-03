@@ -4,6 +4,7 @@ namespace App\Services\Fulfillment\Adapters;
 
 use App\Exceptions\FulfillmentException;
 use App\Models\Transaction;
+use App\Services\Fulfillment\VTPassRequestIdGenerator;
 
 class DataAdapter implements FulfillmentAdapterInterface
 {
@@ -48,17 +49,12 @@ class DataAdapter implements FulfillmentAdapterInterface
         $phone = (string) ($payload['recipient_phone'] ?? $transaction->customer_phone);
 
         return [
-            'request_id' => $this->requestId($transaction),
+            'request_id' => VTPassRequestIdGenerator::forTransaction($transaction),
             'serviceID' => self::NETWORK_SERVICE_IDS[$network],
             'billersCode' => $phone,
             'variation_code' => $variationCode,
             'amount' => $transaction->product_amount,
             'phone' => $phone,
         ];
-    }
-
-    private function requestId(Transaction $transaction): string
-    {
-        return $transaction->reference.'-'.now()->format('His');
     }
 }

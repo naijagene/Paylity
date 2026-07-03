@@ -48,7 +48,7 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | `VTPASS_TEST_DATA_SERVICE_ID` | Sandbox data service ID (e.g. `mtn-data`) |
 | `VTPASS_TEST_DATA_VARIATION_CODE` | Valid sandbox data variation code |
 | `VTPASS_TEST_DATA_PHONE` | Phone number for sandbox data purchase test |
-| `VTPASS_TEST_ELECTRICITY_DISCO` | Sandbox electricity purchase test disco (e.g. `IKEDC`) |
+| `VTPASS_TEST_ELECTRICITY_DISCO` | Sandbox electricity purchase test disco (`IKEDC`, `ikedc`, or `ikeja-electric`) |
 | `VTPASS_TEST_ELECTRICITY_METER_NUMBER` | Sandbox electricity purchase test meter |
 | `VTPASS_TEST_ELECTRICITY_METER_TYPE` | `prepaid` or `postpaid` (default `prepaid`) |
 | `VTPASS_TEST_ELECTRICITY_PHONE` | Phone number for sandbox electricity purchase test |
@@ -187,9 +187,10 @@ Expected success fields: `Customer_Name`, `Meter_Number`, minimum amount fields 
 
 ## Idempotency strategy
 
-- Each fulfillment uses unique `request_id`: `{transaction.reference}-{HHmmss}`
-- Do not reuse `request_id` for different purchase attempts
-- Failed fulfillment retry generates new `request_id` on next fulfill call
+- Each fulfillment uses a unique `request_id` generated at fulfill time (`YmdHis` + random suffix) unless `request_payload.request_id` is already set
+- Do not reuse `request_id` for different purchase attempts — VTPass returns duplicate errors when the same ID is sent twice
+- Sandbox integration tests inject a fresh `request_id` into `request_payload` on every run
+- Failed fulfillment retry generates a new `request_id` on the next fulfill call
 - Requery uses original `request_id` from failed attempt (future enhancement)
 
 ---

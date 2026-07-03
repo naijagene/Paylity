@@ -6,6 +6,7 @@ use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class VTPassFulfillmentTest extends TestCase
@@ -89,6 +90,7 @@ class VTPassFulfillmentTest extends TestCase
             'request_payload' => [
                 'network' => '9mobile',
                 'recipient_phone' => '08091112233',
+                'request_id' => '202607030924sandbox01',
             ],
         ]);
 
@@ -99,7 +101,7 @@ class VTPassFulfillmentTest extends TestCase
                 $this->assertSame('etisalat', $payload['serviceID']);
                 $this->assertSame(1000, $payload['amount']);
                 $this->assertSame('08091112233', $payload['phone']);
-                $this->assertStringStartsWith('PYL-20260702-FULFIL', $payload['request_id']);
+                $this->assertSame('202607030924sandbox01', $payload['request_id']);
 
                 return Http::response([
                     'code' => '000',
@@ -260,6 +262,52 @@ class VTPassFulfillmentTest extends TestCase
         $this->assertSame('ikeja-electric', $payload['serviceID']);
         $this->assertSame('45053854956', $payload['billersCode']);
         $this->assertSame('prepaid', $payload['type']);
+    }
+
+    #[DataProvider('normalizedElectricityDiscoProvider')]
+    public function test_electricity_adapter_normalizes_disco_values(string $inputDisco): void
+    {
+        $adapter = app(\App\Services\Fulfillment\Adapters\ElectricityAdapter::class);
+
+        $verifyPayload = $adapter->buildVerifyPayload($inputDisco, '45053854956', 'prepaid');
+
+        $this->assertSame('ikeja-electric', $verifyPayload['serviceID']);
+        $this->assertSame('ikedc', $adapter->normalizeDisco($inputDisco));
+
+        $transaction = Transaction::query()->create([
+            'reference' => 'PYL-20260702-ELEC-'.strtolower($inputDisco),
+            'product_type' => 'electricity',
+            'customer_phone' => '08031234567',
+            'product_amount' => 5000,
+            'convenience_fee' => 100,
+            'gateway_fee' => 0,
+            'payable_amount' => 5100,
+            'currency' => 'NGN',
+            'status' => TransactionStatus::PAYMENT_SUCCESS,
+            'request_payload' => [
+                'disco' => $inputDisco,
+                'meter_type' => 'prepaid',
+                'meter_number' => '12345678901',
+            ],
+            'verified_phone' => false,
+        ]);
+
+        $purchasePayload = $adapter->buildPayload($transaction);
+
+        $this->assertSame('ikeja-electric', $purchasePayload['serviceID']);
+        $this->assertSame('prepaid', $purchasePayload['variation_code']);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function normalizedElectricityDiscoProvider(): array
+    {
+        return [
+            'IKEDC' => ['IKEDC'],
+            'ikedc' => ['ikedc'],
+            'ikeja-electric' => ['ikeja-electric'],
+        ];
     }
 
     public function test_electricity_adapter_includes_meter_fields(): void

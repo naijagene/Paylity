@@ -173,6 +173,8 @@ php artisan test --testsuite=Integration
 
 **Note:** `apps/api/phpunit.xml` sets `FEATURE_VTPASS=false` and `VTPASS_SANDBOX_TESTS=false` by default so CI does not hit live sandbox. For local certification, temporarily set both to `true` in `phpunit.xml` (or export them in a way that overrides PHPUnit env), ensure `VTPASS_TEST_DATA_*` values are in `.env`, then run the integration suite.
 
+Each sandbox purchase run must use a **fresh unique `request_id`**. Integration tests generate one automatically (`YmdHis` + random suffix). Do not reuse IDs from prior runs — VTPass returns `LIKELY DUPLICATE TRANSACTION` when a previous `request_id` is replayed.
+
 If `VTPASS_TEST_DATA_VARIATION_CODE` is unset, the data purchase test skips with:
 
 `Set VTPASS_TEST_DATA_VARIATION_CODE to a valid sandbox variation code.`
@@ -218,6 +220,8 @@ After a successful run, inspect `response_payload.fulfillment` for delivery deta
 Do not mark Electricity purchase as **CERTIFIED** until `test_sandbox_electricity_purchase` passes.
 
 **Note:** `apps/api/phpunit.xml` sets `FEATURE_VTPASS=false` and `VTPASS_SANDBOX_TESTS=false` by default. For local certification, temporarily set both to `true` in `phpunit.xml`, ensure electricity env values are in `.env`, then run the integration suite.
+
+Each sandbox purchase run must use a **fresh unique `request_id`**. Integration tests generate one automatically. Do not reuse IDs from prior runs.
 
 ---
 
