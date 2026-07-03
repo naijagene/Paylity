@@ -1,0 +1,114 @@
+<?php
+
+namespace Tests\Feature\Api\V1;
+
+use App\Services\Fulfillment\Adapters\ElectricityAdapter;
+use App\Services\Fulfillment\ElectricityMeterVerificationService;
+use App\Services\Fulfillment\VTPassResponseMapper;
+use App\Services\Fulfillment\VTPassService;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+class VTPassResponseMapperTest extends TestCase
+{
+    public function test_maps_success_code_000(): void
+    {
+        $mapper = app(VTPassResponseMapper::class);
+
+        $mapped = $mapper->map([
+            'code' => '000',
+            'response_description' => 'TRANSACTION SUCCESSFUL',
+        ]);
+
+        $this->assertSame(VTPassResponseMapper::STATUS_SUCCESS, $mapped['status']);
+        $this->assertFalse($mapped['retryable']);
+        $this->assertTrue($mapper->isSuccessful(['code' => '000']));
+    }
+
+    public function test_maps_failed_code_016(): void
+    {
+        $mapper = app(VTPassResponseMapper::class);
+
+        $mapped = $mapper->map([
+            'code' => '016',
+            'response_description' => 'TRANSACTION FAILED',
+        ]);
+
+        $this->assertSame(VTPassResponseMapper::STATUS_FAILED, $mapped['status']);
+        $this->assertSame('TRANSACTION FAILED', $mapper->failureReason([
+            'code' => '016',
+            'response_description' => 'TRANSACTION FAILED',
+        ]));
+    }
+
+    public function test_maps_retryable_code_030(): void
+    {
+        $mapper = app(VTPassResponseMapper::class);
+
+        $mapped = $mapper->map([
+            'code' => '030',
+            'response_description' => 'SERVICE TEMPORARILY UNAVAILABLE',
+        ]);
+
+        $this->assertSame(VTPassResponseMapper::STATUS_RETRYABLE, $mapped['status']);
+        $this->assertTrue($mapped['retryable']);
+    }
+
+    public function test_meter_verification_unavailable_when_feature_disabled(): void
+    {
+        config(['services.vtpass.enabled' => false]);
+
+        $result = app(ElectricityMeterVerificationService::class)->verify(
+            'IKEDC',
+            '45053854956',
+            'prepaid',
+        );
+
+        $this->assertFalse($result['available']);
+        $this->assertFalse($result['verified']);
+        $this->assertStringContainsString('FEATURE_VTPASS=false', $result['message']);
+    }
+
+    public function test_meter_verification_unavailable_without_credentials(): void
+    {
+        config([
+            'services.vtpass.enabled' => true,
+            'services.vtpass.username' => null,
+            'services.vtpass.password' => null,
+            'services.vtpass.api_key' => null,
+        ]);
+
+        $result = app(ElectricityMeterVerificationService::class)->verify(
+            'IKEDC',
+            '45053854956',
+            'prepaid',
+        );
+
+        $this->assertFalse($result['available']);
+        $this->assertStringContainsString('credentials are not configured', $result['message']);
+    }
+
+    public function test_timeout_handling_returns_vtpass_timeout(): void
+    {
+        config([
+            'services.vtpass.enabled' => true,
+            'services.vtpass.username' => 'sandbox-user',
+            'services.vtpass.password' => 'sandbox-pass',
+            'services.vtpass.api_key' => 'sandbox-key',
+            'services.vtpass.retry_times' => 1,
+            'services.vtpass.timeout' => 1,
+        ]);
+
+        Http::fake(function () {
+            throw new ConnectionException('Connection timed out.');
+        });
+
+        $this->expectException(\App\Exceptions\VTPassException::class);
+        $this->expectExceptionMessage('Connection timed out.');
+
+        app(VTPassService::class)->verifyMeter(
+            app(ElectricityAdapter::class)->buildVerifyPayload('IKEDC', '45053854956', 'prepaid'),
+        );
+    }
+}

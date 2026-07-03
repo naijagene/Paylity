@@ -251,6 +251,17 @@ class VTPassFulfillmentTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_electricity_adapter_builds_merchant_verify_payload(): void
+    {
+        $adapter = app(\App\Services\Fulfillment\Adapters\ElectricityAdapter::class);
+
+        $payload = $adapter->buildVerifyPayload('IKEDC', '45053854956', 'prepaid');
+
+        $this->assertSame('ikeja-electric', $payload['serviceID']);
+        $this->assertSame('45053854956', $payload['billersCode']);
+        $this->assertSame('prepaid', $payload['type']);
+    }
+
     public function test_electricity_adapter_includes_meter_fields(): void
     {
         $transaction = Transaction::query()->create([

@@ -18,6 +18,7 @@ class FulfillmentService
 
     public function __construct(
         private readonly VTPassService $vtpassService,
+        private readonly VTPassResponseMapper $responseMapper,
         AirtimeAdapter $airtimeAdapter,
         DataAdapter $dataAdapter,
         ElectricityAdapter $electricityAdapter,
@@ -96,7 +97,7 @@ class FulfillmentService
         try {
             $response = $this->vtpassService->pay($payload);
 
-            if ($this->isSuccessfulResponse($response)) {
+            if ($this->responseMapper->isSuccessful($response)) {
                 $transaction->update([
                     'status' => TransactionStatus::FULFILLED,
                     'fulfillment_provider' => 'vtpass',
@@ -111,7 +112,7 @@ class FulfillmentService
                 return $transaction->fresh();
             }
 
-            $reason = $this->resolveFailureReason($response);
+            $reason = $this->responseMapper->failureReason($response);
 
             $transaction->update([
                 'status' => TransactionStatus::FAILED,
@@ -149,20 +150,6 @@ class FulfillmentService
 
     /**
      * @param  array<string, mixed>  $response
-     */
-    private function isSuccessfulResponse(array $response): bool
-    {
-        if ((string) data_get($response, 'code') === '000') {
-            return true;
-        }
-
-        $status = strtolower((string) data_get($response, 'content.transactions.status', ''));
-
-        return in_array($status, ['delivered', 'successful', 'success'], true);
-    }
-
-    /**
-     * @param  array<string, mixed>  $response
      * @param  array<string, mixed>  $payload
      */
     private function resolveFulfillmentReference(array $response, array $payload): string
@@ -172,19 +159,6 @@ class FulfillmentService
             ?? data_get($response, 'content.transactions.transactionId')
             ?? data_get($response, 'content.transactions.requestId')
             ?? $payload['request_id']
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $response
-     */
-    private function resolveFailureReason(array $response): string
-    {
-        return (string) (
-            data_get($response, 'response_description')
-            ?? data_get($response, 'content.transactions.product_name')
-            ?? data_get($response, 'message')
-            ?? 'VTPass fulfillment failed.'
         );
     }
 
