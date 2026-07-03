@@ -13,10 +13,15 @@ import { SupportCard } from "@/components/support/SupportCard";
 import { verifyPaystackPayment } from "@/lib/api/payments";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import {
+  getCallbackPageHeading,
+  getFulfillmentBadgeLabel,
+  getFulfillmentBadgeVariant,
   getPaymentBadgeLabel,
   getPaymentBadgeVariant,
   getTimelinePhase,
   PRODUCT_LABELS,
+  shouldRenderCallbackPendingView,
+  shouldRenderCallbackSuccessView,
 } from "@/lib/transaction/display";
 
 type VerificationState =
@@ -176,7 +181,7 @@ export function PaymentCallbackClient() {
   const productLabel =
     PRODUCT_LABELS[state.productType] ?? state.productType;
 
-  if (state.status === "payment_success") {
+  if (shouldRenderCallbackSuccessView(state.status)) {
     return (
       <PageContainer className="py-8 sm:py-12">
         <PaymentSuccessCard
@@ -188,6 +193,7 @@ export function PaymentCallbackClient() {
           gatewayFee={state.gatewayFee}
           payableAmount={state.payableAmount}
           transactionStatus={state.status}
+          failureReason={state.failureReason}
         />
       </PageContainer>
     );
@@ -238,25 +244,55 @@ export function PaymentCallbackClient() {
     );
   }
 
+  if (shouldRenderCallbackPendingView(state.status)) {
+    const heading = getCallbackPageHeading(state.status);
+
+    return (
+      <PageContainer className="py-8 sm:py-12">
+        <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-light">
+            <div
+              className="h-8 w-8 animate-spin rounded-full border-4 border-success/20 border-t-success"
+              aria-hidden="true"
+            />
+          </div>
+          <h1 className="text-2xl font-black text-foreground">{heading.title}</h1>
+          <p className="text-sm text-foreground/60">{heading.subtitle}</p>
+          <p className="font-mono text-xs text-foreground/50">{state.reference}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <StatusBadge
+              label={getPaymentBadgeLabel(state.status)}
+              variant={getPaymentBadgeVariant(state.status)}
+            />
+          </div>
+          <section className="rounded-2xl border border-border bg-card p-5 text-left shadow-sm">
+            <TransactionTimeline phase={getTimelinePhase(state.status)} />
+          </section>
+          <Button onClick={() => void checkAgain()}>Check Again</Button>
+        </div>
+      </PageContainer>
+    );
+  }
+
+  const heading = getCallbackPageHeading(state.status);
+
   return (
     <PageContainer className="py-8 sm:py-12">
       <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-light">
-          <div
-            className="h-8 w-8 animate-spin rounded-full border-4 border-success/20 border-t-success"
-            aria-hidden="true"
+        <h1 className="text-2xl font-black text-foreground">{heading.title}</h1>
+        <p className="text-sm text-foreground/60">{heading.subtitle}</p>
+        <p className="font-mono text-xs text-foreground/50">{state.reference}</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <StatusBadge
+            label={getPaymentBadgeLabel(state.status)}
+            variant={getPaymentBadgeVariant(state.status)}
+          />
+          <StatusBadge
+            label={getFulfillmentBadgeLabel(state.status)}
+            variant={getFulfillmentBadgeVariant(state.status)}
           />
         </div>
-        <h1 className="text-2xl font-black text-foreground">Payment Pending</h1>
-        <p className="text-sm text-foreground/60">
-          Your payment is still being confirmed.
-        </p>
-        <p className="font-mono text-xs text-foreground/50">{state.reference}</p>
-        <StatusBadge
-          label={getPaymentBadgeLabel(state.status)}
-          variant={getPaymentBadgeVariant(state.status)}
-        />
-        <section className="rounded-3xl border border-dark/5 bg-white p-5 text-left">
+        <section className="rounded-2xl border border-border bg-card p-5 text-left shadow-sm">
           <TransactionTimeline phase={getTimelinePhase(state.status)} />
         </section>
         <Button onClick={() => void checkAgain()}>Check Again</Button>

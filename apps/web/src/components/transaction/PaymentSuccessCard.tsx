@@ -5,7 +5,10 @@ import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
 import { SupportCard } from "@/components/support/SupportCard";
-import { getTimelinePhase } from "@/lib/transaction/display";
+import {
+  getCallbackPageHeading,
+  getTimelinePhase,
+} from "@/lib/transaction/display";
 
 type PaymentSuccessCardProps = {
   reference: string;
@@ -16,6 +19,7 @@ type PaymentSuccessCardProps = {
   gatewayFee: number;
   payableAmount: number;
   transactionStatus?: string;
+  failureReason?: string;
 };
 
 export function PaymentSuccessCard({
@@ -27,10 +31,18 @@ export function PaymentSuccessCard({
   gatewayFee,
   payableAmount,
   transactionStatus = "payment_success",
+  failureReason,
 }: PaymentSuccessCardProps) {
   const handlePrint = () => {
     window.print();
   };
+
+  const heading = getCallbackPageHeading(transactionStatus);
+  const heroIconClass =
+    heading.tone === "delivery_failed"
+      ? "bg-accent text-dark"
+      : "bg-success text-white shadow-lg shadow-success/20";
+  const heroIconContent = heading.tone === "delivery_failed" ? "!" : "✓";
 
   return (
     <div className={`animate-fade-in mx-auto w-full ${CONTENT_MAX_WIDTH_CLASS} space-y-6`}>
@@ -43,23 +55,26 @@ export function PaymentSuccessCard({
         aria-labelledby="payment-success-title"
       >
         <div
-          className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-success text-white shadow-lg shadow-success/20"
+          className={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${heroIconClass}`}
           aria-hidden="true"
         >
-          <span className="text-4xl font-bold">✓</span>
+          <span className="text-4xl font-bold">{heroIconContent}</span>
         </div>
         <h1
           id="payment-success-title"
           className="font-display text-2xl font-extrabold tracking-tight text-dark sm:text-3xl"
         >
-          Payment Completed Successfully
+          {heading.title}
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          Payment confirmed. Delivery is being processed.
+          {heading.subtitle}
         </p>
-        <p className="mt-2 text-sm text-muted">
-          This usually takes 30 seconds to 2 minutes.
-        </p>
+        {heading.detail ? (
+          <p className="mt-2 text-sm text-muted">{heading.detail}</p>
+        ) : null}
+        {failureReason && heading.tone === "delivery_failed" ? (
+          <p className="mt-3 text-sm font-medium text-error">{failureReason}</p>
+        ) : null}
         <p className="mt-5 font-mono text-sm font-bold text-dark">{reference}</p>
       </section>
 

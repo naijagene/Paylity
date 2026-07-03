@@ -81,6 +81,7 @@ export function getTimelinePhase(status: string): TimelinePhase {
     case "fulfilled":
       return "delivered";
     case "fulfillment_pending":
+    case "payment_success":
       return "processing";
     case "failed":
       return "delivery_failed";
@@ -89,6 +90,80 @@ export function getTimelinePhase(status: string): TimelinePhase {
     default:
       return "awaiting";
   }
+}
+
+export type CallbackPageTone = "success" | "pending" | "failed" | "delivery_failed";
+
+export type CallbackPageHeading = {
+  title: string;
+  subtitle: string;
+  detail?: string;
+  tone: CallbackPageTone;
+  showSpinner: boolean;
+};
+
+export function getCallbackPageHeading(status: string): CallbackPageHeading {
+  switch (status) {
+    case "fulfilled":
+      return {
+        title: "Payment Completed Successfully",
+        subtitle: "Your order has been delivered.",
+        tone: "success",
+        showSpinner: false,
+      };
+    case "payment_success":
+    case "fulfillment_pending":
+      return {
+        title: "Payment Completed Successfully",
+        subtitle: "Delivery is being processed.",
+        detail: "This usually takes 30 seconds to 2 minutes.",
+        tone: "success",
+        showSpinner: false,
+      };
+    case "failed":
+      return {
+        title: "Payment Successful, Delivery Failed",
+        subtitle:
+          "Your payment was confirmed, but delivery could not be completed.",
+        tone: "delivery_failed",
+        showSpinner: false,
+      };
+    case "payment_failed":
+      return {
+        title: "Payment Failed",
+        subtitle: "Your payment could not be completed.",
+        tone: "failed",
+        showSpinner: false,
+      };
+    case "payment_pending":
+    case "created":
+      return {
+        title: "Payment Pending",
+        subtitle: "Your payment is still being confirmed.",
+        tone: "pending",
+        showSpinner: true,
+      };
+    default:
+      return {
+        title: "Payment Pending",
+        subtitle: "Your payment is still being confirmed.",
+        tone: "pending",
+        showSpinner: true,
+      };
+  }
+}
+
+export function shouldRenderCallbackSuccessView(status: string): boolean {
+  return (
+    status === "fulfilled" ||
+    status === "payment_success" ||
+    status === "fulfillment_pending" ||
+    status === "failed"
+  );
+}
+
+export function shouldRenderCallbackPendingView(status: string): boolean {
+  return status === "payment_pending" || status === "created";
 }
 
 export function shouldPollTransactionStatus(status: string): boolean {
