@@ -133,18 +133,25 @@ php artisan paylity:vtpass-check
 PAYLITY frontend plan IDs (e.g. `mtn-1gb-daily`) are **not** VTPass variation codes. Sandbox data certification requires real codes from VTPass.
 
 1. Confirm sandbox credentials work: `php artisan paylity:vtpass-check`
-2. Query variations for your target data service:
+2. Fetch variations for your target data service (recommended):
 
 ```bash
-curl -X POST https://sandbox.vtpass.com/api/service-variations \
-  -u "VTPASS_USERNAME:VTPASS_PASSWORD" \
-  -H "api-key: VTPASS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"serviceID":"mtn-data"}'
+cd apps/api
+php artisan paylity:vtpass-variations mtn-data
 ```
 
-3. Pick a `variation_code` from the response (note amount and validity).
-4. Set env values:
+The command prints `variation_code`, `name`, `amount`, and `fixedPrice` (when available). It never prints passwords, API keys, or other secrets.
+
+Alternative — query the API directly with curl (VTPass uses GET):
+
+```bash
+curl "https://sandbox.vtpass.com/api/service-variations?serviceID=mtn-data" \
+  -u "VTPASS_USERNAME:VTPASS_PASSWORD" \
+  -H "api-key: VTPASS_API_KEY"
+```
+
+3. Pick a `variation_code` from the output (note amount and validity).
+4. Set env values in `apps/api/.env`:
 
 ```env
 VTPASS_TEST_DATA_SERVICE_ID=mtn-data
@@ -152,7 +159,14 @@ VTPASS_TEST_DATA_VARIATION_CODE=<code_from_vtpass>
 VTPASS_TEST_DATA_PHONE=08011111111
 ```
 
-5. Run `php artisan test --testsuite=Integration`
+5. Clear config cache if needed, then run integration tests:
+
+```bash
+php artisan config:clear
+php artisan test --testsuite=Integration
+```
+
+**Note:** `apps/api/phpunit.xml` sets `FEATURE_VTPASS=false` and `VTPASS_SANDBOX_TESTS=false` by default so CI does not hit live sandbox. For local certification, temporarily set both to `true` in `phpunit.xml` (or export them in a way that overrides PHPUnit env), ensure `VTPASS_TEST_DATA_*` values are in `.env`, then run the integration suite.
 
 If `VTPASS_TEST_DATA_VARIATION_CODE` is unset, the data purchase test skips with:
 

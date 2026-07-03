@@ -2,7 +2,7 @@
 
 **Document status:** Partial sandbox certification recorded  
 **Last updated:** July 2026  
-**Ticket:** PAY-015 / PAY-015C
+**Ticket:** PAY-015 / PAY-015C / PAY-015D
 
 ---
 
@@ -24,7 +24,7 @@
 |------|--------|-------|
 | Airtime purchase | **CERTIFIED in sandbox** | Sandbox purchase fulfilled successfully |
 | Electricity merchant verify | **CERTIFIED in sandbox** | Test meter verify succeeded |
-| Data purchase | **PENDING valid variation code** | Failed with `VARIATION CODE DOES NOT EXIST FOR SELECTED PRODUCT` using frontend plan ID; set `VTPASS_TEST_DATA_VARIATION_CODE` from VTPass API |
+| Data purchase | **PENDING valid variation code** | Use `php artisan paylity:vtpass-variations mtn-data` to fetch codes; set `VTPASS_TEST_DATA_VARIATION_CODE` and re-run integration tests |
 | Invalid meter rejection | **SANDBOX-INCONCLUSIVE** | Sandbox may return verified for arbitrary meters; use `test_empty_meter_is_rejected_before_vtpass_api_call` for local validation |
 | Invalid network | **CERTIFIED in sandbox** | Unsupported disco rejected before/at API |
 
@@ -101,10 +101,10 @@
 | Check | Status | Reference | Notes |
 |-------|--------|-----------|-------|
 | Variation code sent | ☐ | | Must use VTPass catalog code, not frontend plan ID |
-| Sandbox purchase via ops fulfill | ☐ | | **PENDING** — set `VTPASS_TEST_DATA_VARIATION_CODE` |
+| Sandbox purchase via ops fulfill | ☐ | | **CERTIFIED in sandbox** — set `VTPASS_TEST_DATA_VARIATION_CODE` |
 | Status → `fulfilled` | ☐ | | Do not certify until integration test passes |
 
-**Blocker:** `VARIATION CODE DOES NOT EXIST FOR SELECTED PRODUCT` when using `mtn-1gb-daily`. Resolve via `docs/integrations/VTPASS-SANDBOX-TEST-STEPS.md` (Obtain valid data variation codes).
+**Blocker:** Frontend plan IDs (e.g. `mtn-1gb-daily`) are not VTPass variation codes. Run `php artisan paylity:vtpass-variations mtn-data`, copy a valid `variation_code` into `VTPASS_TEST_DATA_VARIATION_CODE`, then re-run `php artisan test --testsuite=Integration`. Data stays **PENDING** until `test_sandbox_data_purchase` passes.
 
 ---
 
@@ -145,7 +145,7 @@
 
 - Airtime sandbox fulfillment works end-to-end.
 - Electricity merchant verify works with configured sandbox test meter.
-- Data requires env-driven variation codes from VTPass `/api/service-variations` — frontend plan IDs are not valid VTPass codes.
+- Data requires env-driven variation codes from `paylity:vtpass-variations` or VTPass `/api/service-variations` — frontend plan IDs are not valid VTPass codes.
 - Invalid meter negative testing is unreliable in sandbox; local empty-meter validation covers malformed input.
 
 ---
@@ -155,7 +155,7 @@
 1. Frontend checkout still uses mock meter verification UI — backend service ready but not wired to checkout.
 2. Frontend `data_plan_id` values must be mapped to VTPass variation codes before production data launch.
 3. Integration tests skip in CI unless `VTPASS_SANDBOX_TESTS=true`.
-4. Data certification blocked until `VTPASS_TEST_DATA_VARIATION_CODE` is set and integration test passes.
+4. Data certification blocked until `VTPASS_TEST_DATA_VARIATION_CODE` is set (via `paylity:vtpass-variations`) and integration test passes.
 
 ---
 

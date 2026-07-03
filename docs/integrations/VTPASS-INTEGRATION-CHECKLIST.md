@@ -77,17 +77,24 @@ Variation codes are **not** the same as PAYLITY frontend `data_plan_id` values. 
 #### How to obtain sandbox data variation codes
 
 1. Log in to the [VTPass sandbox dashboard](https://sandbox.vtpass.com) and confirm your account is active.
-2. Query the service variations API for your target network:
+2. Fetch variations with the PAYLITY artisan command (recommended):
 
 ```bash
-curl -X POST https://sandbox.vtpass.com/api/service-variations \
-  -u "VTPASS_USERNAME:VTPASS_PASSWORD" \
-  -H "api-key: VTPASS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"serviceID":"mtn-data"}'
+cd apps/api
+php artisan paylity:vtpass-variations mtn-data
 ```
 
-3. From the response, copy a valid `variation_code` (and note the matching `serviceID` and amount).
+Output columns: `variation_code`, `name`, `amount`, `fixedPrice`. Secrets are never printed.
+
+Alternative — query the service variations API directly (GET):
+
+```bash
+curl "https://sandbox.vtpass.com/api/service-variations?serviceID=mtn-data" \
+  -u "VTPASS_USERNAME:VTPASS_PASSWORD" \
+  -H "api-key: VTPASS_API_KEY"
+```
+
+3. From the output, copy a valid `variation_code` (and note the matching `serviceID` and amount).
 4. Set in `apps/api/.env`:
 
 ```env
@@ -99,6 +106,7 @@ VTPASS_TEST_DATA_PHONE=08011111111
 5. Re-run integration tests:
 
 ```bash
+php artisan config:clear
 php artisan test --testsuite=Integration
 ```
 
@@ -124,6 +132,7 @@ Meter type maps to `variation_code`: `prepaid` or `postpaid`.
 | Operation | Method | Path | Used by |
 |-----------|--------|------|---------|
 | Merchant Verify | POST | `/api/merchant-verify` | Electricity meter verification |
+| Service Variations | GET | `/api/service-variations?serviceID={id}` | Data variation lookup (`paylity:vtpass-variations`) |
 | Purchase | POST | `/api/pay` | Fulfillment (airtime, data, electricity) |
 | Query / Requery | POST | `/api/requery` | Transaction status lookup (available, not yet wired to UI) |
 

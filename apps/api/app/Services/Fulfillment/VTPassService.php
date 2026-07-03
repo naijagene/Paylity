@@ -106,6 +106,22 @@ class VTPassService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function getServiceVariations(string $serviceId): array
+    {
+        $this->assertConfigured();
+
+        return $this->sendRequest(
+            'service-variations',
+            '/api/service-variations',
+            ['serviceID' => $serviceId],
+            'VTPass service variations request failed.',
+            'get',
+        );
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
@@ -114,6 +130,7 @@ class VTPassService
         string $path,
         array $payload,
         string $fallbackMessage,
+        string $method = 'post',
     ): array {
         $startedAt = microtime(true);
         $attempts = max(1, (int) config('services.vtpass.retry_times', 2));
@@ -121,7 +138,11 @@ class VTPassService
 
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             try {
-                $response = $this->client()->post($this->endpoint($path), $payload);
+                $client = $this->client();
+                $url = $this->endpoint($path);
+                $response = $method === 'get'
+                    ? $client->get($url, $payload)
+                    : $client->post($url, $payload);
                 $diagnostics = $this->buildDiagnostics($endpoint, $response);
                 $body = (string) $response->body();
                 $json = $response->json();
