@@ -37,17 +37,35 @@ const AD_COPY: Record<
 
 const TYPE_STYLES: Record<AdSlotType, string> = {
   "homepage-large":
-    "min-h-[7.5rem] rounded-3xl border border-dark/10 bg-gradient-to-br from-white via-white to-primary/5 p-6 shadow-sm",
+    "min-h-[7rem] rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6",
   "homepage-small":
-    "min-h-[6.5rem] rounded-2xl border border-dark/10 bg-white p-4 shadow-sm",
+    "min-h-[6rem] rounded-2xl border border-border bg-card p-4 shadow-sm",
   "checkout-banner":
-    "rounded-2xl border border-dashed border-dark/15 bg-white/80 px-4 py-3 shadow-sm",
+    "rounded-2xl border border-border bg-card px-4 py-3 shadow-sm",
   "status-banner":
-    "rounded-2xl border border-dashed border-dark/15 bg-white px-4 py-3 shadow-sm",
+    "rounded-2xl border border-border bg-card px-4 py-3 shadow-sm",
 };
+
+function MegaphoneIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M3 11v2a2 2 0 0 0 2 2h1l4 4V5L6 9H5a2 2 0 0 0-2 2z" />
+      <path d="M15 9.5a4 4 0 0 1 0 5M17.5 6.5a7.5 7.5 0 0 1 0 11" />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
 
 export function AdSlot({ type, className = "" }: AdSlotProps) {
   const copy = AD_COPY[type];
+  const compact = type === "checkout-banner" || type === "status-banner";
 
   return (
     <aside
@@ -55,17 +73,31 @@ export function AdSlot({ type, className = "" }: AdSlotProps) {
       aria-label="Advertisement placeholder"
       role="complementary"
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-        {copy.tag}
-      </p>
-      <p
-        className={`mt-2 font-bold text-dark ${
-          type === "homepage-large" ? "text-lg" : "text-sm"
-        }`}
-      >
-        {copy.headline}
-      </p>
-      <p className="mt-1 text-sm text-foreground/60">{copy.subline}</p>
+      <div className="flex items-start gap-4">
+        {!compact ? (
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-success-light text-success">
+            <MegaphoneIcon />
+          </div>
+        ) : null}
+
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-success">
+            {copy.tag}
+          </p>
+          <p
+            className={`mt-1.5 font-display font-bold text-dark ${
+              type === "homepage-large" ? "text-lg" : "text-sm"
+            }`}
+          >
+            {copy.headline}
+          </p>
+          <p className="mt-1 text-sm text-muted">{copy.subline}</p>
+        </div>
+
+        <span className="mt-1 flex shrink-0 items-center text-success" aria-hidden="true">
+          <ArrowIcon />
+        </span>
+      </div>
     </aside>
   );
 }

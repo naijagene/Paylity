@@ -12,8 +12,8 @@ import { StatusBadge } from "@/components/transaction/StatusBadge";
 import { TransactionPageSkeleton } from "@/components/transaction/TransactionPageSkeleton";
 import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
+import { AppFooter } from "@/components/system/AppFooter";
 import { SupportCard } from "@/components/support/SupportCard";
-import { SystemIdentity } from "@/components/system/SystemIdentity";
 import { getTransaction, type TransactionDetail } from "@/lib/api/transactions";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import {
@@ -280,17 +280,19 @@ export function TransactionStatusClient() {
 
   return (
     <PageContainer className="py-8 sm:py-12">
-      <div className="animate-fade-in mx-auto w-full max-w-2xl space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <PaylityLogo size="sm" />
-          <AdSlot type="status-banner" className="sm:max-w-xs" />
-        </div>
+      <div className="animate-fade-in mx-auto w-full space-y-6">
+        <header className="border-b border-border pb-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <PaylityLogo size="md" href="/" />
+            <AdSlot type="status-banner" className="sm:max-w-sm" />
+          </div>
+        </header>
 
-        <header className="text-center sm:text-left">
-          <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+        <section className="text-center sm:text-left">
+          <p className="text-sm font-semibold uppercase tracking-wide text-success">
             Transaction Details
           </p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-dark sm:text-4xl">
+          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-dark sm:text-4xl">
             {transaction.reference}
           </h1>
           <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
@@ -303,11 +305,11 @@ export function TransactionStatusClient() {
               variant={getFulfillmentBadgeVariant(transaction.status)}
             />
           </div>
-        </header>
+        </section>
 
         {awaitingDelivery ? (
           <section
-            className="rounded-3xl border border-success/20 bg-gradient-to-br from-success/10 via-white to-success/5 p-5 shadow-sm"
+            className="rounded-2xl border border-border-green bg-success-light/40 p-5 shadow-sm"
             aria-live="polite"
           >
             {pollingExhausted ? (
@@ -357,12 +359,12 @@ export function TransactionStatusClient() {
         shouldPollTransactionStatus(transaction.status) &&
         !pollingExhausted ? (
           <div
-            className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground/70"
+            className="flex items-center gap-3 rounded-2xl border border-border-green bg-card px-4 py-3 text-sm text-muted"
             role="status"
             aria-live="polite"
           >
             <div
-              className="h-4 w-4 animate-spin rounded-full border-2 border-primary/20 border-t-primary"
+              className="h-4 w-4 animate-spin rounded-full border-2 border-success/20 border-t-success"
               aria-hidden="true"
             />
             Checking delivery status...
@@ -370,16 +372,16 @@ export function TransactionStatusClient() {
         ) : null}
 
         <section
-          className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm"
+          className="rounded-2xl border border-border bg-card p-5 shadow-sm"
           aria-label="Reference details"
         >
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
             Reference
           </h2>
-          <p className="mt-2 font-mono text-lg font-bold text-foreground">
+          <p className="mt-2 font-mono text-lg font-bold text-dark">
             {transaction.reference}
           </p>
-          <p className="mt-2 text-sm text-foreground/60">
+          <p className="mt-2 text-sm text-muted">
             {productLabel} · {transaction.customer_phone}
           </p>
         </section>
@@ -405,10 +407,10 @@ export function TransactionStatusClient() {
         ) : null}
 
         <section
-          className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm"
+          className="rounded-2xl border border-border bg-card p-5 shadow-sm"
           aria-label="Delivery progress"
         >
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted">
             Status Timeline
           </h2>
           <TransactionTimeline phase={getTimelinePhase(transaction.status)} />
@@ -432,9 +434,9 @@ export function TransactionStatusClient() {
         <div className="print:hidden">
           <SupportCard reference={transaction.reference} />
         </div>
-
-        <SystemIdentity className="print:hidden" />
       </div>
+
+      <AppFooter className="print:hidden mt-8" />
     </PageContainer>
   );
 }

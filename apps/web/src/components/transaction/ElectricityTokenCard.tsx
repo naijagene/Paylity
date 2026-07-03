@@ -68,7 +68,7 @@ export function ElectricityTokenCard({
   if (!details) {
     return (
       <section
-        className={`rounded-3xl border border-dark/5 bg-white p-5 shadow-sm ${className}`}
+        className={`rounded-2xl border border-border bg-card p-5 shadow-sm ${className}`}
         aria-label="Electricity token details"
       >
         <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
@@ -86,7 +86,7 @@ export function ElectricityTokenCard({
 
   return (
     <section
-      className={`rounded-3xl border border-success/20 bg-gradient-to-br from-success/10 via-white to-success/5 p-5 shadow-sm ${className}`}
+      className={`rounded-2xl border border-border-green bg-success-light/40 p-5 shadow-sm ${className}`}
       aria-label="Electricity token details"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -129,7 +129,7 @@ export function ElectricityTokenCard({
           return (
             <div
               key={key}
-              className="rounded-2xl border border-dark/5 bg-white/80 px-4 py-3"
+              className="rounded-xl border border-border bg-card px-4 py-3"
             >
               <dt className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
                 {label}

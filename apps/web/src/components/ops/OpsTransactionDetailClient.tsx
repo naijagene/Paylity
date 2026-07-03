@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
 import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
@@ -126,7 +127,7 @@ export function OpsTransactionDetailClient() {
   if (loading) {
     return (
       <PageContainer className="flex min-h-[40vh] items-center justify-center py-16">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-success/20 border-t-success" />
       </PageContainer>
     );
   }
@@ -157,13 +158,14 @@ export function OpsTransactionDetailClient() {
       <div className="mx-auto w-full max-w-4xl space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <PaylityLogo size="sm" href="/ops" />
             <Link
               href="/ops"
-              className="text-sm font-semibold text-primary hover:underline"
+              className="mt-3 inline-flex text-sm font-semibold text-success hover:underline"
             >
               ← Back to Ops
             </Link>
-            <h1 className="mt-2 font-mono text-2xl font-black text-foreground sm:text-3xl">
+            <h1 className="mt-2 font-mono text-2xl font-extrabold text-dark sm:text-3xl">
               {transaction.reference}
             </h1>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -208,7 +210,7 @@ export function OpsTransactionDetailClient() {
           </p>
         ) : null}
 
-        <section className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
             Fulfillment Diagnostics
           </h2>
@@ -256,7 +258,7 @@ export function OpsTransactionDetailClient() {
           failureReason={transaction.failure_reason}
         />
 
-        <section className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
             Customer Details
           </h2>
@@ -286,14 +288,14 @@ export function OpsTransactionDetailClient() {
           </dl>
         </section>
 
-        <section className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
             Status Timeline
           </h2>
           <TransactionTimeline phase={getTimelinePhase(transaction.status)} />
         </section>
 
-        <details className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+        <details className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <summary className="cursor-pointer text-sm font-semibold text-foreground">
             Raw Payloads
           </summary>

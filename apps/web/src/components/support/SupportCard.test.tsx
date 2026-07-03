@@ -13,7 +13,9 @@ describe("SupportCard", () => {
     render(<SupportCard reference="PYL-20260702-ABC123" />);
 
     expect(
-      screen.getByRole("link", { name: /Email Support/i }),
+      screen.getByRole("link", {
+        name: /Email PAYLITY Support at support@paylity.ng/i,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText("support@paylity.ng")).toBeInTheDocument();
   });
@@ -27,7 +29,7 @@ describe("SupportCard", () => {
     render(<SupportCard reference="PYL-20260702-ABC123" />);
 
     expect(
-      screen.getByRole("link", { name: /WhatsApp Support/i }),
+      screen.getByRole("link", { name: /Chat with PAYLITY Support on WhatsApp/i }),
     ).toBeInTheDocument();
   });
 

@@ -1,11 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3f4f6;
+  --background: #f8fafc;
   --foreground: #0f172a;
-  --primary: #f5b400;
+  --primary: #10b981;
+  --primary-dark: #059669;
+  --accent: #f5b400;
   --dark: #0f172a;
   --success: #10b981;
+  --success-dark: #059669;
+  --success-light: #ecfdf5;
+  --muted: #64748b;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --border-green: #d1fae5;
   --error: #dc2626;
 }
 
@@ -13,16 +21,32 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-accent: var(--accent);
   --color-dark: var(--dark);
   --color-success: var(--success);
+  --color-success-dark: var(--success-dark);
+  --color-success-light: var(--success-light);
+  --color-muted: var(--muted);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-border-green: var(--border-green);
   --color-error: var(--error);
   --font-sans: var(--font-inter);
+  --font-display: var(--font-poppins);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-poppins), var(--font-inter), system-ui, sans-serif;
 }
 
 @keyframes fade-in {

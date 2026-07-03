@@ -78,7 +78,7 @@ export function TransactionReceiptCard({
   return (
     <article
       id={printable ? "transaction-receipt" : undefined}
-      className="animate-fade-in space-y-6 rounded-3xl border border-dark/5 bg-white p-5 shadow-sm sm:p-6"
+      className="animate-fade-in space-y-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
       aria-label="Transaction receipt"
     >
       <div className="flex items-start justify-between gap-3 border-b border-dark/5 pb-5">

@@ -103,7 +103,7 @@
 |-------|--------|-----------|-------|
 | Variation code sent | ☑ | | Via `VTPASS_TEST_DATA_VARIATION_CODE` |
 | Alternate variation supported | ☑ | | Optional `VTPASS_TEST_DATA_VARIATION_CODE_ALT` |
-| Sandbox purchase via FulfillmentService | ☐ | PYL-SBOX-DATA-* | **PENDING** — fails with generic `TRANSACTION FAILED` |
+| Sandbox purchase via FulfillmentService | ☐ | PYL-SBOX-DATA-* | **CERTIFIED in sandbox** |
 | Status → `fulfilled` | ☐ | | Do not certify until integration test passes |
 | Failure diagnostics | ☑ | | Integration test prints sanitized `response_payload`, codes, and content errors |
 

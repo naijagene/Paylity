@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
 import {
   fetchOpsSummary,
@@ -42,11 +43,11 @@ const PRODUCT_OPTIONS = ["", "airtime", "data", "electricity"];
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-3xl border border-dark/5 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-black text-foreground">{value}</p>
+      <p className="mt-2 font-display text-2xl font-extrabold text-dark">{value}</p>
     </div>
   );
 }
@@ -137,15 +138,18 @@ export function OpsDashboardClient() {
   };
 
   return (
-    <PageContainer className="py-8">
+    <PageContainer className="py-8" narrow={false}>
       <div className="mx-auto w-full max-w-6xl space-y-8">
-        <header>
-          <h1 className="text-3xl font-black tracking-tight text-foreground">
-            Operations Dashboard
-          </h1>
-          <p className="mt-2 text-sm text-foreground/60">
-            Search transactions by reference, phone, status, or product type.
-          </p>
+        <header className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <PaylityLogo size="sm" href="/" />
+            <h1 className="mt-4 font-display text-3xl font-extrabold tracking-tight text-dark">
+              Operations Dashboard
+            </h1>
+            <p className="mt-2 text-sm text-muted">
+              Search transactions by reference, phone, status, or product type.
+            </p>
+          </div>
         </header>
 
         {summary ? (
@@ -171,7 +175,7 @@ export function OpsDashboardClient() {
           </section>
         ) : null}
 
-        <section className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <form
             className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
             onSubmit={handleSearch}
@@ -258,7 +262,7 @@ export function OpsDashboardClient() {
           </p>
         ) : null}
 
-        <section className="overflow-hidden rounded-3xl border border-dark/5 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-dark/5 bg-dark/[0.02] text-xs uppercase tracking-wide text-foreground/45">
@@ -290,7 +294,7 @@ export function OpsDashboardClient() {
                       <td className="px-4 py-3 font-mono text-xs">
                         <Link
                           href={`/ops/transactions/${encodeURIComponent(transaction.reference)}`}
-                          className="font-semibold text-primary hover:underline"
+                          className="font-semibold text-success hover:underline"
                         >
                           {transaction.reference}
                         </Link>

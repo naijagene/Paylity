@@ -197,7 +197,7 @@ export function PaymentCallbackClient() {
     return (
       <PageContainer className="py-8 sm:py-12">
         <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6">
-          <section className="rounded-3xl border border-error/15 bg-error/5 p-6 text-center">
+          <section className="rounded-2xl border border-error/15 bg-error/5 p-6 text-center shadow-sm">
             <div
               className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error text-white"
               aria-hidden="true"
@@ -219,7 +219,7 @@ export function PaymentCallbackClient() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-dark/5 bg-white p-5">
+          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <TransactionTimeline phase={getTimelinePhase(state.status)} />
           </section>
 
@@ -241,9 +241,9 @@ export function PaymentCallbackClient() {
   return (
     <PageContainer className="py-8 sm:py-12">
       <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-light">
           <div
-            className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary"
+            className="h-8 w-8 animate-spin rounded-full border-4 border-success/20 border-t-success"
             aria-hidden="true"
           />
         </div>
