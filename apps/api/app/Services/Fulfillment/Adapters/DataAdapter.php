@@ -16,6 +16,15 @@ class DataAdapter implements FulfillmentAdapterInterface
         'etisalat' => 'etisalat-data',
     ];
 
+    /** @var list<string> */
+    public const REQUIRED_VTPASS_FIELDS = [
+        'request_id',
+        'serviceID',
+        'billersCode',
+        'variation_code',
+        'phone',
+    ];
+
     public function supports(string $productType): bool
     {
         return $productType === 'data';
@@ -46,15 +55,48 @@ class DataAdapter implements FulfillmentAdapterInterface
             );
         }
 
-        $phone = (string) ($payload['recipient_phone'] ?? $transaction->customer_phone);
+        $recipientPhone = trim((string) (
+            $payload['recipient_phone']
+            ?? $payload['phone']
+            ?? $transaction->customer_phone
+        ));
+
+        if ($recipientPhone === '') {
+            throw new FulfillmentException(
+                'Recipient phone number is required for VTPass data fulfillment.',
+                'MISSING_RECIPIENT_PHONE',
+            );
+        }
+
+        $billersCode = trim((string) (
+            $payload['billers_code']
+            ?? $payload['billersCode']
+            ?? $recipientPhone
+        ));
+
+        $contactPhone = trim((string) ($payload['contact_phone'] ?? $recipientPhone));
 
         return [
             'request_id' => VTPassRequestIdGenerator::forTransaction($transaction),
             'serviceID' => self::NETWORK_SERVICE_IDS[$network],
-            'billersCode' => $phone,
+            'billersCode' => $billersCode,
             'variation_code' => $variationCode,
             'amount' => $transaction->product_amount,
-            'phone' => $phone,
+            'phone' => $contactPhone,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public static function sanitizeForDiagnostics(array $payload): array
+    {
+        $fields = array_merge(self::REQUIRED_VTPASS_FIELDS, ['amount']);
+
+        return collect($fields)
+            ->filter(fn (string $field) => array_key_exists($field, $payload))
+            ->mapWithKeys(fn (string $field) => [$field => $payload[$field]])
+            ->all();
     }
 }

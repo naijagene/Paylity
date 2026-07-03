@@ -48,7 +48,8 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | `VTPASS_TEST_DATA_SERVICE_ID` | Sandbox data service ID (e.g. `mtn-data`) |
 | `VTPASS_TEST_DATA_VARIATION_CODE` | Valid sandbox data variation code |
 | `VTPASS_TEST_DATA_VARIATION_CODE_ALT` | Optional alternate sandbox data variation code |
-| `VTPASS_TEST_DATA_PHONE` | Phone number for sandbox data purchase test |
+| `VTPASS_TEST_DATA_PHONE` | Contact/recipient phone for sandbox data purchase test (use `08011111111` for VTPass sandbox success) |
+| `VTPASS_TEST_DATA_BILLERS_CODE` | Optional data recipient override for `billersCode`; falls back to `VTPASS_TEST_DATA_PHONE` when empty |
 | `VTPASS_TEST_ELECTRICITY_DISCO` | Sandbox electricity purchase test disco (`IKEDC`, `ikedc`, or `ikeja-electric`) |
 | `VTPASS_TEST_ELECTRICITY_METER_NUMBER` | Sandbox electricity purchase test meter |
 | `VTPASS_TEST_ELECTRICITY_METER_TYPE` | `prepaid` or `postpaid` (default `prepaid`) |
@@ -81,7 +82,54 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 
 Variation codes are **not** the same as PAYLITY frontend `data_plan_id` values. Obtain valid sandbox codes from VTPass before running data certification.
 
-#### How to obtain sandbox data variation codes
+#### Official MTN Data flow (VTPass docs)
+
+Reference: [MTN Data API](https://vtpass.com/documentation/mtn-data/)
+
+1. **Get variation codes** — `GET /api/service-variations?serviceID=mtn-data`
+   - Sandbox: `https://sandbox.vtpass.com/api/service-variations?serviceID=mtn-data`
+   - Copy a valid `variation_code` (e.g. documented `mtn-10mb-100` for N100 / 100MB).
+2. **Purchase product** — `POST /api/pay`
+   - Sandbox: `https://sandbox.vtpass.com/api/pay`
+   - Required JSON fields:
+
+| Field | Required | PAYLITY mapping |
+|-------|----------|-----------------|
+| `request_id` | Yes | `VTPassRequestIdGenerator` at fulfill time |
+| `serviceID` | Yes | `mtn-data` (from network via `DataAdapter`) |
+| `billersCode` | Yes | Data recipient MSISDN (`recipient_phone` or `billers_code`) |
+| `variation_code` | Yes | VTPass variation code (not frontend `data_plan_id`) |
+| `amount` | Optional | `product_amount` (ignored when variation has fixed price) |
+| `phone` | Yes | Recipient/contact phone (same as recipient unless `contact_phone` set) |
+
+Example outgoing payload (sanitized):
+
+```json
+{
+  "request_id": "202607031200abc1234567",
+  "serviceID": "mtn-data",
+  "billersCode": "08011111111",
+  "variation_code": "mtn-10mb-100",
+  "amount": 100,
+  "phone": "08011111111"
+}
+```
+
+3. **Query transaction status** — `POST /api/requery` with `{ "request_id": "..." }`
+   - Available via `VTPassService::queryTransaction()` (not yet wired to customer UI).
+
+**Sandbox phone scenarios (MTN Data docs):**
+
+| Phone | Expected sandbox result |
+|-------|-------------------------|
+| `08011111111` | Success |
+| Any other number | Failed (`016` / `TRANSACTION FAILED`) |
+
+Use `VTPASS_TEST_DATA_PHONE=08011111111` unless deliberately testing failure scenarios. Optional `VTPASS_TEST_DATA_BILLERS_CODE` overrides `billersCode` only; defaults to the test phone.
+
+**Diagnostics:** When `VTPASS_SANDBOX_TESTS=true` or during PHPUnit, `VTPassRequestLogger` logs sanitized outgoing data purchase fields (`request_id`, `serviceID`, `billersCode`, `variation_code`, `amount`, `phone`) with no credentials. Integration test failure output includes the same fields plus VTPass response code/description for escalation.
+
+Do **not** mark Data as certified until `test_sandbox_data_purchase` passes with `status=fulfilled`.
 
 1. Log in to the [VTPass sandbox dashboard](https://sandbox.vtpass.com) and confirm your account is active.
 2. Fetch variations with the PAYLITY artisan command (recommended):
@@ -108,6 +156,7 @@ curl "https://sandbox.vtpass.com/api/service-variations?serviceID=mtn-data" \
 VTPASS_TEST_DATA_SERVICE_ID=mtn-data
 VTPASS_TEST_DATA_VARIATION_CODE=<variation_code_from_vtpass>
 VTPASS_TEST_DATA_PHONE=08011111111
+VTPASS_TEST_DATA_BILLERS_CODE=
 ```
 
 5. Re-run integration tests:
@@ -141,7 +190,7 @@ Meter type maps to `variation_code`: `prepaid` or `postpaid`.
 | Merchant Verify | POST | `/api/merchant-verify` | Electricity meter verification |
 | Service Variations | GET | `/api/service-variations?serviceID={id}` | Data variation lookup (`paylity:vtpass-variations`) |
 | Purchase | POST | `/api/pay` | Fulfillment (airtime, data, electricity) |
-| Query / Requery | POST | `/api/requery` | Transaction status lookup (available, not yet wired to UI) |
+| Query / Requery | POST | `/api/requery` | Transaction status lookup (`VTPassService::queryTransaction`) |
 
 ### Merchant Verify payload
 
@@ -154,6 +203,23 @@ Meter type maps to `variation_code`: `prepaid` or `postpaid`.
 ```
 
 Expected success fields: `Customer_Name`, `Meter_Number`, minimum amount fields in `content`.
+
+### Purchase payload (MTN data example)
+
+Per [VTPass MTN Data docs](https://vtpass.com/documentation/mtn-data/):
+
+```json
+{
+  "request_id": "202607031200abc1234567",
+  "serviceID": "mtn-data",
+  "billersCode": "08011111111",
+  "variation_code": "mtn-10mb-100",
+  "amount": 100,
+  "phone": "08011111111"
+}
+```
+
+`billersCode` and `phone` are both the data recipient MSISDN in normal checkout flows. `amount` is optional when the variation has a fixed price.
 
 ### Purchase payload (electricity example)
 

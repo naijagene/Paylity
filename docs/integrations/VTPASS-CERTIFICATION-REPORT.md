@@ -113,11 +113,15 @@
 |-------|-------|
 | `serviceID` | `mtn-data` |
 | `variation_code` | `mtn-10mb-100` |
+| `billersCode` | recipient MSISDN (see `VTPASS_TEST_DATA_BILLERS_CODE` / `VTPASS_TEST_DATA_PHONE`) |
+| `phone` | recipient/contact MSISDN |
 | `code` | `016` |
 | `status` | `failed` |
 | `response_description` | `TRANSACTION FAILED` |
 
-**Conclusion:** Payload structure is valid (service ID and variation code sent correctly), but VTPass sandbox returns generic code `016`. Needs VTPass support confirmation or an alternative sandbox variation, product catalog match, recipient phone rule, or sandbox wallet balance rule. **Do not mark Data as certified** until `test_sandbox_data_purchase` passes.
+**Payload audit (PAY-015L):** Outgoing purchase payload matches official VTPass MTN Data docs (`request_id`, `serviceID`, `billersCode`, `variation_code`, `amount`, `phone`). Sanitized outgoing payload is logged during sandbox tests and printed in integration failure diagnostics.
+
+**Conclusion:** Payload structure is valid and matches official docs. Sandbox docs require `08011111111` for success; other phones simulate failure. If failure persists with the success phone and documented variation code, escalate to VTPass support (sandbox wallet, account rules, or product availability). **Do not mark Data as certified** until `test_sandbox_data_purchase` passes.
 
 Set `VTPASS_SKIP_DATA_CERTIFICATION=true` to run Airtime + Electricity integration certification without failing the suite on Data. Integration test still prints sanitized diagnostics when Data is not skipped.
 

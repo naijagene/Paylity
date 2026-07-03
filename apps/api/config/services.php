@@ -62,6 +62,7 @@ return [
         'test_data_variation_code' => env('VTPASS_TEST_DATA_VARIATION_CODE'),
         'test_data_variation_code_alt' => env('VTPASS_TEST_DATA_VARIATION_CODE_ALT'),
         'test_data_phone' => env('VTPASS_TEST_DATA_PHONE'),
+        'test_data_billers_code' => env('VTPASS_TEST_DATA_BILLERS_CODE'),
         'test_electricity_disco' => env('VTPASS_TEST_ELECTRICITY_DISCO'),
         'test_electricity_meter_number' => env('VTPASS_TEST_ELECTRICITY_METER_NUMBER'),
         'test_electricity_meter_type' => env('VTPASS_TEST_ELECTRICITY_METER_TYPE', 'prepaid'),

@@ -33,6 +33,7 @@ VTPASS_TEST_DATA_SERVICE_ID=mtn-data
 VTPASS_TEST_DATA_VARIATION_CODE=
 VTPASS_TEST_DATA_VARIATION_CODE_ALT=
 VTPASS_TEST_DATA_PHONE=08011111111
+VTPASS_TEST_DATA_BILLERS_CODE=
 VTPASS_TEST_ELECTRICITY_DISCO=IKEDC
 VTPASS_TEST_ELECTRICITY_METER_NUMBER=
 VTPASS_TEST_ELECTRICITY_METER_TYPE=prepaid
@@ -175,7 +176,10 @@ VTPASS_TEST_DATA_SERVICE_ID=mtn-data
 VTPASS_TEST_DATA_VARIATION_CODE=<code_from_vtpass>
 VTPASS_TEST_DATA_VARIATION_CODE_ALT=
 VTPASS_TEST_DATA_PHONE=08011111111
+VTPASS_TEST_DATA_BILLERS_CODE=
 ```
+
+Per [VTPass MTN Data docs](https://vtpass.com/documentation/mtn-data/), sandbox purchase succeeds only when `billersCode` and `phone` use **`08011111111`**. Any other phone simulates failure (`016` / `TRANSACTION FAILED`). Leave `VTPASS_TEST_DATA_BILLERS_CODE` empty to reuse the test phone for both fields.
 
 5. Clear config cache if needed, then run integration tests:
 
@@ -200,7 +204,7 @@ If the primary variation code fails, set an optional alternate:
 VTPASS_TEST_DATA_VARIATION_CODE_ALT=<another_code_from_vtpass>
 ```
 
-The integration test tries the primary code first, then the alternate if configured, and prints sanitized diagnostics for each failed attempt (`vtpass_code`, `response_description`, `content_errors`, `serviceID`, `variation_code`, `phone`, `request_id`, and redacted `response_payload`). Credentials are never printed.
+The integration test tries the primary code first, then the alternate if configured, and prints sanitized diagnostics for each failed attempt including **`billersCode`**, **`phone`**, **`amount`**, **`request_id`**, **`outgoing_payload`**, `vtpass_code`, `response_description`, and redacted `response_payload`. Credentials are never printed.
 
 ### Skip Data certification while certifying Airtime + Electricity
 

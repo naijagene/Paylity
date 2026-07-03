@@ -6,7 +6,8 @@ use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Services\Fulfillment\ElectricityMeterVerificationService;
 use App\Services\Fulfillment\FulfillmentService;
-use App\Services\Fulfillment\VTPassElectricityTestConfig;
+use App\Services\Fulfillment\Adapters\DataAdapter;
+use App\Services\Fulfillment\VTPassDataTestConfig;
 use App\Services\Fulfillment\VTPassResponseMapper;
 use App\Services\Fulfillment\VTPassService;
 use App\Services\Fulfillment\VTPassRequestIdGenerator;
@@ -106,19 +107,26 @@ class VTPassSandboxTest extends TestCase
             );
         }
 
-        $serviceId = trim((string) config('services.vtpass.test_data_service_id', ''));
+        $serviceId = VTPassDataTestConfig::serviceId();
         if ($serviceId === '') {
             $this->markTestSkipped(
                 'Set VTPASS_TEST_DATA_SERVICE_ID (e.g. mtn-data) alongside VTPASS_TEST_DATA_VARIATION_CODE.',
             );
         }
 
-        $phone = trim((string) config('services.vtpass.test_data_phone', '')) ?: '08011111111';
+        $phone = VTPassDataTestConfig::phone();
+        $billersCode = VTPassDataTestConfig::billersCode();
         $network = $this->networkForDataServiceId($serviceId);
         $attempts = [];
 
         foreach ($variationCodes as $label => $variationCode) {
-            $attempts[$label] = $this->attemptDataPurchase($network, $phone, $variationCode, $serviceId);
+            $attempts[$label] = $this->attemptDataPurchase(
+                $network,
+                $phone,
+                $billersCode,
+                $variationCode,
+                $serviceId,
+            );
 
             if ($attempts[$label]['fulfilled']) {
                 $this->assertSame(TransactionStatus::FULFILLED, $attempts[$label]['transaction']->status);
@@ -128,7 +136,7 @@ class VTPassSandboxTest extends TestCase
         }
 
         foreach ($attempts as $label => $attempt) {
-            $this->printDataPurchaseFailureDiagnostics($attempt, $serviceId, $phone, $label);
+            $this->printDataPurchaseFailureDiagnostics($attempt, $serviceId, $label);
         }
 
         $summary = collect($attempts)
@@ -340,12 +348,14 @@ class VTPassSandboxTest extends TestCase
      *     fulfilled: bool,
      *     variation_code: string,
      *     transaction: Transaction,
-     *     failure_reason: string|null
+     *     failure_reason: string|null,
+     *     outgoing_payload: array<string, mixed>|null
      * }
      */
     private function attemptDataPurchase(
         string $network,
         string $phone,
+        string $billersCode,
         string $variationCode,
         string $serviceId,
     ): array {
@@ -357,12 +367,16 @@ class VTPassSandboxTest extends TestCase
             'request_payload' => [
                 'network' => $network,
                 'recipient_phone' => $phone,
+                'billers_code' => $billersCode,
                 'variation_code' => $variationCode,
                 'service_id' => $serviceId,
             ],
         ]);
 
+        $outgoingPayload = null;
+
         try {
+            $outgoingPayload = app(DataAdapter::class)->buildPayload($transaction->fresh());
             $fulfilled = app(FulfillmentService::class)->fulfill($transaction->fresh());
 
             return [
@@ -370,15 +384,25 @@ class VTPassSandboxTest extends TestCase
                 'variation_code' => $variationCode,
                 'transaction' => $fulfilled,
                 'failure_reason' => null,
+                'outgoing_payload' => $outgoingPayload,
             ];
         } catch (\App\Exceptions\FulfillmentException $exception) {
             $failed = $transaction->fresh();
+
+            if ($outgoingPayload === null) {
+                try {
+                    $outgoingPayload = app(DataAdapter::class)->buildPayload($failed);
+                } catch (\Throwable) {
+                    $outgoingPayload = null;
+                }
+            }
 
             return [
                 'fulfilled' => false,
                 'variation_code' => $variationCode,
                 'transaction' => $failed,
                 'failure_reason' => $failed->failure_reason ?? $exception->getMessage(),
+                'outgoing_payload' => $outgoingPayload,
             ];
         }
     }
@@ -389,28 +413,36 @@ class VTPassSandboxTest extends TestCase
      *     variation_code: string,
      *     transaction: Transaction,
      *     failure_reason: string|null
+     *     failure_reason: string|null,
+     *     outgoing_payload: array<string, mixed>|null
      * }  $attempt
      */
     private function printDataPurchaseFailureDiagnostics(
         array $attempt,
         string $serviceId,
-        string $phone,
         string $label,
     ): void {
         $transaction = $attempt['transaction'];
         $fulfillment = (array) data_get($transaction->response_payload, 'fulfillment', []);
         $requestPayload = (array) $transaction->request_payload;
         $contentErrors = $this->extractContentErrors($fulfillment);
+        $outgoingPayload = is_array($attempt['outgoing_payload'] ?? null)
+            ? DataAdapter::sanitizeForDiagnostics($attempt['outgoing_payload'])
+            : [];
 
         $lines = [
             'Data sandbox purchase diagnostics ['.$label.']',
+            'official_docs=https://vtpass.com/documentation/mtn-data/',
             'vtpass_code='.(data_get($fulfillment, 'code') ?? 'n/a'),
             'response_description='.$this->sanitizeForStdout((string) (data_get($fulfillment, 'response_description') ?? 'n/a')),
             'failure_reason='.$this->sanitizeForStdout((string) ($attempt['failure_reason'] ?? 'n/a')),
             'serviceID='.$serviceId,
             'variation_code='.$attempt['variation_code'],
-            'phone='.$phone,
-            'request_id='.($requestPayload['request_id'] ?? 'n/a'),
+            'billersCode='.($outgoingPayload['billersCode'] ?? $requestPayload['billers_code'] ?? 'n/a'),
+            'phone='.($outgoingPayload['phone'] ?? $requestPayload['recipient_phone'] ?? 'n/a'),
+            'amount='.($outgoingPayload['amount'] ?? 'n/a'),
+            'request_id='.($outgoingPayload['request_id'] ?? $requestPayload['request_id'] ?? 'n/a'),
+            'outgoing_payload='.json_encode($outgoingPayload, JSON_UNESCAPED_SLASHES),
         ];
 
         if ($contentErrors !== '') {

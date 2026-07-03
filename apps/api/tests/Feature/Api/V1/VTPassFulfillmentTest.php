@@ -466,6 +466,59 @@ class VTPassFulfillmentTest extends TestCase
         $this->assertSame('mtn-data', $payload['serviceID']);
         $this->assertSame('mtn-1gb-daily', $payload['variation_code']);
         $this->assertSame('08031234567', $payload['billersCode']);
+        $this->assertSame('08031234567', $payload['phone']);
+        $this->assertArrayHasKey('request_id', $payload);
+        $this->assertSame(350, $payload['amount']);
+    }
+
+    public function test_data_adapter_uses_billers_code_when_provided(): void
+    {
+        $transaction = Transaction::query()->create([
+            'reference' => 'PYL-20260702-DATA02',
+            'product_type' => 'data',
+            'customer_phone' => '08011111111',
+            'product_amount' => 100,
+            'convenience_fee' => 100,
+            'gateway_fee' => 0,
+            'payable_amount' => 200,
+            'currency' => 'NGN',
+            'status' => TransactionStatus::PAYMENT_SUCCESS,
+            'request_payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08011111111',
+                'billers_code' => '08022222222',
+                'variation_code' => 'mtn-10mb-100',
+            ],
+            'verified_phone' => false,
+        ]);
+
+        $payload = app(\App\Services\Fulfillment\Adapters\DataAdapter::class)->buildPayload($transaction);
+
+        $this->assertSame('08022222222', $payload['billersCode']);
+        $this->assertSame('08011111111', $payload['phone']);
+    }
+
+    public function test_data_adapter_sanitize_for_diagnostics_includes_required_fields(): void
+    {
+        $sanitized = \App\Services\Fulfillment\Adapters\DataAdapter::sanitizeForDiagnostics([
+            'request_id' => '202607031200abc123',
+            'serviceID' => 'mtn-data',
+            'billersCode' => '08011111111',
+            'variation_code' => 'mtn-10mb-100',
+            'amount' => 100,
+            'phone' => '08011111111',
+            'password' => 'secret',
+        ]);
+
+        $this->assertSame([
+            'request_id' => '202607031200abc123',
+            'serviceID' => 'mtn-data',
+            'billersCode' => '08011111111',
+            'variation_code' => 'mtn-10mb-100',
+            'phone' => '08011111111',
+            'amount' => 100,
+        ], $sanitized);
+        $this->assertArrayNotHasKey('password', $sanitized);
     }
 
     public function test_airtime_adapter_maps_mtn_network_to_vtpass_service_id(): void
