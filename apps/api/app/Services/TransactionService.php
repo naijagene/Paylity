@@ -7,6 +7,7 @@ use App\Exceptions\FraudCheckException;
 use App\Exceptions\PaystackConfigurationException;
 use App\Exceptions\PaystackException;
 use App\Models\Transaction;
+use App\Services\Fulfillment\FulfillmentPayloadExtractor;
 use App\Services\Payments\PaystackService;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +18,7 @@ class TransactionService
         private readonly FeeService $feeService,
         private readonly FraudService $fraudService,
         private readonly PaystackService $paystackService,
+        private readonly FulfillmentPayloadExtractor $fulfillmentPayloadExtractor,
     ) {
     }
 
@@ -136,7 +138,7 @@ class TransactionService
 
     public function toDetailResponse(Transaction $transaction): array
     {
-        return [
+        $response = [
             'reference' => $transaction->reference,
             'product_type' => $transaction->product_type,
             'customer_phone' => $transaction->customer_phone,
@@ -158,5 +160,13 @@ class TransactionService
             'created_at' => $transaction->created_at?->toIso8601String(),
             'updated_at' => $transaction->updated_at?->toIso8601String(),
         ];
+
+        $fulfillmentDetails = $this->fulfillmentPayloadExtractor->extractPublicDetails($transaction);
+
+        if ($fulfillmentDetails !== null) {
+            $response['fulfillment_details'] = $fulfillmentDetails;
+        }
+
+        return $response;
     }
 }

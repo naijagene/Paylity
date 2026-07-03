@@ -6,9 +6,9 @@ use App\Enums\TransactionStatus;
 use App\Exceptions\PaymentVerificationException;
 use App\Models\Transaction;
 use App\Exceptions\PaystackException;
+use App\Services\Fulfillment\AutoFulfillmentRecorder;
 use App\Services\Fulfillment\FulfillmentService;
 use App\Services\Fulfillment\VTPassService;
-use Illuminate\Support\Facades\Log;
 
 class PaymentVerificationService
 {
@@ -16,6 +16,7 @@ class PaymentVerificationService
         private readonly PaystackService $paystackService,
         private readonly VTPassService $vtpassService,
         private readonly FulfillmentService $fulfillmentService,
+        private readonly AutoFulfillmentRecorder $autoFulfillmentRecorder,
     ) {
     }
 
@@ -190,22 +191,43 @@ class PaymentVerificationService
 
     private function maybeAutoFulfill(Transaction $transaction): Transaction
     {
-        if (
-            $transaction->status !== TransactionStatus::PAYMENT_SUCCESS
-            || ! $this->vtpassService->isAutoFulfillEnabled()
-        ) {
-            return $transaction;
+        if ($transaction->status !== TransactionStatus::PAYMENT_SUCCESS) {
+            return $this->autoFulfillmentRecorder->recordSkip(
+                $transaction,
+                AutoFulfillmentRecorder::SKIP_NOT_PAYMENT_SUCCESS,
+            );
         }
 
-        try {
-            return $this->fulfillmentService->fulfill($transaction->fresh());
-        } catch (\Throwable $exception) {
-            Log::warning('Auto-fulfillment failed after payment verification.', [
-                'reference' => $transaction->reference,
-                'message' => $exception->getMessage(),
-            ]);
+        if (! $this->vtpassService->isEnabled()) {
+            return $this->autoFulfillmentRecorder->recordSkip(
+                $transaction,
+                AutoFulfillmentRecorder::SKIP_VTPASS_DISABLED,
+            );
+        }
 
-            return $transaction->fresh();
+        if (! $this->vtpassService->isAutoFulfillEnabled()) {
+            return $this->autoFulfillmentRecorder->recordSkip(
+                $transaction,
+                AutoFulfillmentRecorder::SKIP_FEATURE_FLAG_OFF,
+            );
+        }
+
+        $transaction = $this->autoFulfillmentRecorder->recordAttempt($transaction->fresh());
+
+        try {
+            $fulfilled = $this->fulfillmentService->fulfill($transaction->fresh());
+
+            return $this->autoFulfillmentRecorder->recordSuccess($fulfilled);
+        } catch (\Throwable $exception) {
+            $fresh = $transaction->fresh();
+            $reason = $fresh->failure_reason ?: $exception->getMessage();
+
+            if (! $fresh->failure_reason && $fresh->status === TransactionStatus::PAYMENT_SUCCESS) {
+                $fresh->update(['failure_reason' => $reason]);
+                $fresh = $fresh->fresh();
+            }
+
+            return $this->autoFulfillmentRecorder->recordFailure($fresh, $reason);
         }
     }
 

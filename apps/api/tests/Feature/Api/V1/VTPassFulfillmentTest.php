@@ -216,6 +216,105 @@ class VTPassFulfillmentTest extends TestCase
             'reference' => $transaction->reference,
             'status' => TransactionStatus::PAYMENT_SUCCESS,
         ]);
+
+        $stored = Transaction::query()->where('reference', $transaction->reference)->first();
+
+        $this->assertSame(false, data_get($stored->response_payload, 'auto_fulfill.attempted'));
+        $this->assertSame('skipped', data_get($stored->response_payload, 'auto_fulfill.outcome'));
+    }
+
+    public function test_auto_fulfillment_failure_stores_failure_reason(): void
+    {
+        config([
+            'services.vtpass.enabled' => true,
+            'services.vtpass.auto_fulfill' => true,
+        ]);
+
+        $transaction = $this->createPaidTransaction([
+            'status' => TransactionStatus::PAYMENT_PENDING,
+        ]);
+
+        Http::fake([
+            'https://api.paystack.co/transaction/verify/*' => Http::response([
+                'status' => true,
+                'data' => [
+                    'status' => 'success',
+                    'amount' => 110000,
+                    'reference' => $transaction->reference,
+                    'currency' => 'NGN',
+                ],
+            ]),
+            'https://sandbox.vtpass.com/api/pay' => Http::response([
+                'code' => '016',
+                'response_description' => 'TRANSACTION FAILED',
+            ]),
+        ]);
+
+        $this->getJson('/api/v1/payments/paystack/verify/'.$transaction->reference)
+            ->assertOk()
+            ->assertJsonPath('data.status', TransactionStatus::FAILED)
+            ->assertJsonPath('data.failure_reason', 'TRANSACTION FAILED');
+
+        $stored = Transaction::query()->where('reference', $transaction->reference)->first();
+
+        $this->assertSame('TRANSACTION FAILED', $stored->failure_reason);
+        $this->assertSame('failed', data_get($stored->response_payload, 'auto_fulfill.outcome'));
+        $this->assertNotNull(data_get($stored->response_payload, 'fulfillment'));
+    }
+
+    public function test_successful_electricity_fulfillment_stores_response_payload(): void
+    {
+        config(['services.vtpass.enabled' => true]);
+
+        $transaction = Transaction::query()->create([
+            'reference' => 'PYL-20260702-ELEC-FUL',
+            'product_type' => 'electricity',
+            'customer_phone' => '08031234567',
+            'product_amount' => 5000,
+            'convenience_fee' => 100,
+            'gateway_fee' => 0,
+            'payable_amount' => 5100,
+            'currency' => 'NGN',
+            'status' => TransactionStatus::PAYMENT_SUCCESS,
+            'request_payload' => [
+                'disco' => 'IKEDC',
+                'meter_type' => 'prepaid',
+                'meter_number' => '12345678901',
+            ],
+            'verified_phone' => false,
+        ]);
+
+        Http::fake([
+            'https://sandbox.vtpass.com/api/pay' => Http::response([
+                'code' => '000',
+                'requestId' => 'vtpass-elec-1',
+                'content' => [
+                    'transactions' => [
+                        'token' => '1234-5678-9012-3456',
+                        'units' => '50.0',
+                        'tariff' => 'R2',
+                    ],
+                ],
+            ]),
+        ]);
+
+        $this->withHeaders([
+            'X-Operator-Key' => self::OPERATOR_KEY,
+        ])->postJson('/api/v1/ops/transactions/'.$transaction->reference.'/fulfill')
+            ->assertOk()
+            ->assertJsonPath('data.status', TransactionStatus::FULFILLED);
+
+        $stored = Transaction::query()->where('reference', $transaction->reference)->first();
+
+        $this->assertSame(
+            '1234-5678-9012-3456',
+            data_get($stored->response_payload, 'fulfillment.content.transactions.token'),
+        );
+
+        $this->getJson('/api/v1/transactions/'.$transaction->reference)
+            ->assertOk()
+            ->assertJsonPath('data.fulfillment_details.token', '1234-5678-9012-3456')
+            ->assertJsonPath('data.fulfillment_details.units', '50.0');
     }
 
     public function test_auto_fulfillment_runs_only_when_both_flags_are_true(): void

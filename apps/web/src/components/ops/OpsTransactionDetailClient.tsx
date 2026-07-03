@@ -208,6 +208,42 @@ export function OpsTransactionDetailClient() {
           </p>
         ) : null}
 
+        <section className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Fulfillment Diagnostics
+          </h2>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-foreground/60">Auto-fulfill attempted</dt>
+              <dd className="font-semibold">
+                {transaction.auto_fulfill_attempted === true
+                  ? "Yes"
+                  : transaction.auto_fulfill_attempted === false
+                    ? "No"
+                    : "Not recorded"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-foreground/60">Auto-fulfill outcome</dt>
+              <dd className="font-semibold">
+                {transaction.auto_fulfill_outcome || "—"}
+              </dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-foreground/60">Failure reason</dt>
+              <dd className="font-semibold text-error">
+                {transaction.failure_reason || "—"}
+              </dd>
+            </div>
+            {transaction.auto_fulfill_reason ? (
+              <div className="sm:col-span-2">
+                <dt className="text-foreground/60">Auto-fulfill note</dt>
+                <dd className="font-semibold">{transaction.auto_fulfill_reason}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </section>
+
         <TransactionReceiptCard
           reference={transaction.reference}
           productLabel={productLabel}

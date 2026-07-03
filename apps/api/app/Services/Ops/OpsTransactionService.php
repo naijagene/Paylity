@@ -4,6 +4,7 @@ namespace App\Services\Ops;
 
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
+use App\Services\Fulfillment\AutoFulfillmentRecorder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -67,7 +68,7 @@ class OpsTransactionService
      */
     public function toDetailResponse(Transaction $transaction): array
     {
-        return [
+        return array_merge([
             'reference' => $transaction->reference,
             'product_type' => $transaction->product_type,
             'customer_phone' => $transaction->customer_phone,
@@ -92,7 +93,9 @@ class OpsTransactionService
             'verified_phone' => $transaction->verified_phone,
             'created_at' => $transaction->created_at?->toIso8601String(),
             'updated_at' => $transaction->updated_at?->toIso8601String(),
-        ];
+        ], AutoFulfillmentRecorder::summaryFromResponsePayload(
+            is_array($transaction->response_payload) ? $transaction->response_payload : null,
+        ));
     }
 
     /**

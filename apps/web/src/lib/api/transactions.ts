@@ -18,6 +18,7 @@ export type TransactionDetail = {
   fulfillment_provider?: string | null;
   fulfillment_reference?: string | null;
   failure_reason?: string | null;
+  fulfillment_details?: Record<string, string | number> | null;
   verified_phone?: boolean;
   created_at?: string | null;
   updated_at?: string | null;

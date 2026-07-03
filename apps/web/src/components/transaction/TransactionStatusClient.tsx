@@ -6,6 +6,7 @@ import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { PaylityLogo } from "@/components/brand/PaylityLogo";
+import { ElectricityTokenCard } from "@/components/transaction/ElectricityTokenCard";
 import { ErrorStatePage } from "@/components/transaction/ErrorStatePage";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
 import { TransactionPageSkeleton } from "@/components/transaction/TransactionPageSkeleton";
@@ -25,9 +26,13 @@ import {
   PRODUCT_LABELS,
   shouldPollTransactionStatus,
 } from "@/lib/transaction/display";
+import {
+  DEFAULT_MAX_POLL_ATTEMPTS,
+  hasPollingExhausted,
+} from "@/lib/transaction/polling";
 
 const REFERENCE_PATTERN = /^PYL-\d{8}-[A-Z0-9]{6}$/;
-const MAX_POLL_ATTEMPTS = 24;
+const MAX_POLL_ATTEMPTS = DEFAULT_MAX_POLL_ATTEMPTS;
 const POLL_INTERVAL_MS = 5000;
 
 type PageState =
@@ -46,6 +51,8 @@ export function TransactionStatusClient() {
     isValidReference ? { kind: "loading" } : { kind: "invalid_reference" },
   );
   const [isCheckingDelivery, setIsCheckingDelivery] = useState(false);
+  const [pollExhausted, setPollExhausted] = useState(false);
+  const [pollingGeneration, setPollingGeneration] = useState(0);
   const pollAttemptsRef = useRef(0);
 
   const loadTransaction = useCallback(
@@ -146,19 +153,32 @@ export function TransactionStatusClient() {
 
     pollAttemptsRef.current = 0;
     let cancelled = false;
+    let intervalId = 0;
 
     const runPoll = () => {
-      if (cancelled || pollAttemptsRef.current >= MAX_POLL_ATTEMPTS) {
+      if (cancelled) {
         return;
       }
 
-      pollAttemptsRef.current += 1;
+      const nextAttempt = pollAttemptsRef.current + 1;
+      pollAttemptsRef.current = nextAttempt;
+
+      if (nextAttempt > MAX_POLL_ATTEMPTS) {
+        setPollExhausted(true);
+        window.clearInterval(intervalId);
+        return;
+      }
+
       setIsCheckingDelivery(true);
 
       getTransaction(reference)
         .then((transaction) => {
           if (!cancelled) {
             setState({ kind: "loaded", transaction });
+
+            if (!shouldPollTransactionStatus(transaction.status)) {
+              window.clearInterval(intervalId);
+            }
           }
         })
         .catch(() => {
@@ -171,13 +191,13 @@ export function TransactionStatusClient() {
         });
     };
 
-    const intervalId = window.setInterval(runPoll, POLL_INTERVAL_MS);
+    intervalId = window.setInterval(runPoll, POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isValidReference, reference, transactionStatus]);
+  }, [isValidReference, reference, transactionStatus, pollingGeneration]);
 
   const handlePrint = () => {
     window.print();
@@ -246,6 +266,17 @@ export function TransactionStatusClient() {
   const { transaction } = state;
   const productLabel =
     PRODUCT_LABELS[transaction.product_type] ?? transaction.product_type;
+  const pollingExhausted =
+    pollExhausted &&
+    hasPollingExhausted(
+      transaction.status,
+      MAX_POLL_ATTEMPTS,
+      MAX_POLL_ATTEMPTS,
+    );
+  const awaitingDelivery = isAwaitingDelivery(transaction.status);
+  const showElectricityToken =
+    transaction.status === "fulfilled" &&
+    transaction.product_type === "electricity";
 
   return (
     <PageContainer className="py-8 sm:py-12">
@@ -274,26 +305,57 @@ export function TransactionStatusClient() {
           </div>
         </header>
 
-        {isAwaitingDelivery(transaction.status) ? (
+        {awaitingDelivery ? (
           <section
             className="rounded-3xl border border-success/20 bg-gradient-to-br from-success/10 via-white to-success/5 p-5 shadow-sm"
             aria-live="polite"
           >
-            <p className="text-base font-semibold text-dark">
-              Payment confirmed. Delivery is being processed.
-            </p>
-            <p className="mt-2 text-sm text-foreground/65">
-              If delivery takes longer than expected, contact support with your
-              reference.
-            </p>
-            <Button href="#customer-support" variant="outline" className="mt-4">
-              Contact Support
-            </Button>
+            {pollingExhausted ? (
+              <>
+                <p className="text-base font-semibold text-dark">
+                  Delivery is taking longer than expected. Please contact support
+                  with your reference.
+                </p>
+                <p className="mt-2 font-mono text-sm text-foreground/70">
+                  {transaction.reference}
+                </p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      pollAttemptsRef.current = 0;
+                      setPollExhausted(false);
+                      setPollingGeneration((value) => value + 1);
+                      void loadTransaction({ silent: true });
+                    }}
+                  >
+                    Retry Status
+                  </Button>
+                  <Button href="#customer-support" variant="secondary">
+                    Contact Support
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-semibold text-dark">
+                  Payment confirmed. Delivery is being processed.
+                </p>
+                <p className="mt-2 text-sm text-foreground/65">
+                  This usually takes 30 seconds to 2 minutes.
+                </p>
+                <Button href="#customer-support" variant="outline" className="mt-4">
+                  Contact Support
+                </Button>
+              </>
+            )}
           </section>
         ) : null}
 
         {isCheckingDelivery &&
-        shouldPollTransactionStatus(transaction.status) ? (
+        shouldPollTransactionStatus(transaction.status) &&
+        !pollingExhausted ? (
           <div
             className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground/70"
             role="status"
@@ -334,6 +396,13 @@ export function TransactionStatusClient() {
           failureReason={transaction.failure_reason}
           printable
         />
+
+        {showElectricityToken ? (
+          <ElectricityTokenCard
+            reference={transaction.reference}
+            fulfillmentDetails={transaction.fulfillment_details}
+          />
+        ) : null}
 
         <section
           className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm"

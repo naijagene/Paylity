@@ -128,6 +128,9 @@ export type OpsTransactionDetail = {
   fulfillment_provider?: string | null;
   fulfillment_reference?: string | null;
   failure_reason?: string | null;
+  auto_fulfill_attempted?: boolean | null;
+  auto_fulfill_outcome?: string | null;
+  auto_fulfill_reason?: string | null;
   request_payload?: Record<string, unknown> | null;
   response_payload?: Record<string, unknown> | null;
   ip_address?: string | null;
