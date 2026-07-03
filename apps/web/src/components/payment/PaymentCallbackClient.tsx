@@ -9,6 +9,7 @@ import { PaymentSuccessCard } from "@/components/transaction/PaymentSuccessCard"
 import { PaymentVerificationSkeleton } from "@/components/transaction/TransactionPageSkeleton";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
+import { BackHomeLink } from "@/components/transaction/BackHomeLink";
 import { SupportCard } from "@/components/support/SupportCard";
 import { verifyPaystackPayment } from "@/lib/api/payments";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
@@ -16,9 +17,13 @@ import {
   getBadgeState,
   getHeroState,
   getTimelineState,
+  isTerminalTransactionStatus,
   PRODUCT_LABELS,
   toTransactionLike,
 } from "@/lib/transaction/display";
+import {
+  saveTransactionSession,
+} from "@/lib/transaction/session";
 
 type VerificationState =
   | { kind: "loading" }
@@ -115,14 +120,10 @@ export function PaymentCallbackClient() {
         const mapped = mapVerificationResult(result);
         setState(mapped);
 
-        if (
-          mapped.kind === "verified" &&
-          (mapped.status === "payment_success" ||
-            mapped.status === "fulfillment_pending" ||
-            mapped.status === "fulfilled" ||
-            mapped.status === "failed")
-        ) {
-          router.replace(`/transaction/${encodeURIComponent(mapped.reference)}`);
+        saveTransactionSession(result.reference, result.status);
+
+        if (!isTerminalTransactionStatus(result.status)) {
+          router.replace(`/transaction/${encodeURIComponent(reference)}`);
         }
       })
       .catch((error) => {
@@ -251,9 +252,9 @@ export function PaymentCallbackClient() {
             <Button href="/checkout?product=airtime" className="flex-1">
               Try Again
             </Button>
-            <Button href="/" variant="outline" className="flex-1">
+            <BackHomeLink variant="outline" className="flex-1">
               Back Home
-            </Button>
+            </BackHomeLink>
           </div>
 
           <SupportCard reference={state.reference} />

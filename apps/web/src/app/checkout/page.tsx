@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { CheckoutClient } from "@/components/checkout/CheckoutClient";
+import { TransactionSessionCleanup } from "@/components/transaction/TransactionSessionCleanup";
 
 function CheckoutFallback() {
   return (
@@ -11,8 +12,11 @@ function CheckoutFallback() {
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<CheckoutFallback />}>
-      <CheckoutClient />
-    </Suspense>
+    <>
+      <TransactionSessionCleanup />
+      <Suspense fallback={<CheckoutFallback />}>
+        <CheckoutClient />
+      </Suspense>
+    </>
   );
 }

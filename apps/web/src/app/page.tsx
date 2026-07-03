@@ -5,10 +5,12 @@ import { SiteHeader } from "@/components/layout/SiteHeader";
 import { AppFooter } from "@/components/system/AppFooter";
 import { SupportCard } from "@/components/support/SupportCard";
 import { TrustBadge, TrustStrip } from "@/components/TrustBadge";
+import { TransactionSessionCleanup } from "@/components/transaction/TransactionSessionCleanup";
 
 export default function Home() {
   return (
     <main className="flex flex-1 flex-col">
+      <TransactionSessionCleanup />
       <PageContainer>
         <SiteHeader />
 

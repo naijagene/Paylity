@@ -30,6 +30,10 @@ import {
   DEFAULT_MAX_POLL_ATTEMPTS,
   hasPollingExhausted,
 } from "@/lib/transaction/polling";
+import {
+  updateTransactionSessionStatus,
+} from "@/lib/transaction/session";
+import { BackHomeLink } from "@/components/transaction/BackHomeLink";
 
 const REFERENCE_PATTERN = /^PYL-\d{8}-[A-Z0-9]{6}$/;
 const MAX_POLL_ATTEMPTS = DEFAULT_MAX_POLL_ATTEMPTS;
@@ -68,6 +72,7 @@ export function TransactionStatusClient() {
 
       try {
         const transaction = await getTransaction(reference);
+        updateTransactionSessionStatus(transaction.status);
         setState({ kind: "loaded", transaction });
       } catch (error) {
         if (error instanceof ApiOfflineError) {
@@ -104,6 +109,7 @@ export function TransactionStatusClient() {
     getTransaction(reference)
       .then((transaction) => {
         if (!cancelled) {
+          updateTransactionSessionStatus(transaction.status);
           setState({ kind: "loaded", transaction });
         }
       })
@@ -178,6 +184,7 @@ export function TransactionStatusClient() {
       getTransaction(reference)
         .then((transaction) => {
           if (!cancelled) {
+            updateTransactionSessionStatus(transaction.status);
             setState({ kind: "loaded", transaction });
 
             if (!shouldPollTransactionStatus(transaction.status)) {
@@ -423,9 +430,7 @@ export function TransactionStatusClient() {
           <Button href="/transactions" variant="outline" className="w-full">
             View Transaction History
           </Button>
-          <Button href="/" className="w-full">
-            Back Home
-          </Button>
+          <BackHomeLink variant="primary">Back Home</BackHomeLink>
         </div>
 
         <div className="print:hidden">

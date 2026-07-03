@@ -20,6 +20,13 @@ import type {
   ProductType,
 } from "@/lib/checkout/types";
 import type { InitializeCheckoutResponse } from "@/lib/api/checkout";
+import {
+  clearTransactionSession,
+  getTransactionSession,
+  isTerminalTransactionStatus,
+  saveTransactionSession,
+  shouldResumeStoredTransaction,
+} from "@/lib/transaction/session";
 
 const defaultFields = (): CheckoutFields => ({
   customerPhone: "",
@@ -87,6 +94,19 @@ function normalizeStoredState(
   };
 }
 
+function stripStaleTransactionState(stored: CheckoutState): CheckoutState {
+  if (shouldResumeStoredTransaction(stored.transactionRef)) {
+    return stored;
+  }
+
+  return {
+    ...stored,
+    step: stored.transactionInitialized ? "form" : stored.step,
+    transactionRef: null,
+    transactionInitialized: false,
+  };
+}
+
 function loadStoredState(product: ProductType): CheckoutState | null {
   if (typeof window === "undefined") return null;
 
@@ -95,7 +115,7 @@ function loadStoredState(product: ProductType): CheckoutState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as LegacyCheckoutState;
     if (parsed.product !== product) return null;
-    return normalizeStoredState(parsed, product);
+    return stripStaleTransactionState(normalizeStoredState(parsed, product));
   } catch {
     return null;
   }
@@ -172,6 +192,15 @@ export function useCheckoutState(product: ProductType) {
 
   const setProduct = useCallback(
     (nextProduct: ProductType) => {
+      const session = getTransactionSession();
+
+      if (
+        session?.status &&
+        isTerminalTransactionStatus(session.status)
+      ) {
+        clearTransactionSession();
+      }
+
       router.replace(`/checkout?product=${nextProduct}`);
     },
     [router],
@@ -212,6 +241,12 @@ export function useCheckoutState(product: ProductType) {
 
   const setTransactionInitialized = useCallback(
     (transaction: InitializeCheckoutResponse) => {
+      saveTransactionSession(
+        transaction.reference,
+        transaction.status,
+        product,
+      );
+
       setState((prev) => ({
         ...prev,
         transactionRef: transaction.reference,
@@ -222,7 +257,7 @@ export function useCheckoutState(product: ProductType) {
         payableAmount: transaction.payable_amount,
       }));
     },
-    [],
+    [product],
   );
 
   const setCustomProductAmount = useCallback((value: string) => {

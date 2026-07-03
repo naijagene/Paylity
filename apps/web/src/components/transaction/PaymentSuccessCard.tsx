@@ -5,6 +5,7 @@ import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
 import { SupportCard } from "@/components/support/SupportCard";
+import { BackHomeLink } from "@/components/transaction/BackHomeLink";
 import {
   getHeroState,
   getTimelineState,
@@ -133,9 +134,7 @@ export function PaymentSuccessCard({
         >
           Download Receipt
         </Button>
-        <Button href="/" variant="outline" className="w-full">
-          Back Home
-        </Button>
+        <BackHomeLink variant="outline">Back Home</BackHomeLink>
       </div>
 
       <div className="print:hidden">
