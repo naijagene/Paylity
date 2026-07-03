@@ -55,8 +55,8 @@ return [
         'timeout' => env('VTPASS_TIMEOUT', 30),
         'retry_times' => env('VTPASS_RETRY_TIMES', 2),
         'retry_sleep_ms' => env('VTPASS_RETRY_SLEEP_MS', 500),
-        'test_disco' => env('VTPASS_TEST_DISCO', 'IKEDC'),
-        'test_meter_number' => env('VTPASS_TEST_METER_NUMBER', '45053854956'),
+        'test_disco' => env('VTPASS_TEST_DISCO'),
+        'test_meter_number' => env('VTPASS_TEST_METER_NUMBER'),
         'test_meter_type' => env('VTPASS_TEST_METER_TYPE', 'prepaid'),
     ],
 

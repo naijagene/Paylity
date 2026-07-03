@@ -42,9 +42,9 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | `VTPASS_TIMEOUT` | HTTP timeout seconds (default 30) |
 | `VTPASS_RETRY_TIMES` | Retry attempts (default 2) |
 | `VTPASS_RETRY_SLEEP_MS` | Delay between retries (default 500) |
-| `VTPASS_TEST_DISCO` | Sandbox verify test disco (default IKEDC) |
+| `VTPASS_TEST_DISCO` | Sandbox verify test disco |
 | `VTPASS_TEST_METER_NUMBER` | Sandbox verify test meter |
-| `VTPASS_TEST_METER_TYPE` | `prepaid` or `postpaid` |
+| `VTPASS_TEST_METER_TYPE` | `prepaid` or `postpaid` (default `prepaid`) |
 | `VTPASS_SANDBOX_TESTS` | Enable integration test suite (default false) |
 
 ---

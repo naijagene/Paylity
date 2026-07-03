@@ -64,9 +64,56 @@ php artisan paylity:vtpass-check
 - `FEATURE_VTPASS` → PASS
 - `Credentials` → PASS
 - `Reachability` → PASS
-- `Authentication` → PASS (merchant verify accepted)
+- `Merchant verify` → PASS (sandbox test meter accepted)
 
 Record output in the certification report.
+
+---
+
+## Troubleshooting `paylity:vtpass-check`
+
+The command **never crashes**. It always prints a PASS/WARN/FAIL table and exits `1` when any FAIL row is present.
+
+### Configure test meter values
+
+Set these in `apps/api/.env` before running the check:
+
+```env
+VTPASS_TEST_DISCO=IKEDC
+VTPASS_TEST_METER_NUMBER=45053854956
+VTPASS_TEST_METER_TYPE=prepaid
+```
+
+If either `VTPASS_TEST_DISCO` or `VTPASS_TEST_METER_NUMBER` is empty, merchant verify is **skipped** with WARN.
+
+### Read FAIL diagnostics safely
+
+Failed merchant verify rows include safe details only:
+
+- `endpoint=merchant-verify`
+- `http_status=...`
+- `content_type=...`
+- `vtpass_code=...`
+- `vtpass_message=...`
+
+Passwords, API keys, secrets, and auth headers are **never** printed.
+
+### Common failures
+
+| Symptom | Likely cause | Action |
+|---------|--------------|--------|
+| `Non-JSON response received from VTPass` | Wrong base URL, bad credentials, or sandbox outage | Confirm `VTPASS_BASE_URL=https://sandbox.vtpass.com`, verify username/password/API key |
+| `http_status=401` with non-JSON body | Invalid credentials | Regenerate sandbox credentials in VTPass dashboard |
+| `vtpass_code=016` | Invalid test meter or auth rejected | Use a valid sandbox meter for the selected disco |
+| `VTPASS_TEST_DISCO ... not set` | Test values missing | Set `VTPASS_TEST_DISCO` and `VTPASS_TEST_METER_NUMBER` |
+| Reachability FAIL | Network/DNS/firewall | Confirm server can reach `sandbox.vtpass.com` |
+
+### Re-run after fixes
+
+```bash
+php artisan config:clear
+php artisan paylity:vtpass-check
+```
 
 ---
 

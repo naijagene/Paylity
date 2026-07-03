@@ -5,10 +5,14 @@ namespace App\Services\Fulfillment;
 use App\Exceptions\VTPassConfigurationException;
 use App\Exceptions\VTPassException;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 class VTPassService
 {
+    /** @var array<string, mixed>|null */
+    private ?array $lastRequestDiagnostics = null;
+
     public function __construct(
         private readonly VTPassRequestLogger $requestLogger,
         private readonly VTPassResponseMapper $responseMapper,
@@ -37,6 +41,14 @@ class VTPassService
         if (! $this->hasCredentials()) {
             throw new VTPassConfigurationException();
         }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function lastRequestDiagnostics(): ?array
+    {
+        return $this->lastRequestDiagnostics;
     }
 
     public function isReachable(): bool
@@ -110,13 +122,23 @@ class VTPassService
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             try {
                 $response = $this->client()->post($this->endpoint($path), $payload);
+                $diagnostics = $this->buildDiagnostics($endpoint, $response);
+                $this->lastRequestDiagnostics = $diagnostics;
+
                 $json = $response->json();
 
                 if (! is_array($json)) {
-                    throw new VTPassException($fallbackMessage);
+                    throw new VTPassException(
+                        'Non-JSON response received from VTPass. Check credentials, endpoint, or sandbox availability.',
+                        'VTPASS_NON_JSON_RESPONSE',
+                        $diagnostics,
+                    );
                 }
 
                 $mapped = $this->responseMapper->map($json);
+                $diagnostics['vtpass_code'] = $mapped['code'];
+                $diagnostics['vtpass_message'] = $mapped['message'];
+                $this->lastRequestDiagnostics = $diagnostics;
 
                 if ($mapped['retryable'] && $attempt < $attempts) {
                     $this->sleepBeforeRetry();
@@ -134,6 +156,12 @@ class VTPassService
                 return $json;
             } catch (ConnectionException $exception) {
                 $lastException = $exception;
+                $this->lastRequestDiagnostics = [
+                    'endpoint' => $endpoint,
+                    'http_status' => null,
+                    'content_type' => null,
+                    'vtpass_message' => $exception->getMessage(),
+                ];
 
                 if ($attempt < $attempts) {
                     $this->sleepBeforeRetry();
@@ -161,7 +189,24 @@ class VTPassService
             $reason,
         );
 
-        throw new VTPassException($reason, 'VTPASS_TIMEOUT');
+        throw new VTPassException($reason, 'VTPASS_TIMEOUT', [
+            'endpoint' => $endpoint,
+            'http_status' => $this->lastRequestDiagnostics['http_status'] ?? null,
+            'content_type' => $this->lastRequestDiagnostics['content_type'] ?? null,
+            'vtpass_message' => $reason,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildDiagnostics(string $endpoint, Response $response): array
+    {
+        return [
+            'endpoint' => $endpoint,
+            'http_status' => $response->status(),
+            'content_type' => $response->header('Content-Type') ?? 'unknown',
+        ];
     }
 
     private function client()

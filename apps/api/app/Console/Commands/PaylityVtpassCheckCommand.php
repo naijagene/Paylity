@@ -6,6 +6,7 @@ use App\Services\Fulfillment\ElectricityMeterVerificationService;
 use App\Services\Fulfillment\VTPassResponseMapper;
 use App\Services\Fulfillment\VTPassService;
 use Illuminate\Console\Command;
+use Throwable;
 
 class PaylityVtpassCheckCommand extends Command
 {
@@ -19,7 +20,6 @@ class PaylityVtpassCheckCommand extends Command
     public function __construct(
         private readonly VTPassService $vtpassService,
         private readonly ElectricityMeterVerificationService $meterVerificationService,
-        private readonly VTPassResponseMapper $responseMapper,
     ) {
         parent::__construct();
     }
@@ -33,7 +33,7 @@ class PaylityVtpassCheckCommand extends Command
         $this->checkCredentials();
         $this->checkBaseUrl();
         $this->checkReachability();
-        $this->checkAuthentication();
+        $this->checkMerchantVerify();
         $this->checkServiceMappings();
 
         $this->renderResults();
@@ -100,69 +100,83 @@ class PaylityVtpassCheckCommand extends Command
             return;
         }
 
-        if ($this->vtpassService->isReachable()) {
-            $this->record('PASS', 'Reachability', 'VTPass base URL is reachable.');
+        try {
+            if ($this->vtpassService->isReachable()) {
+                $this->record('PASS', 'Reachability', 'VTPass base URL is reachable.');
 
-            return;
+                return;
+            }
+
+            $this->record('FAIL', 'Reachability', 'Unable to reach VTPass base URL.');
+        } catch (Throwable $exception) {
+            $this->record(
+                'FAIL',
+                'Reachability',
+                'Reachability check failed: '.$this->sanitizeMessage($exception->getMessage()),
+            );
         }
-
-        $this->record('FAIL', 'Reachability', 'Unable to reach VTPass base URL.');
     }
 
-    private function checkAuthentication(): void
+    private function checkMerchantVerify(): void
     {
         if (! $this->vtpassService->isEnabled()) {
-            $this->record('WARN', 'Authentication', 'Skipped because FEATURE_VTPASS=false.');
+            $this->record('WARN', 'Merchant verify', 'Skipped because FEATURE_VTPASS=false.');
 
             return;
         }
 
         if (! $this->vtpassService->hasCredentials()) {
-            $this->record('WARN', 'Authentication', 'Skipped because credentials are incomplete.');
+            $this->record('WARN', 'Merchant verify', 'Skipped because credentials are incomplete.');
 
             return;
         }
 
-        $disco = (string) config('services.vtpass.test_disco', 'IKEDC');
-        $meterNumber = (string) config('services.vtpass.test_meter_number', '45053854956');
-        $meterType = (string) config('services.vtpass.test_meter_type', 'prepaid');
+        $disco = trim((string) config('services.vtpass.test_disco', ''));
+        $meterNumber = trim((string) config('services.vtpass.test_meter_number', ''));
+        $meterType = trim((string) config('services.vtpass.test_meter_type', 'prepaid')) ?: 'prepaid';
 
-        $result = $this->meterVerificationService->verify($disco, $meterNumber, $meterType);
-
-        if (($result['available'] ?? false) === false) {
-            $this->record('WARN', 'Authentication', $result['message']);
-
-            return;
-        }
-
-        if (($result['status'] ?? '') === VTPassResponseMapper::STATUS_SUCCESS) {
+        if ($disco === '' || $meterNumber === '') {
             $this->record(
-                'PASS',
-                'Authentication',
-                'Merchant verify accepted. Customer: '.($result['customer_name'] ?? 'N/A'),
+                'WARN',
+                'Merchant verify',
+                'Skipped because VTPASS_TEST_DISCO or VTPASS_TEST_METER_NUMBER is not set.',
             );
 
             return;
         }
 
-        if (in_array($result['status'] ?? '', [
-            VTPassResponseMapper::STATUS_FAILED,
-            VTPassResponseMapper::STATUS_UNKNOWN,
-        ], true) && ($result['raw_code'] ?? null) !== 'VTPASS_TIMEOUT') {
+        try {
+            $result = $this->meterVerificationService->verify($disco, $meterNumber, $meterType);
+
+            if (($result['available'] ?? false) === false) {
+                $this->record('WARN', 'Merchant verify', $result['message']);
+
+                return;
+            }
+
+            if (($result['status'] ?? '') === VTPassResponseMapper::STATUS_SUCCESS) {
+                $this->record(
+                    'PASS',
+                    'Merchant verify',
+                    'Verify succeeded. Customer: '.($result['customer_name'] ?? 'N/A')
+                        .'. '.$this->formatDiagnostics($result['diagnostics'] ?? []),
+                );
+
+                return;
+            }
+
             $this->record(
-                'PASS',
-                'Authentication',
-                'VTPass accepted credentials. Verify response: '.$result['message'],
+                'FAIL',
+                'Merchant verify',
+                $this->formatVerifyFailure($result),
             );
-
-            return;
+        } catch (Throwable $exception) {
+            $this->record(
+                'FAIL',
+                'Merchant verify',
+                'Unexpected verify error: '.$this->sanitizeMessage($exception->getMessage()),
+            );
         }
-
-        $this->record(
-            'FAIL',
-            'Authentication',
-            'Unable to authenticate with VTPass: '.$result['message'],
-        );
     }
 
     private function checkServiceMappings(): void
@@ -177,6 +191,64 @@ class PaylityVtpassCheckCommand extends Command
             'Service mappings',
             'Airtime, data, and electricity adapters loaded. Electricity discos: '.implode(', ', $electricityDiscos),
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function formatVerifyFailure(array $result): string
+    {
+        $message = (string) ($result['message'] ?? 'Merchant verify failed.');
+
+        return $this->sanitizeMessage($message).'. '.$this->formatDiagnostics($result['diagnostics'] ?? []);
+    }
+
+    /**
+     * @param  array<string, mixed>  $diagnostics
+     */
+    private function formatDiagnostics(array $diagnostics): string
+    {
+        $parts = [];
+
+        if (! empty($diagnostics['endpoint'])) {
+            $parts[] = 'endpoint='.$diagnostics['endpoint'];
+        }
+
+        if (array_key_exists('http_status', $diagnostics) && $diagnostics['http_status'] !== null) {
+            $parts[] = 'http_status='.$diagnostics['http_status'];
+        }
+
+        if (! empty($diagnostics['content_type'])) {
+            $parts[] = 'content_type='.$this->sanitizeMessage((string) $diagnostics['content_type']);
+        }
+
+        if (! empty($diagnostics['vtpass_code'])) {
+            $parts[] = 'vtpass_code='.$diagnostics['vtpass_code'];
+        }
+
+        if (! empty($diagnostics['vtpass_message'])) {
+            $parts[] = 'vtpass_message='.$this->sanitizeMessage((string) $diagnostics['vtpass_message']);
+        }
+
+        return $parts === [] ? 'No additional diagnostics available.' : implode('; ', $parts);
+    }
+
+    private function sanitizeMessage(string $message): string
+    {
+        $sanitized = $message;
+
+        foreach ([
+            (string) config('services.vtpass.password'),
+            (string) config('services.vtpass.api_key'),
+            (string) config('services.vtpass.secret_key'),
+            (string) config('services.vtpass.username'),
+        ] as $secret) {
+            if ($secret !== '') {
+                $sanitized = str_replace($secret, '[redacted]', $sanitized);
+            }
+        }
+
+        return $sanitized;
     }
 
     private function record(string $status, string $check, string $detail): void

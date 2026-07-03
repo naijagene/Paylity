@@ -3,6 +3,7 @@
 namespace App\Services\Fulfillment;
 
 use App\Exceptions\FulfillmentException;
+use App\Exceptions\VTPassException;
 use App\Services\Fulfillment\Adapters\ElectricityAdapter;
 
 class ElectricityMeterVerificationService
@@ -24,7 +25,8 @@ class ElectricityMeterVerificationService
      *     status: string,
      *     message: string,
      *     minimum_amount: string|null,
-     *     raw_code: string|null
+     *     raw_code: string|null,
+     *     diagnostics: array<string, mixed>
      * }
      */
     public function verify(string $disco, string $meterNumber, string $meterType): array
@@ -53,6 +55,9 @@ class ElectricityMeterVerificationService
             $payload = $this->electricityAdapter->buildVerifyPayload($disco, $meterNumber, $meterType);
             $response = $this->vtpassService->verifyMeter($payload);
             $mapped = $this->responseMapper->map($response);
+            $diagnostics = $this->vtpassService->lastRequestDiagnostics() ?? [
+                'endpoint' => 'merchant-verify',
+            ];
 
             return [
                 'verified' => $mapped['status'] === VTPassResponseMapper::STATUS_SUCCESS,
@@ -69,6 +74,7 @@ class ElectricityMeterVerificationService
                 'minimum_amount' => data_get($response, 'content.Minimum_Amount')
                     ?? data_get($response, 'content.Minimium_Purchase_Amount'),
                 'raw_code' => $mapped['code'],
+                'diagnostics' => $diagnostics,
             ];
         } catch (FulfillmentException $exception) {
             return [
@@ -81,6 +87,26 @@ class ElectricityMeterVerificationService
                 'message' => $exception->getMessage(),
                 'minimum_amount' => null,
                 'raw_code' => $exception->errorCode,
+                'diagnostics' => [
+                    'endpoint' => 'merchant-verify',
+                    'vtpass_message' => $exception->getMessage(),
+                ],
+            ];
+        } catch (VTPassException $exception) {
+            return [
+                'verified' => false,
+                'available' => true,
+                'customer_name' => null,
+                'meter_number' => $meterNumber,
+                'disco' => $disco,
+                'status' => VTPassResponseMapper::STATUS_FAILED,
+                'message' => $exception->getMessage(),
+                'minimum_amount' => null,
+                'raw_code' => $exception->errorCode,
+                'diagnostics' => array_merge(
+                    ['endpoint' => 'merchant-verify'],
+                    $exception->safeContext(),
+                ),
             ];
         }
     }
@@ -95,7 +121,8 @@ class ElectricityMeterVerificationService
      *     status: string,
      *     message: string,
      *     minimum_amount: string|null,
-     *     raw_code: string|null
+     *     raw_code: string|null,
+     *     diagnostics: array<string, mixed>
      * }
      */
     private function unavailableResponse(string $disco, string $meterNumber, string $message): array
@@ -110,6 +137,7 @@ class ElectricityMeterVerificationService
             'message' => $message,
             'minimum_amount' => null,
             'raw_code' => null,
+            'diagnostics' => [],
         ];
     }
 
