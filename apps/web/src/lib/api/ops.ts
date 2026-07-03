@@ -165,6 +165,22 @@ export type OpsTransactionDetail = {
     status: string;
     created_at?: string | null;
   }>;
+  catalog?: {
+    provider?: string | null;
+    service_id?: string | null;
+    variation_code?: string | null;
+    plan_name?: string | null;
+    catalog_validated?: boolean;
+  };
+  fulfillment_payload?: {
+    service_id?: string | null;
+    variation_code?: string | null;
+    billers_code?: string | null;
+    recipient_phone?: string | null;
+    meter_number?: string | null;
+    network?: string | null;
+    disco?: string | null;
+  };
 };
 
 export type OpsSummary = {

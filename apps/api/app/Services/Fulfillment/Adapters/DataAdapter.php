@@ -4,6 +4,7 @@ namespace App\Services\Fulfillment\Adapters;
 
 use App\Exceptions\FulfillmentException;
 use App\Models\Transaction;
+use App\Services\Catalog\ProductCatalogService;
 use App\Services\Fulfillment\VTPassRequestIdGenerator;
 
 class DataAdapter implements FulfillmentAdapterInterface
@@ -25,6 +26,11 @@ class DataAdapter implements FulfillmentAdapterInterface
         'phone',
     ];
 
+    public function __construct(
+        private readonly ProductCatalogService $productCatalogService,
+    ) {
+    }
+
     public function supports(string $productType): bool
     {
         return $productType === 'data';
@@ -35,7 +41,15 @@ class DataAdapter implements FulfillmentAdapterInterface
         $payload = (array) $transaction->request_payload;
         $network = strtolower((string) ($payload['network'] ?? ''));
 
-        if (! isset(self::NETWORK_SERVICE_IDS[$network])) {
+        $serviceId = (string) ($payload['service_id'] ?? '');
+
+        if ($serviceId === '') {
+            $service = $this->productCatalogService->findActiveService('data', $network);
+            $serviceId = $service?->service_id
+                ?? self::NETWORK_SERVICE_IDS[$this->productCatalogService->normalizeNetworkKey($network)] ?? '';
+        }
+
+        if ($serviceId === '') {
             throw new FulfillmentException(
                 'Unsupported data network for VTPass fulfillment.',
                 'UNSUPPORTED_NETWORK',
@@ -75,13 +89,18 @@ class DataAdapter implements FulfillmentAdapterInterface
         ));
 
         $contactPhone = trim((string) ($payload['contact_phone'] ?? $recipientPhone));
+        $amount = $transaction->product_amount;
+
+        if (! empty($payload['fixed_price']) && isset($payload['catalog_amount'])) {
+            $amount = (int) $payload['catalog_amount'];
+        }
 
         return [
             'request_id' => VTPassRequestIdGenerator::forTransaction($transaction),
-            'serviceID' => self::NETWORK_SERVICE_IDS[$network],
+            'serviceID' => $serviceId,
             'billersCode' => $billersCode,
             'variation_code' => $variationCode,
-            'amount' => $transaction->product_amount,
+            'amount' => $amount,
             'phone' => $contactPhone,
         ];
     }

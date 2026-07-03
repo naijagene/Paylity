@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\Ops\OpsMonitoringController;
@@ -14,6 +15,8 @@ use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\TransactionHistoryController;
 
 Route::get('/health', HealthController::class);
+
+Route::get('/catalog/products', [CatalogController::class, 'products']);
 
 Route::middleware('throttle:checkout')->group(function () {
     Route::post('/checkout/initialize', [CheckoutController::class, 'initialize']);

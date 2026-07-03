@@ -5,11 +5,13 @@ namespace Tests\Feature\Api\V1;
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\SeedsProductCatalog;
 use Tests\TestCase;
 
 class PreLaunchHardeningTest extends TestCase
 {
     use RefreshDatabase;
+    use SeedsProductCatalog;
 
     private const OPERATOR_KEY = 'test-operator-key';
 
@@ -17,6 +19,7 @@ class PreLaunchHardeningTest extends TestCase
     {
         parent::setUp();
 
+        $this->seedProductCatalog();
         config(['services.operator.access_key' => self::OPERATOR_KEY]);
     }
 
@@ -65,7 +68,10 @@ class PreLaunchHardeningTest extends TestCase
             'product_type' => 'airtime',
             'customer_phone' => '08031234567',
             'product_amount' => 1000,
-            'payload' => [],
+            'payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08031234567',
+            ],
         ];
 
         for ($attempt = 0; $attempt < 10; $attempt++) {
@@ -150,7 +156,10 @@ class PreLaunchHardeningTest extends TestCase
             'product_type' => 'airtime',
             'customer_phone' => '08031234567',
             'product_amount' => 1000,
-            'payload' => [],
+            'payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08031234567',
+            ],
         ]);
 
         $response

@@ -75,4 +75,8 @@ return [
         'access_key' => env('OPERATOR_ACCESS_KEY'),
     ],
 
+    'catalog' => [
+        'sync_provider' => env('CATALOG_SYNC_PROVIDER', 'vtpass'),
+    ],
+
 ];

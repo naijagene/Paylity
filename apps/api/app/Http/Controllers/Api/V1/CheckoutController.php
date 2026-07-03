@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Exceptions\FraudCheckException;
 use App\Exceptions\PaystackConfigurationException;
 use App\Exceptions\PaystackException;
+use App\Exceptions\ProductCatalogValidationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\InitializeCheckoutRequest;
 use App\Services\TransactionService;
@@ -28,6 +29,12 @@ class CheckoutController extends Controller
                 userAgent: $request->userAgent(),
             );
         } catch (FraudCheckException $exception) {
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+                errors: ['code' => $exception->errorCode],
+                status: 422,
+            );
+        } catch (ProductCatalogValidationException $exception) {
             return ApiResponse::error(
                 message: $exception->getMessage(),
                 errors: ['code' => $exception->errorCode],

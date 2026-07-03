@@ -5,15 +5,19 @@ namespace Tests\Feature\Api\V1;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\SeedsProductCatalog;
 use Tests\TestCase;
 
 class PaystackCheckoutTest extends TestCase
 {
     use RefreshDatabase;
+    use SeedsProductCatalog;
 
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->seedProductCatalog();
 
         config([
             'services.paystack.enabled' => false,
@@ -29,7 +33,10 @@ class PaystackCheckoutTest extends TestCase
             'product_type' => 'airtime',
             'customer_phone' => '08031234567',
             'product_amount' => 1000,
-            'payload' => [],
+            'payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08031234567',
+            ],
         ]);
 
         $response
@@ -49,7 +56,10 @@ class PaystackCheckoutTest extends TestCase
             'product_type' => 'airtime',
             'customer_phone' => '08031234567',
             'product_amount' => 1000,
-            'payload' => [],
+            'payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08031234567',
+            ],
         ]);
 
         $response
@@ -96,7 +106,10 @@ class PaystackCheckoutTest extends TestCase
             'customer_phone' => '08031234567',
             'customer_email' => 'user@example.com',
             'product_amount' => 1000,
-            'payload' => [],
+            'payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08031234567',
+            ],
         ]);
 
         $response
@@ -133,7 +146,10 @@ class PaystackCheckoutTest extends TestCase
             'product_type' => 'airtime',
             'customer_phone' => '08031234567',
             'product_amount' => 10_000,
-            'payload' => [],
+            'payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08031234567',
+            ],
         ])->assertCreated();
 
         Http::assertSent(function ($request) {

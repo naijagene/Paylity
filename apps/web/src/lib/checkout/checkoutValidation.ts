@@ -1,4 +1,8 @@
-import { DATA_PLANS } from "./constants";
+import {
+  findCatalogDataPlan,
+  getDevelopmentFallbackDataPlans,
+} from "./catalogPlans";
+import type { ProductCatalog } from "@/lib/api/catalog";
 import {
   GUEST_MAX_PRODUCT_AMOUNT,
   MIN_PRODUCT_AMOUNT,
@@ -16,6 +20,10 @@ export const ERROR_MESSAGES = {
     "Guest checkout supports purchases up to ₦10,000. Please verify your phone number via OTP to continue.",
   METER_INVALID: "Enter a valid meter number",
   PLAN_REQUIRED: "Select a data plan to continue",
+  PLAN_UNAVAILABLE:
+    "This data plan is currently unavailable. Please choose another plan.",
+  CATALOG_UNAVAILABLE:
+    "Product catalog is unavailable. Please refresh the page and try again.",
   NETWORK_REQUIRED: "Select a network",
   DISCO_REQUIRED: "Select an electricity provider",
   NAME_REQUIRED: "Enter the customer name",
@@ -64,6 +72,7 @@ export function validateCheckoutForm(
   product: ProductType,
   fields: CheckoutFields,
   productAmount: number,
+  catalog: ProductCatalog | null = null,
 ): FieldErrors {
   const errors: FieldErrors = {};
 
@@ -96,8 +105,15 @@ export function validateCheckoutForm(
     if (!fields.dataPlan) {
       errors.dataPlan = ERROR_MESSAGES.PLAN_REQUIRED;
     } else {
-      const plan = DATA_PLANS.find((item) => item.id === fields.dataPlan);
-      if (plan && plan.price > GUEST_MAX_PRODUCT_AMOUNT) {
+      const plan =
+        findCatalogDataPlan(catalog, fields.network, fields.dataPlan) ??
+        getDevelopmentFallbackDataPlans(fields.network).find(
+          (item) => item.variationCode === fields.dataPlan,
+        );
+
+      if (!plan) {
+        errors.dataPlan = ERROR_MESSAGES.PLAN_UNAVAILABLE;
+      } else if (plan.price > GUEST_MAX_PRODUCT_AMOUNT) {
         errors.productAmount = ERROR_MESSAGES.PRODUCT_AMOUNT_MAX_GUEST;
       }
     }

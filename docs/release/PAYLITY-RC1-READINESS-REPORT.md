@@ -17,6 +17,7 @@ RC1 is **ready for staging deployment** once infrastructure, secrets, and DNS ar
 | Area | RC1 status |
 |------|------------|
 | Guest checkout (Airtime, Data, Electricity) | ✅ Complete |
+| Provider product catalog + variation validation (PAY-020) | ✅ Complete |
 | Paystack init + verify + webhook | ✅ Complete |
 | Transaction engine + status UX | ✅ Complete |
 | VTPass fulfillment (manual + auto diagnostics) | ✅ Complete |
@@ -86,8 +87,13 @@ Paystack test-mode payment initialization and backend verification are implement
 ```bash
 php artisan paylity:preflight   # no FAIL
 php artisan migrate --force
+php artisan db:seed --class=ProductCatalogSeeder
+php artisan paylity:catalog-sync vtpass
+php artisan optimize:clear
 # Run docs/deployment/STAGING-SMOKE-TESTS.md
 ```
+
+See [Product Catalog](../integrations/PRODUCT-CATALOG.md) for sync and troubleshooting.
 
 ---
 
@@ -95,7 +101,7 @@ php artisan migrate --force
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Data product not VTPass-certified | Failed deliveries for data purchases | Block/limit data on staging; do not promote to public until certified |
+| Data product not VTPass-certified | Failed deliveries for data purchases | Catalog sync + checkout validation; use synced plans only; do not promote until certified |
 | Auto-fulfill disabled | Manual ops step required | Expected for RC1; ops runbook + console available |
 | Staging uses Paystack test mode | No real money | Acceptable for RC1 staging |
 | WhatsApp unset | “Coming Soon” card shown | Configure real URL before soft launch |
@@ -129,7 +135,7 @@ php artisan migrate --force
 2. Deploy API to cPanel following [CPANEL-LARAVEL-API-DEPLOYMENT.md](../deployment/CPANEL-LARAVEL-API-DEPLOYMENT.md)
 3. Deploy frontend to Vercel following [VERCEL-FRONTEND-DEPLOYMENT.md](../deployment/VERCEL-FRONTEND-DEPLOYMENT.md)
 4. Execute full smoke test matrix and record results
-5. Complete VTPass data sandbox certification (resolve code 016)
+5. Complete VTPass data sandbox certification (resolve code 016) — run catalog sync and test with synced variation codes
 6. Decide auto-fulfill policy for soft launch
 7. Configure live support channels (email + WhatsApp)
 8. Produce soft-launch go/no-go from staging evidence

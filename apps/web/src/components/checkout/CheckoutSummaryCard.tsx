@@ -1,4 +1,3 @@
-import { DATA_PLANS } from "@/lib/checkout/constants";
 import { getProductSchema } from "@/lib/checkout/checkoutSchemas";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { formatGatewayFeeLabel } from "@/lib/checkout/pricing";
@@ -25,12 +24,14 @@ type CheckoutSummaryCardProps = {
   pricingMode: PricingMode;
   transactionReady: boolean;
   isOverGuestLimit: boolean;
+  dataPlanName?: string;
   onReduceProductAmount?: () => void;
 };
 
 function buildSummaryItems(
   product: ProductType,
   fields: CheckoutFields,
+  dataPlanName?: string,
 ): SummaryItem[] {
   const schema = getProductSchema(product);
   const items: SummaryItem[] = [{ label: "Product", value: schema.label }];
@@ -42,10 +43,10 @@ function buildSummaryItems(
   }
 
   if (product === "data") {
-    const plan = DATA_PLANS.find((item) => item.id === fields.dataPlan);
-    if (plan) {
-      items.push({ label: "Plan", value: plan.name });
-      items.push({ label: "Validity", value: plan.validity });
+    if (dataPlanName) {
+      items.push({ label: "Plan", value: dataPlanName });
+    } else if (fields.dataPlan) {
+      items.push({ label: "Plan", value: fields.dataPlan });
     }
   }
 
@@ -73,9 +74,10 @@ export function CheckoutSummaryCard({
   pricingMode,
   transactionReady,
   isOverGuestLimit,
+  dataPlanName,
   onReduceProductAmount,
 }: CheckoutSummaryCardProps) {
-  const items = buildSummaryItems(product, fields);
+  const items = buildSummaryItems(product, fields, dataPlanName);
   const gatewayFeeLabel =
     pricingMode === "confirmed"
       ? formatNaira(gatewayFee)

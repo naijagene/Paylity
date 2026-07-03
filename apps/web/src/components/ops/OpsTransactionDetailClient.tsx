@@ -500,6 +500,70 @@ export function OpsTransactionDetailClient() {
 
         <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Catalog & Fulfillment Mapping
+          </h2>
+          <div className="grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <p className="text-foreground/60">Provider</p>
+              <p className="font-medium">{transaction.catalog?.provider || "—"}</p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Catalog validated</p>
+              <p className="font-medium">
+                {transaction.catalog?.catalog_validated ? "Yes" : "No"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Service ID</p>
+              <p className="font-mono text-xs">
+                {transaction.catalog?.service_id ||
+                  transaction.fulfillment_payload?.service_id ||
+                  "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Variation code</p>
+              <p className="font-mono text-xs">
+                {transaction.catalog?.variation_code ||
+                  transaction.fulfillment_payload?.variation_code ||
+                  "—"}
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-foreground/60">Selected plan name</p>
+              <p className="font-medium">{transaction.catalog?.plan_name || "—"}</p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Billers code</p>
+              <p className="font-mono text-xs">
+                {transaction.fulfillment_payload?.billers_code || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Recipient phone</p>
+              <p className="font-mono text-xs">
+                {transaction.fulfillment_payload?.recipient_phone || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Meter number</p>
+              <p className="font-mono text-xs">
+                {transaction.fulfillment_payload?.meter_number || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Network</p>
+              <p>{transaction.fulfillment_payload?.network || "—"}</p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Disco</p>
+              <p>{transaction.fulfillment_payload?.disco || "—"}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-foreground/45">
             Status Timeline
           </h2>
           <TransactionTimeline phase={getTimelinePhase(transaction.status)} />

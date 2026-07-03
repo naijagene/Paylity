@@ -3,15 +3,21 @@ import { FormField } from "./ValidationMessage";
 
 type NetworkSelectorProps = {
   value: string;
+  networks?: readonly string[];
   onChange: (value: string) => void;
   error?: string;
 };
 
-export function NetworkSelector({ value, onChange, error }: NetworkSelectorProps) {
+export function NetworkSelector({
+  value,
+  networks = NETWORKS,
+  onChange,
+  error,
+}: NetworkSelectorProps) {
   return (
     <FormField label="Network" htmlFor="network" error={error}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {NETWORKS.map((network) => {
+        {networks.map((network) => {
           const isSelected = value === network;
           return (
             <button

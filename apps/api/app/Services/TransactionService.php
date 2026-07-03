@@ -6,7 +6,9 @@ use App\Enums\TransactionStatus;
 use App\Exceptions\FraudCheckException;
 use App\Exceptions\PaystackConfigurationException;
 use App\Exceptions\PaystackException;
+use App\Exceptions\ProductCatalogValidationException;
 use App\Models\Transaction;
+use App\Services\Catalog\ProductCatalogService;
 use App\Services\Fulfillment\FulfillmentPayloadExtractor;
 use App\Services\Payments\PaystackService;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +30,7 @@ class TransactionService
         private readonly FulfillmentPayloadExtractor $fulfillmentPayloadExtractor,
         private readonly ReceiptService $receiptService,
         private readonly TransactionEventService $transactionEventService,
+        private readonly ProductCatalogService $productCatalogService,
     ) {
     }
 
@@ -35,6 +38,7 @@ class TransactionService
      * @throws FraudCheckException
      * @throws PaystackConfigurationException
      * @throws PaystackException
+     * @throws ProductCatalogValidationException
      */
     public function initializeCheckout(array $input, ?string $ipAddress, ?string $userAgent): Transaction
     {
@@ -59,7 +63,13 @@ class TransactionService
             verifiedPhone: false,
         );
 
-        $transaction = DB::transaction(function () use ($input, $productAmount, $convenienceFee, $gatewayFee, $payableAmount, $ipAddress, $userAgent, $productType) {
+        $validatedPayload = $this->productCatalogService->validateAndEnrichCheckout(
+            productType: $productType,
+            productAmount: $productAmount,
+            payload: (array) ($input['payload'] ?? []),
+        );
+
+        $transaction = DB::transaction(function () use ($input, $productAmount, $convenienceFee, $gatewayFee, $payableAmount, $ipAddress, $userAgent, $productType, $validatedPayload) {
             $reference = $this->referenceGenerator->generate();
 
             while (Transaction::query()->where('reference', $reference)->exists()) {
@@ -78,7 +88,7 @@ class TransactionService
                 'payable_amount' => $payableAmount,
                 'currency' => 'NGN',
                 'status' => TransactionStatus::CREATED,
-                'request_payload' => $input['payload'] ?? [],
+                'request_payload' => $validatedPayload,
                 'ip_address' => $ipAddress,
                 'user_agent' => $userAgent,
                 'verified_phone' => false,

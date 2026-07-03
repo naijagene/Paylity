@@ -5,9 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   CHECKOUT_STORAGE_KEY,
   CONVENIENCE_FEE,
-  DATA_PLANS,
   GATEWAY_FEE,
 } from "@/lib/checkout/constants";
+import {
+  findCatalogDataPlan,
+  getDevelopmentFallbackDataPlans,
+  resolveDataPlansForNetwork,
+} from "@/lib/checkout/catalogPlans";
+import type { ProductCatalog } from "@/lib/api/catalog";
 import {
   calculatePayableAmount,
   isOverGuestProductLimit,
@@ -135,9 +140,14 @@ function computeProductAmount(
   fields: CheckoutFields,
   customProductAmount: string,
   selectedProductAmount: number,
+  catalog: ProductCatalog | null,
 ): number {
   if (product === "data") {
-    const plan = DATA_PLANS.find((item) => item.id === fields.dataPlan);
+    const plan =
+      findCatalogDataPlan(catalog, fields.network, fields.dataPlan) ??
+      getDevelopmentFallbackDataPlans(fields.network).find(
+        (item) => item.variationCode === fields.dataPlan,
+      );
     return plan?.price ?? 0;
   }
 
@@ -147,7 +157,10 @@ function computeProductAmount(
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-export function useCheckoutState(product: ProductType) {
+export function useCheckoutState(
+  product: ProductType,
+  catalog: ProductCatalog | null = null,
+) {
   const router = useRouter();
 
   const [state, setState] = useState<CheckoutState>(() => {
@@ -166,8 +179,15 @@ export function useCheckoutState(product: ProductType) {
         state.fields,
         state.customProductAmount,
         selectedProductAmount,
+        catalog,
       ),
-    [state.product, state.fields, state.customProductAmount, selectedProductAmount],
+    [
+      state.product,
+      state.fields,
+      state.customProductAmount,
+      selectedProductAmount,
+      catalog,
+    ],
   );
 
   const convenienceFee = CONVENIENCE_FEE;
@@ -313,5 +333,11 @@ export function useCheckoutState(product: ProductType) {
     selectProductAmount,
     resetMeterVerification,
     markMeterVerified,
+    resolveDataPlansForNetwork: (network: string) =>
+      resolveDataPlansForNetwork(
+        catalog,
+        network,
+        process.env.NODE_ENV === "development",
+      ),
   };
 }

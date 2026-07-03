@@ -1,4 +1,6 @@
 import type { CheckoutFields, ProductType } from "@/lib/checkout/types";
+import type { ProductCatalog } from "@/lib/api/catalog";
+import { findCatalogDataPlan } from "@/lib/checkout/catalogPlans";
 import { apiRequest } from "./client";
 
 export type InitializeCheckoutRequest = {
@@ -29,6 +31,7 @@ export function buildInitializeCheckoutPayload(
   product: ProductType,
   fields: CheckoutFields,
   productAmount: number,
+  catalog?: ProductCatalog | null,
 ): InitializeCheckoutRequest {
   const recipientPhone = fields.useMyNumber
     ? fields.customerPhone
@@ -52,10 +55,14 @@ export function buildInitializeCheckoutPayload(
   }
 
   if (product === "data") {
+    const plan = findCatalogDataPlan(catalog ?? null, fields.network, fields.dataPlan);
+
     base.payload = {
       network: fields.network,
       recipient_phone: recipientPhone,
-      data_plan_id: fields.dataPlan,
+      variation_code: fields.dataPlan,
+      service_id: plan?.serviceId,
+      plan_name: plan?.name,
     };
   }
 

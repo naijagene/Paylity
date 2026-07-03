@@ -22,6 +22,8 @@ Run after each staging deployment on the **hybrid stack** (Vercel frontend + cPa
 - [ ] DNS: `staging` CNAME → Vercel, `api-staging` A → VPS
 - [ ] SSL valid on both domains
 - [ ] `php artisan paylity:preflight` — no FAIL items (run on cPanel via SSH)
+- [ ] `php artisan db:seed --class=ProductCatalogSeeder` (first deploy / after catalog migration)
+- [ ] `php artisan paylity:catalog-sync vtpass` — data variations synced (see [PRODUCT-CATALOG.md](../integrations/PRODUCT-CATALOG.md))
 - [ ] Queue worker running on cPanel (if async jobs used)
 
 ---
@@ -46,7 +48,32 @@ curl -s https://api-staging.paylity.ng/api/v1/health | jq
 
 ---
 
-## 2. Homepage & branding
+## 2. Product catalog
+
+```bash
+curl -s "https://api-staging.paylity.ng/api/v1/catalog/products?category=data" | jq
+```
+
+**Expected**
+
+- HTTP 200, `success: true`
+- `data.provider`: `vtpass`
+- `data.data_services[]` includes MTN/Airtel/Glo/9mobile with `variations[]`
+- Each variation has `variation_code`, `name`, `amount`, `fixed_price`
+
+**Checkout UI**
+
+1. Open `/checkout?product=data`
+2. Select network — plans load from API (not hardcoded IDs)
+3. If catalog API fails, payment initialize is blocked
+
+| Result | Notes |
+|--------|-------|
+| ☐ Pass ☐ Fail | |
+
+---
+
+## 3. Homepage & branding
 
 Open `https://staging.paylity.ng`
 
@@ -65,11 +92,17 @@ Open `https://staging.paylity.ng`
 
 ---
 
-## 3. Checkout initialize
+## 4. Checkout initialize
 
 1. Go to `/checkout?product=airtime`
 2. Enter valid phone + amount ≤ ₦10,000
 3. Continue to review and initialize payment
+
+**Data checkout (PAY-020)**
+
+1. Go to `/checkout?product=data`
+2. Select network and a plan from catalog API
+3. Initialize payment — invalid/stale variation must be rejected before Paystack
 
 **Expected**
 
@@ -82,7 +115,7 @@ Open `https://staging.paylity.ng`
 
 ---
 
-## 4. Paystack test payment
+## 5. Paystack test payment
 
 Use Paystack test card (test mode):
 
@@ -102,7 +135,7 @@ Use Paystack test card (test mode):
 
 ---
 
-## 5. Callback verification
+## 6. Callback verification
 
 After test payment:
 
@@ -116,7 +149,7 @@ After test payment:
 
 ---
 
-## 6. Transaction status page
+## 7. Transaction status page
 
 Open `/transaction/{reference}`
 
@@ -132,7 +165,7 @@ Open `/transaction/{reference}`
 
 ---
 
-## 7. Ops console login
+## 8. Ops console login
 
 1. Open `/ops`
 2. Enter `OPERATOR_ACCESS_KEY`
@@ -148,7 +181,7 @@ Open `/transaction/{reference}`
 
 ---
 
-## 8. Manual fulfillment (default staging mode)
+## 9. Manual fulfillment (default staging mode)
 
 With `FEATURE_VTPASS_AUTO_FULFILL=false`:
 
@@ -167,7 +200,7 @@ With `FEATURE_VTPASS_AUTO_FULFILL=false`:
 
 ---
 
-## 9. Auto-fulfillment test (optional)
+## 10. Auto-fulfillment test (optional)
 
 ⚠️ Enable only for intentional test window:
 
@@ -185,7 +218,7 @@ FEATURE_VTPASS_AUTO_FULFILL=true
 
 ---
 
-## 10. VTPass sandbox product checks
+## 11. VTPass sandbox product checks
 
 Run from API host (engineering):
 
@@ -206,7 +239,7 @@ VTPASS_SANDBOX_TESTS=true php artisan test --filter=VTPass
 
 ---
 
-## 11. Rate limit check
+## 12. Rate limit check
 
 Rapidly submit checkout initialize (>10 requests/min from same IP):
 
@@ -221,7 +254,7 @@ Rapidly submit checkout initialize (>10 requests/min from same IP):
 
 ---
 
-## 12. Legal & static pages
+## 13. Legal & static pages
 
 - [ ] `/privacy` loads
 - [ ] `/terms` loads
@@ -233,7 +266,7 @@ Rapidly submit checkout initialize (>10 requests/min from same IP):
 
 ---
 
-## 13. Mobile responsive check
+## 14. Mobile responsive check
 
 On phone or narrow viewport:
 

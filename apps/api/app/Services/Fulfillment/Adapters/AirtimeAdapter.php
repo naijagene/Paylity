@@ -4,6 +4,7 @@ namespace App\Services\Fulfillment\Adapters;
 
 use App\Exceptions\FulfillmentException;
 use App\Models\Transaction;
+use App\Services\Catalog\ProductCatalogService;
 use App\Services\Fulfillment\VTPassRequestIdGenerator;
 
 class AirtimeAdapter implements FulfillmentAdapterInterface
@@ -16,6 +17,11 @@ class AirtimeAdapter implements FulfillmentAdapterInterface
         'etisalat' => 'etisalat',
     ];
 
+    public function __construct(
+        private readonly ProductCatalogService $productCatalogService,
+    ) {
+    }
+
     public function supports(string $productType): bool
     {
         return $productType === 'airtime';
@@ -26,7 +32,15 @@ class AirtimeAdapter implements FulfillmentAdapterInterface
         $payload = (array) $transaction->request_payload;
         $network = strtolower((string) ($payload['network'] ?? ''));
 
-        if (! isset(self::NETWORK_SERVICE_IDS[$network])) {
+        $serviceId = (string) ($payload['service_id'] ?? '');
+
+        if ($serviceId === '') {
+            $service = $this->productCatalogService->findActiveService('airtime', $network);
+            $serviceId = $service?->service_id
+                ?? self::NETWORK_SERVICE_IDS[$this->productCatalogService->normalizeNetworkKey($network)] ?? '';
+        }
+
+        if ($serviceId === '') {
             throw new FulfillmentException(
                 'Unsupported airtime network for VTPass fulfillment.',
                 'UNSUPPORTED_NETWORK',
@@ -37,7 +51,7 @@ class AirtimeAdapter implements FulfillmentAdapterInterface
 
         return [
             'request_id' => VTPassRequestIdGenerator::forTransaction($transaction),
-            'serviceID' => self::NETWORK_SERVICE_IDS[$network],
+            'serviceID' => $serviceId,
             'amount' => $transaction->product_amount,
             'phone' => $phone,
         ];

@@ -4,6 +4,7 @@ namespace App\Services\Fulfillment\Adapters;
 
 use App\Exceptions\FulfillmentException;
 use App\Models\Transaction;
+use App\Services\Catalog\ProductCatalogService;
 use App\Services\Fulfillment\ElectricityDiscoMapper;
 use App\Services\Fulfillment\VTPassRequestIdGenerator;
 
@@ -11,6 +12,7 @@ class ElectricityAdapter implements FulfillmentAdapterInterface
 {
     public function __construct(
         private readonly ElectricityDiscoMapper $discoMapper,
+        private readonly ProductCatalogService $productCatalogService,
     ) {
     }
 
@@ -28,9 +30,16 @@ class ElectricityAdapter implements FulfillmentAdapterInterface
 
         $this->assertMeterInput($discoKey, $meterNumber, $meterType);
 
+        $serviceId = (string) ($payload['service_id'] ?? '');
+
+        if ($serviceId === '') {
+            $service = $this->productCatalogService->findActiveService('electricity', $discoKey);
+            $serviceId = $service?->service_id ?? $this->discoMapper->resolveServiceId($discoKey);
+        }
+
         return [
             'request_id' => VTPassRequestIdGenerator::forTransaction($transaction),
-            'serviceID' => $this->discoMapper->resolveServiceId($discoKey),
+            'serviceID' => $serviceId,
             'billersCode' => $meterNumber,
             'variation_code' => $meterType,
             'amount' => $transaction->product_amount,

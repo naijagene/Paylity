@@ -107,6 +107,12 @@ class OpsTransactionService
             'timeline' => $this->transactionEventService->timelineFor($transaction)->values()->all(),
             'fulfillment_attempts' => $this->fulfillmentAttemptRecorder->historyFor($transaction),
             'webhook_history' => $this->webhookEventService->historyForReference($transaction->reference),
+            'catalog' => $this->catalogSummaryFromPayload(
+                is_array($transaction->request_payload) ? $transaction->request_payload : null,
+            ),
+            'fulfillment_payload' => $this->fulfillmentPayloadSummary(
+                is_array($transaction->request_payload) ? $transaction->request_payload : null,
+            ),
         ], AutoFulfillmentRecorder::summaryFromResponsePayload(
             is_array($transaction->response_payload) ? $transaction->response_payload : null,
         ));
@@ -143,6 +149,46 @@ class OpsTransactionService
             'revenue_today' => (int) $todayQuery()
                 ->whereIn('status', $successfulPaymentStatuses)
                 ->sum('payable_amount'),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $payload
+     * @return array<string, mixed>
+     */
+    private function catalogSummaryFromPayload(?array $payload): array
+    {
+        if ($payload === null) {
+            return [];
+        }
+
+        return [
+            'provider' => $payload['provider'] ?? null,
+            'service_id' => $payload['service_id'] ?? null,
+            'variation_code' => $payload['variation_code'] ?? null,
+            'plan_name' => $payload['plan_name'] ?? null,
+            'catalog_validated' => (bool) ($payload['catalog_validated'] ?? false),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $payload
+     * @return array<string, mixed>
+     */
+    private function fulfillmentPayloadSummary(?array $payload): array
+    {
+        if ($payload === null) {
+            return [];
+        }
+
+        return [
+            'service_id' => $payload['service_id'] ?? null,
+            'variation_code' => $payload['variation_code'] ?? null,
+            'billers_code' => $payload['billers_code'] ?? $payload['billersCode'] ?? $payload['recipient_phone'] ?? $payload['meter_number'] ?? null,
+            'recipient_phone' => $payload['recipient_phone'] ?? null,
+            'meter_number' => $payload['meter_number'] ?? null,
+            'network' => $payload['network'] ?? null,
+            'disco' => $payload['disco'] ?? null,
         ];
     }
 }

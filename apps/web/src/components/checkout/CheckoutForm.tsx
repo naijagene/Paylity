@@ -1,3 +1,4 @@
+import type { CatalogDataPlan } from "@/lib/checkout/catalogPlans";
 import { AIRTIME_AMOUNTS, ELECTRICITY_AMOUNTS } from "@/lib/checkout/constants";
 import { maskPhone } from "@/lib/checkout/normalizePhone";
 import type { CheckoutFields, FieldErrors, ProductType } from "@/lib/checkout/types";
@@ -17,6 +18,11 @@ type CheckoutFormProps = {
   errors: FieldErrors;
   isOverGuestLimit: boolean;
   isVerifyingMeter: boolean;
+  networks?: readonly string[];
+  discos?: Array<{ value: string; label: string }>;
+  dataPlans?: CatalogDataPlan[];
+  catalogLoading?: boolean;
+  catalogError?: string | null;
   onFieldChange: <K extends keyof CheckoutFields>(
     key: K,
     value: CheckoutFields[K],
@@ -35,6 +41,11 @@ export function CheckoutForm({
   errors,
   isOverGuestLimit,
   isVerifyingMeter,
+  networks,
+  discos,
+  dataPlans = [],
+  catalogLoading = false,
+  catalogError = null,
   onFieldChange,
   onSelectProductAmount,
   onCustomProductAmountChange,
@@ -77,6 +88,7 @@ export function CheckoutForm({
         <>
           <NetworkSelector
             value={fields.network}
+            networks={networks}
             onChange={(value) => onFieldChange("network", value)}
             error={errors.network}
           />
@@ -152,6 +164,9 @@ export function CheckoutForm({
         <DataPlanSelector
           network={fields.network}
           selectedPlanId={fields.dataPlan}
+          plans={dataPlans}
+          catalogLoading={catalogLoading}
+          catalogError={catalogError}
           onChange={(value) => onFieldChange("dataPlan", value)}
           error={errors.dataPlan ?? errors.productAmount}
         />
@@ -161,6 +176,7 @@ export function CheckoutForm({
         <>
           <ElectricityProviderSelector
             value={fields.disco}
+            discos={discos}
             onChange={(value) => onFieldChange("disco", value)}
             error={errors.disco}
           />

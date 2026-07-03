@@ -7,17 +7,21 @@ use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\SeedsProductCatalog;
 use Tests\TestCase;
 
 class VTPassFulfillmentTest extends TestCase
 {
     use RefreshDatabase;
+    use SeedsProductCatalog;
 
     private const OPERATOR_KEY = 'test-operator-key';
 
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->seedProductCatalog();
 
         config([
             'services.vtpass.enabled' => false,

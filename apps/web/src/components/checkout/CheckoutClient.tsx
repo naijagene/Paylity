@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/Button";
 import { CheckoutForm } from "@/components/checkout/CheckoutForm";
@@ -14,13 +14,21 @@ import {
 } from "@/lib/api/checkout";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import { MOCK_METER_NAMES } from "@/lib/checkout/constants";
+import { canInitializeCheckout, getCatalogDiscos, getCatalogNetworks } from "@/lib/checkout/catalogPlans";
 import { resolveProduct } from "@/lib/checkout/checkoutSchemas";
 import { validateCheckoutForm } from "@/lib/checkout/checkoutValidation";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { useCheckoutState } from "@/hooks/useCheckoutState";
+import { useProductCatalog } from "@/hooks/useProductCatalog";
 import type { ProductType } from "@/lib/checkout/types";
 
+const INVALID_VARIATION_MESSAGE =
+  "This data plan is currently unavailable. Please choose another plan.";
+
 function CheckoutEngine({ product }: { product: ProductType }) {
+  const { catalog, loading: catalogLoading, error: catalogError } =
+    useProductCatalog();
+
   const {
     state,
     productAmount,
@@ -39,13 +47,38 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     selectProductAmount,
     markMeterVerified,
     resetMeterVerification,
-  } = useCheckoutState(product);
+    resolveDataPlansForNetwork,
+  } = useCheckoutState(product, catalog);
 
   const [isVerifyingMeter, setIsVerifyingMeter] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
+
+  const checkoutAvailability = useMemo(
+    () => canInitializeCheckout(product, catalog, catalogLoading),
+    [product, catalog, catalogLoading],
+  );
+
+  const catalogNetworks = useMemo(
+    () => getCatalogNetworks(catalog, process.env.NODE_ENV === "development"),
+    [catalog],
+  );
+
+  const catalogDiscos = useMemo(
+    () => getCatalogDiscos(catalog, process.env.NODE_ENV === "development"),
+    [catalog],
+  );
+
+  const dataPlans = useMemo(
+    () => resolveDataPlansForNetwork(state.fields.network),
+    [resolveDataPlansForNetwork, state.fields.network],
+  );
+
+  const selectedDataPlanName = useMemo(() => {
+    return dataPlans.find((plan) => plan.variationCode === state.fields.dataPlan)?.name;
+  }, [dataPlans, state.fields.dataPlan]);
 
   const summaryPricing = state.transactionInitialized
     ? {
@@ -78,7 +111,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         : state.fields.recipientPhone,
     };
 
-    const errors = validateCheckoutForm(product, fields, productAmount);
+    const errors = validateCheckoutForm(product, fields, productAmount, catalog);
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
@@ -89,6 +122,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     setStep("review");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [
+    catalog,
     product,
     productAmount,
     scrollToFirstError,
@@ -100,6 +134,11 @@ function CheckoutEngine({ product }: { product: ProductType }) {
   const handleInitializeTransaction = useCallback(async () => {
     setApiError(null);
 
+    if (!checkoutAvailability.allowed) {
+      setApiError(checkoutAvailability.message ?? catalogError);
+      return;
+    }
+
     const fields = {
       ...state.fields,
       recipientPhone: state.fields.useMyNumber
@@ -107,7 +146,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         : state.fields.recipientPhone,
     };
 
-    const errors = validateCheckoutForm(product, fields, productAmount);
+    const errors = validateCheckoutForm(product, fields, productAmount, catalog);
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
@@ -124,6 +163,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         product,
         state.fields,
         productAmount,
+        catalog,
       );
       const transaction = await initializeCheckout(payload);
       setTransactionInitialized(transaction);
@@ -137,7 +177,13 @@ function CheckoutEngine({ product }: { product: ProductType }) {
 
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
-      if (error instanceof ApiOfflineError || error instanceof ApiError) {
+      if (error instanceof ApiError) {
+        if (error.errors?.code === "INVALID_PRODUCT_VARIATION") {
+          setApiError(INVALID_VARIATION_MESSAGE);
+        } else {
+          setApiError(error.message);
+        }
+      } else if (error instanceof ApiOfflineError) {
         setApiError(error.message);
       } else {
         setApiError("Something went wrong. Please try again.");
@@ -148,6 +194,10 @@ function CheckoutEngine({ product }: { product: ProductType }) {
       }
     }
   }, [
+    catalog,
+    catalogError,
+    checkoutAvailability.allowed,
+    checkoutAvailability.message,
     product,
     productAmount,
     scrollToFirstError,
@@ -181,15 +231,25 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [setStep]);
 
+  const paymentBlocked =
+    isOverGuestLimit ||
+    !checkoutAvailability.allowed ||
+    isInitializing;
+
   const footer =
     state.step === "form" ? (
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-dark/5 bg-white/95 px-4 py-4 backdrop-blur-sm">
         <div className="mx-auto w-full max-w-lg sm:max-w-2xl lg:max-w-4xl">
+          {catalogError && product === "data" ? (
+            <p className="mb-3 rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
+              {catalogError}
+            </p>
+          ) : null}
           <Button
             type="button"
             className="w-full"
             onClick={handleContinue}
-            disabled={isOverGuestLimit}
+            disabled={isOverGuestLimit || (product === "data" && catalogLoading)}
           >
             Continue to Review
           </Button>
@@ -201,6 +261,12 @@ function CheckoutEngine({ product }: { product: ProductType }) {
           {apiError ? (
             <p className="rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
               {apiError}
+            </p>
+          ) : null}
+
+          {!checkoutAvailability.allowed && checkoutAvailability.message ? (
+            <p className="rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
+              {checkoutAvailability.message}
             </p>
           ) : null}
 
@@ -226,7 +292,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
               type="button"
               className="w-full"
               onClick={handleInitializeTransaction}
-              disabled={isInitializing || isOverGuestLimit}
+              disabled={paymentBlocked}
             >
               {isInitializing
                 ? "Initializing transaction..."
@@ -262,6 +328,11 @@ function CheckoutEngine({ product }: { product: ProductType }) {
                 errors={fieldErrors}
                 isOverGuestLimit={isOverGuestLimit}
                 isVerifyingMeter={isVerifyingMeter}
+                networks={catalogNetworks}
+                discos={catalogDiscos}
+                dataPlans={dataPlans}
+                catalogLoading={catalogLoading}
+                catalogError={product === "data" ? catalogError : null}
                 onFieldChange={updateField}
                 onSelectProductAmount={selectProductAmount}
                 onCustomProductAmountChange={setCustomProductAmount}
@@ -282,6 +353,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
             pricingMode={state.transactionInitialized ? "confirmed" : "estimated"}
             transactionReady={state.transactionInitialized}
             isOverGuestLimit={isOverGuestLimit}
+            dataPlanName={selectedDataPlanName}
             onReduceProductAmount={handleReduceProductAmount}
           />
         )}

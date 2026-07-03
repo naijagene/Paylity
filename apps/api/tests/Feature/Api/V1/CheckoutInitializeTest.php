@@ -4,11 +4,19 @@ namespace Tests\Feature\Api\V1;
 
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\SeedsProductCatalog;
 use Tests\TestCase;
 
 class CheckoutInitializeTest extends TestCase
 {
     use RefreshDatabase;
+    use SeedsProductCatalog;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seedProductCatalog();
+    }
 
     public function test_checkout_initialize_works_for_max_guest_product_amount(): void
     {
@@ -55,7 +63,10 @@ class CheckoutInitializeTest extends TestCase
             'product_type' => 'airtime',
             'customer_phone' => '08031234567',
             'product_amount' => 10_000,
-            'payload' => [],
+            'payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08031234567',
+            ],
         ]);
 
         $response->assertCreated();
