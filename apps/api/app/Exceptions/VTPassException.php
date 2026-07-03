@@ -28,6 +28,7 @@ class VTPassException extends Exception
             'content_type' => $this->context['content_type'] ?? null,
             'vtpass_code' => $this->context['vtpass_code'] ?? null,
             'vtpass_message' => $this->context['vtpass_message'] ?? null,
+            'safe_body_preview' => $this->context['safe_body_preview'] ?? null,
         ], fn (mixed $value) => $value !== null && $value !== '');
     }
 }

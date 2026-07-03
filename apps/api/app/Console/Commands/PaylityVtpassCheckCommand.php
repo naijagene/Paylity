@@ -228,6 +228,8 @@ class PaylityVtpassCheckCommand extends Command
 
         if (! empty($diagnostics['vtpass_message'])) {
             $parts[] = 'vtpass_message='.$this->sanitizeMessage((string) $diagnostics['vtpass_message']);
+        } elseif (! empty($diagnostics['safe_body_preview'])) {
+            $parts[] = 'safe_body_preview='.$this->sanitizeMessage((string) $diagnostics['safe_body_preview']);
         }
 
         return $parts === [] ? 'No additional diagnostics available.' : implode('; ', $parts);

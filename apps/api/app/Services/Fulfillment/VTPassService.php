@@ -123,16 +123,15 @@ class VTPassService
             try {
                 $response = $this->client()->post($this->endpoint($path), $payload);
                 $diagnostics = $this->buildDiagnostics($endpoint, $response);
-                $this->lastRequestDiagnostics = $diagnostics;
-
+                $body = (string) $response->body();
                 $json = $response->json();
 
+                if ($response->status() === 401) {
+                    throw $this->buildAuthenticationFailureException($diagnostics, $json, $body);
+                }
+
                 if (! is_array($json)) {
-                    throw new VTPassException(
-                        'Non-JSON response received from VTPass. Check credentials, endpoint, or sandbox availability.',
-                        'VTPASS_NON_JSON_RESPONSE',
-                        $diagnostics,
-                    );
+                    throw $this->buildInvalidResponseException($diagnostics, $body);
                 }
 
                 $mapped = $this->responseMapper->map($json);
@@ -207,6 +206,104 @@ class VTPassService
             'http_status' => $response->status(),
             'content_type' => $response->header('Content-Type') ?? 'unknown',
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $diagnostics
+     * @param  array<string, mixed>|null  $json
+     */
+    private function buildAuthenticationFailureException(
+        array $diagnostics,
+        ?array $json,
+        string $body,
+    ): VTPassException {
+        $diagnostics['vtpass_message'] = $this->resolveVTPassMessage($json, $body);
+
+        if ($diagnostics['vtpass_message'] === null) {
+            $diagnostics['safe_body_preview'] = $this->safeBodyPreview($body);
+        }
+
+        return new VTPassException(
+            'VTPass authentication failed. Check sandbox username, password, API key, and whether the sandbox account is active.',
+            'VTPASS_AUTH_FAILED',
+            $diagnostics,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $diagnostics
+     */
+    private function buildInvalidResponseException(array $diagnostics, string $body): VTPassException
+    {
+        $contentType = (string) ($diagnostics['content_type'] ?? 'unknown');
+
+        if ($this->isJsonContentType($contentType)) {
+            $diagnostics['safe_body_preview'] = $this->safeBodyPreview($body);
+
+            return new VTPassException(
+                'Unable to parse JSON response from VTPass. Check credentials, endpoint, or sandbox availability.',
+                'VTPASS_INVALID_JSON_RESPONSE',
+                $diagnostics,
+            );
+        }
+
+        $diagnostics['safe_body_preview'] = $this->safeBodyPreview($body);
+
+        return new VTPassException(
+            'Non-JSON response received from VTPass. Check credentials, endpoint, or sandbox availability.',
+            'VTPASS_NON_JSON_RESPONSE',
+            $diagnostics,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $json
+     */
+    private function resolveVTPassMessage(?array $json, string $body): ?string
+    {
+        if (is_array($json)) {
+            $message = data_get($json, 'response_description')
+                ?? data_get($json, 'message')
+                ?? data_get($json, 'error');
+
+            if ($message !== null && $message !== '') {
+                return (string) $message;
+            }
+        }
+
+        return null;
+    }
+
+    private function isJsonContentType(string $contentType): bool
+    {
+        $normalized = strtolower($contentType);
+
+        return str_contains($normalized, 'application/json')
+            || str_contains($normalized, '+json');
+    }
+
+    private function safeBodyPreview(string $body): string
+    {
+        $preview = trim(preg_replace('/\s+/', ' ', $body) ?? '');
+
+        if ($preview === '') {
+            return '[empty body]';
+        }
+
+        $preview = mb_substr($preview, 0, 200);
+
+        foreach ([
+            (string) config('services.vtpass.username'),
+            (string) config('services.vtpass.password'),
+            (string) config('services.vtpass.api_key'),
+            (string) config('services.vtpass.secret_key'),
+        ] as $secret) {
+            if ($secret !== '') {
+                $preview = str_replace($secret, '[redacted]', $preview);
+            }
+        }
+
+        return $preview;
     }
 
     private function client()

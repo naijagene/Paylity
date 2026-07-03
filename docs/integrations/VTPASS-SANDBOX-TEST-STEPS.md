@@ -93,8 +93,8 @@ Failed merchant verify rows include safe details only:
 - `endpoint=merchant-verify`
 - `http_status=...`
 - `content_type=...`
-- `vtpass_code=...`
-- `vtpass_message=...`
+- `vtpass_message=...` (when VTPass returns a JSON message)
+- `safe_body_preview=...` (when no VTPass message is available)
 
 Passwords, API keys, secrets, and auth headers are **never** printed.
 
@@ -102,11 +102,19 @@ Passwords, API keys, secrets, and auth headers are **never** printed.
 
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
-| `Non-JSON response received from VTPass` | Wrong base URL, bad credentials, or sandbox outage | Confirm `VTPASS_BASE_URL=https://sandbox.vtpass.com`, verify username/password/API key |
-| `http_status=401` with non-JSON body | Invalid credentials | Regenerate sandbox credentials in VTPass dashboard |
-| `vtpass_code=016` | Invalid test meter or auth rejected | Use a valid sandbox meter for the selected disco |
+| `VTPass authentication failed` with `http_status=401` | Credentials, auth method, or inactive sandbox account | Confirm sandbox username/password/API key; do not use live credentials on sandbox URL; confirm VTPass sandbox account is approved/active |
+| `Non-JSON response received from VTPass` | Wrong base URL, HTML error page, or sandbox outage | Confirm `VTPASS_BASE_URL=https://sandbox.vtpass.com` and inspect `safe_body_preview` |
+| `Unable to parse JSON response from VTPass` with `content_type=application/json` | Empty/invalid JSON body from VTPass | Inspect `safe_body_preview`; retry after confirming account status |
+| `vtpass_code=016` | Invalid test meter or auth rejected at API layer | Use a valid sandbox meter for the selected disco |
 | `VTPASS_TEST_DISCO ... not set` | Test values missing | Set `VTPASS_TEST_DISCO` and `VTPASS_TEST_METER_NUMBER` |
 | Reachability FAIL | Network/DNS/firewall | Confirm server can reach `sandbox.vtpass.com` |
+
+**401 troubleshooting notes**
+
+- HTTP `401` means an authentication problem, not necessarily a non-JSON response.
+- Sandbox credentials must be used with `https://sandbox.vtpass.com` — live credentials will fail on sandbox.
+- Confirm the VTPass sandbox account is approved and active before retrying.
+- If `vtpass_message` is missing, read `safe_body_preview` for a sanitized snippet of the response body.
 
 ### Re-run after fixes
 

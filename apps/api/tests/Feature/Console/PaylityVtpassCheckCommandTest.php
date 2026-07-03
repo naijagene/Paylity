@@ -21,6 +21,33 @@ class PaylityVtpassCheckCommandTest extends TestCase
         Http::fake([
             'https://sandbox.vtpass.com' => Http::response('OK', 200, ['Content-Type' => 'text/html']),
             'https://sandbox.vtpass.com/api/merchant-verify' => Http::response(
+                '<html>Service unavailable</html>',
+                502,
+                ['Content-Type' => 'text/html'],
+            ),
+        ]);
+
+        $exitCode = Artisan::call('paylity:vtpass-check');
+        $output = Artisan::output();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Non-JSON response received from VTPass', $output);
+        $this->assertStringContainsString('safe_body_preview=', $output);
+        $this->assertStringContainsString('endpoint=merchant-verify', $output);
+        $this->assertStringNotContainsString('sandbox-pass', $output);
+        $this->assertStringNotContainsString('sandbox-key', $output);
+    }
+
+    public function test_vtpass_check_classifies_html_401_as_authentication_failure(): void
+    {
+        $this->configureVtpass([
+            'test_disco' => 'IKEDC',
+            'test_meter_number' => '45053854956',
+        ]);
+
+        Http::fake([
+            'https://sandbox.vtpass.com' => Http::response('OK', 200),
+            'https://sandbox.vtpass.com/api/merchant-verify' => Http::response(
                 '<html>Unauthorized</html>',
                 401,
                 ['Content-Type' => 'text/html'],
@@ -31,10 +58,61 @@ class PaylityVtpassCheckCommandTest extends TestCase
         $output = Artisan::output();
 
         $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Non-JSON response received from VTPass', $output);
-        $this->assertStringContainsString('endpoint=merchant-verify', $output);
+        $this->assertStringContainsString('VTPass authentication failed', $output);
+        $this->assertStringContainsString('http_status=401', $output);
+        $this->assertStringNotContainsString('Non-JSON response received from VTPass', $output);
+    }
+
+    public function test_vtpass_check_reports_authentication_failure_for_json_401_response(): void
+    {
+        $this->configureVtpass([
+            'test_disco' => 'IKEDC',
+            'test_meter_number' => '45053854956',
+        ]);
+
+        Http::fake([
+            'https://sandbox.vtpass.com' => Http::response('OK', 200),
+            'https://sandbox.vtpass.com/api/merchant-verify' => Http::response(
+                '',
+                401,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        $exitCode = Artisan::call('paylity:vtpass-check');
+        $output = Artisan::output();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('VTPass authentication failed', $output);
+        $this->assertStringContainsString('http_status=401', $output);
+        $this->assertStringContainsString('content_type=application/json', $output);
+        $this->assertStringContainsString('safe_body_preview=[empty body]', $output);
+        $this->assertStringNotContainsString('Non-JSON response received from VTPass', $output);
         $this->assertStringNotContainsString('sandbox-pass', $output);
         $this->assertStringNotContainsString('sandbox-key', $output);
+    }
+
+    public function test_vtpass_check_includes_vtpass_message_for_json_401_with_body(): void
+    {
+        $this->configureVtpass([
+            'test_disco' => 'IKEDC',
+            'test_meter_number' => '45053854956',
+        ]);
+
+        Http::fake([
+            'https://sandbox.vtpass.com' => Http::response('OK', 200),
+            'https://sandbox.vtpass.com/api/merchant-verify' => Http::response([
+                'message' => 'Invalid authentication credentials',
+            ], 401, ['Content-Type' => 'application/json']),
+        ]);
+
+        $exitCode = Artisan::call('paylity:vtpass-check');
+        $output = Artisan::output();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('VTPass authentication failed', $output);
+        $this->assertStringContainsString('vtpass_message=Invalid authentication credentials', $output);
+        $this->assertStringNotContainsString('Non-JSON response received from VTPass', $output);
     }
 
     public function test_vtpass_check_fails_when_merchant_verify_returns_vtpass_error_code(): void

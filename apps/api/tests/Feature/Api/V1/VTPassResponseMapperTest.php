@@ -89,6 +89,38 @@ class VTPassResponseMapperTest extends TestCase
         $this->assertStringContainsString('credentials are not configured', $result['message']);
     }
 
+    public function test_authentication_failure_for_json_401_includes_safe_context(): void
+    {
+        config([
+            'services.vtpass.enabled' => true,
+            'services.vtpass.username' => 'sandbox-user',
+            'services.vtpass.password' => 'sandbox-pass',
+            'services.vtpass.api_key' => 'sandbox-key',
+            'services.vtpass.retry_times' => 1,
+        ]);
+
+        Http::fake([
+            'https://sandbox.vtpass.com/api/merchant-verify' => Http::response(
+                '{"message":"Unauthorized"}',
+                401,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        try {
+            app(VTPassService::class)->verifyMeter(
+                app(ElectricityAdapter::class)->buildVerifyPayload('IKEDC', '45053854956', 'prepaid'),
+            );
+            $this->fail('Expected VTPassException was not thrown.');
+        } catch (\App\Exceptions\VTPassException $exception) {
+            $this->assertSame('VTPASS_AUTH_FAILED', $exception->errorCode);
+            $this->assertStringContainsString('VTPass authentication failed', $exception->getMessage());
+            $this->assertSame(401, $exception->safeContext()['http_status']);
+            $this->assertStringContainsString('application/json', (string) $exception->safeContext()['content_type']);
+            $this->assertSame('Unauthorized', $exception->safeContext()['vtpass_message']);
+        }
+    }
+
     public function test_non_json_response_includes_safe_context(): void
     {
         config([
