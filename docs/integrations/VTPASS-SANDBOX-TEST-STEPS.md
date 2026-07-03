@@ -31,6 +31,7 @@ VTPASS_TEST_METER_NUMBER=45053854956
 VTPASS_TEST_METER_TYPE=prepaid
 VTPASS_TEST_DATA_SERVICE_ID=mtn-data
 VTPASS_TEST_DATA_VARIATION_CODE=
+VTPASS_TEST_DATA_VARIATION_CODE_ALT=
 VTPASS_TEST_DATA_PHONE=08011111111
 VTPASS_TEST_ELECTRICITY_DISCO=IKEDC
 VTPASS_TEST_ELECTRICITY_METER_NUMBER=
@@ -161,6 +162,7 @@ curl "https://sandbox.vtpass.com/api/service-variations?serviceID=mtn-data" \
 ```env
 VTPASS_TEST_DATA_SERVICE_ID=mtn-data
 VTPASS_TEST_DATA_VARIATION_CODE=<code_from_vtpass>
+VTPASS_TEST_DATA_VARIATION_CODE_ALT=
 VTPASS_TEST_DATA_PHONE=08011111111
 ```
 
@@ -180,6 +182,14 @@ If `VTPASS_TEST_DATA_VARIATION_CODE` is unset, the data purchase test skips with
 `Set VTPASS_TEST_DATA_VARIATION_CODE to a valid sandbox variation code.`
 
 Do not mark Data as **CERTIFIED** until that test passes with `fulfilled` status.
+
+If the primary variation code fails, set an optional alternate:
+
+```env
+VTPASS_TEST_DATA_VARIATION_CODE_ALT=<another_code_from_vtpass>
+```
+
+The integration test tries the primary code first, then the alternate if configured, and prints sanitized diagnostics for each failed attempt (`vtpass_code`, `response_description`, `content_errors`, `serviceID`, `variation_code`, `phone`, `request_id`, and redacted `response_payload`). Credentials are never printed.
 
 ---
 

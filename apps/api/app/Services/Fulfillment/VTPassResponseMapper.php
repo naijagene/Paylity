@@ -116,12 +116,107 @@ class VTPassResponseMapper
      */
     private function resolveMessage(array $response): string
     {
+        $description = data_get($response, 'response_description');
+        $detail = $this->resolveNestedFailureDetail($response);
+
+        if ($detail !== null) {
+            if ($description === null || $description === '' || $this->isGenericFailureMessage((string) $description)) {
+                return $detail;
+            }
+
+            if (strcasecmp((string) $description, $detail) === 0) {
+                return $detail;
+            }
+
+            return (string) $description.' — '.$detail;
+        }
+
         return (string) (
-            data_get($response, 'response_description')
+            $description
             ?? data_get($response, 'content.transactions.product_name')
             ?? data_get($response, 'message')
             ?? 'VTPass request failed.'
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function resolveNestedFailureDetail(array $response): ?string
+    {
+        $paths = [
+            'content.error',
+            'content.errors',
+            'content.transactions.error',
+            'content.transactions.response_description',
+            'content.transactions.status',
+        ];
+
+        foreach ($paths as $path) {
+            $value = data_get($response, $path);
+
+            if (is_string($value) && trim($value) !== '' && ! $this->isGenericFailureMessage($value)) {
+                return trim($value);
+            }
+
+            if (is_array($value)) {
+                $flattened = $this->flattenErrorValue($value);
+
+                if ($flattened !== null) {
+                    return $flattened;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $value
+     */
+    private function flattenErrorValue(array $value): ?string
+    {
+        $parts = [];
+
+        foreach ($value as $key => $item) {
+            if (is_string($item) && trim($item) !== '') {
+                $parts[] = trim($item);
+
+                continue;
+            }
+
+            if (is_array($item)) {
+                $nested = $this->flattenErrorValue($item);
+
+                if ($nested !== null) {
+                    $parts[] = $nested;
+                }
+
+                continue;
+            }
+
+            if (is_scalar($item) && (string) $item !== '') {
+                $parts[] = (string) $key.': '.(string) $item;
+            }
+        }
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode('; ', array_unique($parts));
+    }
+
+    private function isGenericFailureMessage(string $message): bool
+    {
+        $normalized = strtolower(trim($message));
+
+        return in_array($normalized, [
+            'transaction failed',
+            'transaction unsuccessful',
+            'failed',
+            '016',
+        ], true);
     }
 
     private function normalizeCode(mixed $code): ?string

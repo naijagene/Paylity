@@ -22,8 +22,8 @@ use Tests\TestCase;
  * Partial certification (July 2026 sandbox run):
  * - Airtime purchase: CERTIFIED in sandbox when test_sandbox_airtime_purchase passes
  * - Electricity merchant verify: CERTIFIED in sandbox when test_sandbox_electricity_merchant_verify passes
- * - Electricity purchase: PENDING until VTPASS_TEST_ELECTRICITY_METER_NUMBER is set and test passes
- * - Data purchase: CERTIFIED in sandbox when test_sandbox_data_purchase passes
+ * - Electricity purchase: CERTIFIED in sandbox when test_sandbox_electricity_purchase passes
+ * - Data purchase: PENDING until test_sandbox_data_purchase passes (diagnostics printed on failure)
  * - Invalid meter rejection: SANDBOX-INCONCLUSIVE (sandbox may verify unexpected meters)
  */
 class VTPassSandboxTest extends TestCase
@@ -91,9 +91,9 @@ class VTPassSandboxTest extends TestCase
 
     public function test_sandbox_data_purchase(): void
     {
-        $variationCode = trim((string) config('services.vtpass.test_data_variation_code', ''));
+        $variationCodes = $this->dataVariationCodesToTry();
 
-        if ($variationCode === '') {
+        if ($variationCodes === []) {
             $this->markTestSkipped(
                 'Set VTPASS_TEST_DATA_VARIATION_CODE to a valid sandbox variation code.',
             );
@@ -108,26 +108,27 @@ class VTPassSandboxTest extends TestCase
 
         $phone = trim((string) config('services.vtpass.test_data_phone', '')) ?: '08011111111';
         $network = $this->networkForDataServiceId($serviceId);
+        $attempts = [];
 
-        $transaction = $this->createPaidTransaction([
-            'product_type' => 'data',
-            'customer_phone' => $phone,
-            'product_amount' => 100,
-            'payable_amount' => 200,
-            'request_payload' => [
-                'network' => $network,
-                'recipient_phone' => $phone,
-                'variation_code' => $variationCode,
-            ],
-        ]);
+        foreach ($variationCodes as $label => $variationCode) {
+            $attempts[$label] = $this->attemptDataPurchase($network, $phone, $variationCode, $serviceId);
 
-        $fulfilled = app(FulfillmentService::class)->fulfill($transaction->fresh());
+            if ($attempts[$label]['fulfilled']) {
+                $this->assertSame(TransactionStatus::FULFILLED, $attempts[$label]['transaction']->status);
 
-        $this->assertSame(
-            TransactionStatus::FULFILLED,
-            $fulfilled->status,
-            'Data sandbox purchase did not fulfill: '.($fulfilled->failure_reason ?? 'unknown'),
-        );
+                return;
+            }
+        }
+
+        foreach ($attempts as $label => $attempt) {
+            $this->printDataPurchaseFailureDiagnostics($attempt, $serviceId, $phone, $label);
+        }
+
+        $summary = collect($attempts)
+            ->map(fn (array $attempt, string $label) => $label.': '.($attempt['failure_reason'] ?? 'unknown'))
+            ->implode('; ');
+
+        $this->fail('Data sandbox purchase did not fulfill. '.$summary);
     }
 
     public function test_sandbox_electricity_merchant_verify(): void
@@ -298,7 +299,187 @@ class VTPassSandboxTest extends TestCase
             return 'PENDING valid variation code (set VTPASS_TEST_DATA_VARIATION_CODE)';
         }
 
-        return 'Run test_sandbox_data_purchase — CERTIFIED when fulfilled';
+        return 'PENDING until test_sandbox_data_purchase passes (diagnostics printed on failure)';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function dataVariationCodesToTry(): array
+    {
+        $primary = trim((string) config('services.vtpass.test_data_variation_code', ''));
+        $alternate = trim((string) config('services.vtpass.test_data_variation_code_alt', ''));
+
+        $codes = [];
+
+        if ($primary !== '') {
+            $codes['primary'] = $primary;
+        }
+
+        if ($alternate !== '' && $alternate !== $primary) {
+            $codes['alternate'] = $alternate;
+        }
+
+        return $codes;
+    }
+
+    /**
+     * @return array{
+     *     fulfilled: bool,
+     *     variation_code: string,
+     *     transaction: Transaction,
+     *     failure_reason: string|null
+     * }
+     */
+    private function attemptDataPurchase(
+        string $network,
+        string $phone,
+        string $variationCode,
+        string $serviceId,
+    ): array {
+        $transaction = $this->createPaidTransaction([
+            'product_type' => 'data',
+            'customer_phone' => $phone,
+            'product_amount' => 100,
+            'payable_amount' => 200,
+            'request_payload' => [
+                'network' => $network,
+                'recipient_phone' => $phone,
+                'variation_code' => $variationCode,
+                'service_id' => $serviceId,
+            ],
+        ]);
+
+        try {
+            $fulfilled = app(FulfillmentService::class)->fulfill($transaction->fresh());
+
+            return [
+                'fulfilled' => true,
+                'variation_code' => $variationCode,
+                'transaction' => $fulfilled,
+                'failure_reason' => null,
+            ];
+        } catch (\App\Exceptions\FulfillmentException $exception) {
+            $failed = $transaction->fresh();
+
+            return [
+                'fulfilled' => false,
+                'variation_code' => $variationCode,
+                'transaction' => $failed,
+                'failure_reason' => $failed->failure_reason ?? $exception->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @param  array{
+     *     fulfilled: bool,
+     *     variation_code: string,
+     *     transaction: Transaction,
+     *     failure_reason: string|null
+     * }  $attempt
+     */
+    private function printDataPurchaseFailureDiagnostics(
+        array $attempt,
+        string $serviceId,
+        string $phone,
+        string $label,
+    ): void {
+        $transaction = $attempt['transaction'];
+        $fulfillment = (array) data_get($transaction->response_payload, 'fulfillment', []);
+        $requestPayload = (array) $transaction->request_payload;
+        $contentErrors = $this->extractContentErrors($fulfillment);
+
+        $lines = [
+            'Data sandbox purchase diagnostics ['.$label.']',
+            'vtpass_code='.(data_get($fulfillment, 'code') ?? 'n/a'),
+            'response_description='.$this->sanitizeForStdout((string) (data_get($fulfillment, 'response_description') ?? 'n/a')),
+            'failure_reason='.$this->sanitizeForStdout((string) ($attempt['failure_reason'] ?? 'n/a')),
+            'serviceID='.$serviceId,
+            'variation_code='.$attempt['variation_code'],
+            'phone='.$phone,
+            'request_id='.($requestPayload['request_id'] ?? 'n/a'),
+        ];
+
+        if ($contentErrors !== '') {
+            $lines[] = 'content_errors='.$this->sanitizeForStdout($contentErrors);
+        }
+
+        $sanitizedPayload = $this->sanitizeArrayForStdout((array) $transaction->response_payload);
+        $lines[] = 'response_payload='.json_encode($sanitizedPayload, JSON_UNESCAPED_SLASHES);
+
+        fwrite(STDOUT, "\n".implode("\n", $lines)."\n\n");
+    }
+
+    /**
+     * @param  array<string, mixed>  $fulfillment
+     */
+    private function extractContentErrors(array $fulfillment): string
+    {
+        $parts = [];
+
+        foreach ([
+            data_get($fulfillment, 'content.error'),
+            data_get($fulfillment, 'content.errors'),
+            data_get($fulfillment, 'content.transactions.error'),
+            data_get($fulfillment, 'content.transactions.response_description'),
+        ] as $value) {
+            if (is_string($value) && trim($value) !== '') {
+                $parts[] = trim($value);
+            } elseif (is_array($value)) {
+                $flattened = collect($value)
+                    ->flatten()
+                    ->filter(fn (mixed $item) => is_scalar($item) && trim((string) $item) !== '')
+                    ->map(fn (mixed $item) => trim((string) $item))
+                    ->values()
+                    ->all();
+
+                $parts = array_merge($parts, $flattened);
+            }
+        }
+
+        return implode('; ', array_unique($parts));
+    }
+
+    /**
+     * @param  array<string, mixed>  $value
+     * @return array<string, mixed>
+     */
+    private function sanitizeArrayForStdout(array $value): array
+    {
+        $sanitized = [];
+
+        foreach ($value as $key => $item) {
+            if (is_array($item)) {
+                $sanitized[$key] = $this->sanitizeArrayForStdout($item);
+
+                continue;
+            }
+
+            $sanitized[$key] = is_string($item)
+                ? $this->sanitizeForStdout($item)
+                : $item;
+        }
+
+        return $sanitized;
+    }
+
+    private function sanitizeForStdout(string $value): string
+    {
+        $sanitized = $value;
+
+        foreach ([
+            (string) config('services.vtpass.password'),
+            (string) config('services.vtpass.api_key'),
+            (string) config('services.vtpass.secret_key'),
+            (string) config('services.vtpass.username'),
+        ] as $secret) {
+            if ($secret !== '') {
+                $sanitized = str_replace($secret, '[redacted]', $sanitized);
+            }
+        }
+
+        return $sanitized;
     }
 
     private function electricityPurchaseCertificationStatus(): string
@@ -309,7 +490,7 @@ class VTPassSandboxTest extends TestCase
             return 'PENDING valid test meter (set VTPASS_TEST_ELECTRICITY_METER_NUMBER)';
         }
 
-        return 'Run test_sandbox_electricity_purchase — CERTIFIED when fulfilled';
+        return 'CERTIFIED in sandbox when test_sandbox_electricity_purchase passes';
     }
 
     /**

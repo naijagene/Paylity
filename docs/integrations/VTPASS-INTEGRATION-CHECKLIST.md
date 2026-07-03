@@ -47,6 +47,7 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | `VTPASS_TEST_METER_TYPE` | `prepaid` or `postpaid` (default `prepaid`) |
 | `VTPASS_TEST_DATA_SERVICE_ID` | Sandbox data service ID (e.g. `mtn-data`) |
 | `VTPASS_TEST_DATA_VARIATION_CODE` | Valid sandbox data variation code |
+| `VTPASS_TEST_DATA_VARIATION_CODE_ALT` | Optional alternate sandbox data variation code |
 | `VTPASS_TEST_DATA_PHONE` | Phone number for sandbox data purchase test |
 | `VTPASS_TEST_ELECTRICITY_DISCO` | Sandbox electricity purchase test disco (`IKEDC`, `ikedc`, or `ikeja-electric`) |
 | `VTPASS_TEST_ELECTRICITY_METER_NUMBER` | Sandbox electricity purchase test meter |

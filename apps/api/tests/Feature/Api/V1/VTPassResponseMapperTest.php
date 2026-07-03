@@ -42,6 +42,46 @@ class VTPassResponseMapperTest extends TestCase
         ]));
     }
 
+    public function test_failure_reason_prefers_nested_content_error_over_generic_description(): void
+    {
+        $mapper = app(VTPassResponseMapper::class);
+
+        $response = [
+            'code' => '016',
+            'response_description' => 'TRANSACTION FAILED',
+            'content' => [
+                'error' => 'VARIATION CODE DOES NOT EXIST FOR SELECTED PRODUCT',
+            ],
+        ];
+
+        $this->assertSame(
+            'VARIATION CODE DOES NOT EXIST FOR SELECTED PRODUCT',
+            $mapper->failureReason($response),
+        );
+        $this->assertSame(
+            'VARIATION CODE DOES NOT EXIST FOR SELECTED PRODUCT',
+            $mapper->map($response)['message'],
+        );
+    }
+
+    public function test_failure_reason_combines_generic_description_with_nested_detail_when_both_specific(): void
+    {
+        $mapper = app(VTPassResponseMapper::class);
+
+        $response = [
+            'code' => '016',
+            'response_description' => 'INSUFFICIENT WALLET BALANCE',
+            'content' => [
+                'error' => 'Kindly fund your wallet to continue',
+            ],
+        ];
+
+        $this->assertSame(
+            'INSUFFICIENT WALLET BALANCE — Kindly fund your wallet to continue',
+            $mapper->failureReason($response),
+        );
+    }
+
     public function test_maps_retryable_code_030(): void
     {
         $mapper = app(VTPassResponseMapper::class);

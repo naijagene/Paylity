@@ -2,7 +2,7 @@
 
 **Document status:** Partial sandbox certification recorded  
 **Last updated:** July 2026  
-**Ticket:** PAY-015 / PAY-015C / PAY-015D / PAY-015E
+**Ticket:** PAY-015 / PAY-015C–H
 
 ---
 
@@ -24,8 +24,8 @@
 |------|--------|-------|
 | Airtime purchase | **CERTIFIED in sandbox** | Sandbox purchase fulfilled successfully |
 | Electricity merchant verify | **CERTIFIED in sandbox** | Test meter verify succeeded |
-| Electricity purchase | **PENDING valid test meter** | Set `VTPASS_TEST_ELECTRICITY_METER_NUMBER` and pass `test_sandbox_electricity_purchase` |
-| Data purchase | **CERTIFIED in sandbox** | Set `VTPASS_TEST_DATA_VARIATION_CODE` and pass `test_sandbox_data_purchase` |
+| Electricity purchase | **CERTIFIED in sandbox** | `test_sandbox_electricity_purchase` passes with token/unit fields logged |
+| Data purchase | **PENDING** | Latest failure: `TRANSACTION FAILED` — use integration test diagnostics to inspect variation code, phone, sandbox balance |
 | Invalid meter rejection | **SANDBOX-INCONCLUSIVE** | Sandbox may return verified for arbitrary meters; use `test_empty_meter_is_rejected_before_vtpass_api_call` for local validation |
 | Invalid network | **CERTIFIED in sandbox** | Unsupported disco rejected before/at API |
 
@@ -101,9 +101,13 @@
 
 | Check | Status | Reference | Notes |
 |-------|--------|-----------|-------|
-| Variation code sent | ☑ | | Valid sandbox code via `VTPASS_TEST_DATA_VARIATION_CODE` |
-| Sandbox purchase via ops fulfill | ☑ | PYL-SBOX-DATA-* | Integration test |
-| Status → `fulfilled` | ☑ | | **CERTIFIED in sandbox** when integration test passes |
+| Variation code sent | ☑ | | Via `VTPASS_TEST_DATA_VARIATION_CODE` |
+| Alternate variation supported | ☑ | | Optional `VTPASS_TEST_DATA_VARIATION_CODE_ALT` |
+| Sandbox purchase via FulfillmentService | ☐ | PYL-SBOX-DATA-* | **PENDING** — fails with generic `TRANSACTION FAILED` |
+| Status → `fulfilled` | ☐ | | Do not certify until integration test passes |
+| Failure diagnostics | ☑ | | Integration test prints sanitized `response_payload`, codes, and content errors |
+
+**Latest failure reason:** `TRANSACTION FAILED` (VTPass code `016`). Run `test_sandbox_data_purchase` with sandbox flags enabled to print sanitized diagnostics including `serviceID`, `variation_code`, `phone`, `request_id`, and nested `content` errors. Try `VTPASS_TEST_DATA_VARIATION_CODE_ALT` if the primary code fails. Investigate variation catalog match, recipient phone validity, and sandbox wallet balance.
 
 ---
 
@@ -113,21 +117,27 @@
 |-------|--------|-----------|-------|
 | Merchant verify before purchase | ☑ | | `test_sandbox_electricity_purchase` verifies meter first |
 | Purchase payload includes required fields | ☑ | | `serviceID`, `billersCode`, `variation_code`, `amount`, `phone`, `request_id` |
-| Sandbox purchase via FulfillmentService | ☐ | PYL-SBOX-ELEC-* | **PENDING** — set `VTPASS_TEST_ELECTRICITY_METER_NUMBER` |
-| Status → `fulfilled` | ☐ | | Do not certify until integration test passes |
-| Meaningful VTPass response stored | ☐ | | `response_payload.fulfillment` |
-
-**Blocker:** Set electricity purchase env values (see `VTPASS-SANDBOX-TEST-STEPS.md`) and run `test_sandbox_electricity_purchase`. The meter must verify with a customer name (not just HTTP 200). Electricity purchase stays **PENDING** until that test passes with `fulfilled` status.
+| Sandbox purchase via FulfillmentService | ☑ | PYL-SBOX-ELEC-* | Integration test |
+| Status → `fulfilled` | ☑ | | **CERTIFIED in sandbox** |
+| Meaningful VTPass response stored | ☑ | | `response_payload.fulfillment` |
 
 ### Token / unit response observations
 
-Prepaid electricity purchases may return delivery details inside `response_payload.fulfillment.content` (exact field names vary by disco and sandbox vs live). Common patterns include recharge tokens, units (kWh), tariff references, or PIN-style values nested under `content` or transaction sub-objects.
+Observed on successful sandbox prepaid electricity purchase (`test_sandbox_electricity_purchase`):
 
-The integration test logs any response paths matching token/unit/recharge-style keys without asserting exact field names. Record observed paths in this section after a successful sandbox purchase run.
+| Field path | Observed | Notes |
+|------------|----------|-------|
+| `content.transactions.unit_price` | ☑ | Unit price returned in transaction content |
+| `token` | ☑ | Main recharge token |
+| `tokenAmount` | ☑ | Token amount metadata |
+| `resetToken` | ☑ | Reset token when provided by disco |
+| `configureToken` | ☑ | Configure token when provided by disco |
+| `units` | ☑ | Allocated units (kWh) |
+| `tariff` | ☑ | Tariff reference |
+| `costOfUnit` | ☑ | Cost per unit |
+| `tariffBaseRate` | ☑ | Base tariff rate |
 
-| Field path (example) | Observed | Notes |
-|----------------------|----------|-------|
-| _Run integration test to populate_ | | |
+Exact nesting varies by disco; integration test logs matching paths without hardcoding assertions.
 
 ---
 
@@ -150,6 +160,7 @@ The integration test logs any response paths matching token/unit/recharge-style 
 | Invalid disco → failed | ☑ | **CERTIFIED in sandbox** |
 | Unpaid transaction → rejected | ☑ | Ops fulfill guard (feature tests) |
 | Timeout handled safely | ☑ | Feature test with Http fake |
+| Data purchase generic failure | **PENDING** | Diagnostics added in PAY-015H |
 
 ---
 
@@ -166,9 +177,9 @@ The integration test logs any response paths matching token/unit/recharge-style 
 ## Observations
 
 - Airtime sandbox fulfillment works end-to-end.
-- Electricity merchant verify works with configured sandbox test meter.
-- Electricity purchase requires env-driven test meter via `VTPASS_TEST_ELECTRICITY_*` — merchant verify alone does not certify purchase.
-- Data sandbox fulfillment works when a valid VTPass variation code is configured.
+- Electricity merchant verify and purchase work with configured sandbox test meter; token/unit fields returned on success.
+- Data sandbox purchase still fails with generic `TRANSACTION FAILED`; integration test now prints sanitized diagnostics and supports an alternate variation code env var.
+- `VTPassResponseMapper` prefers nested `content.error` details over generic failure descriptions when available.
 - Invalid meter negative testing is unreliable in sandbox; local empty-meter validation covers malformed input.
 
 ---
@@ -178,7 +189,7 @@ The integration test logs any response paths matching token/unit/recharge-style 
 1. Frontend checkout still uses mock meter verification UI — backend service ready but not wired to checkout.
 2. Frontend `data_plan_id` values must be mapped to VTPass variation codes before production data launch.
 3. Integration tests skip in CI unless `VTPASS_SANDBOX_TESTS=true`.
-4. Electricity purchase certification blocked until `VTPASS_TEST_ELECTRICITY_METER_NUMBER` is set and integration test passes.
+4. Data certification blocked until `test_sandbox_data_purchase` passes — use printed diagnostics to resolve variation code, phone, or sandbox balance issues.
 
 ---
 
