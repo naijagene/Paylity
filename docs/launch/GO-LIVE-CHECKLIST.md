@@ -63,7 +63,10 @@ Check `[x]` only when verified in the target environment.
 - [ ] `NEXT_PUBLIC_API_BASE_URL` points to production API
 - [ ] CORS allows production web origin only (`FRONTEND_URL`)
 - [ ] **Support WhatsApp** configured (`NEXT_PUBLIC_WHATSAPP_URL`)
+- [ ] **Support email** visible as `support@paylity.ng` (always available)
 - [ ] Placeholder WhatsApp number not shown when URL unset
+- [ ] Ad slots are **placeholder only** — no external ad scripts in MVP
+- [ ] Real ad provider / direct sponsorship setup planned for post-MVP
 - [ ] `OPERATOR_ACCESS_KEY` set for ops console
 - [ ] `php artisan paylity:preflight` passes with no FAIL items
 - [ ] Privacy and Terms pages reviewed (`/privacy`, `/terms`)

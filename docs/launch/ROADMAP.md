@@ -18,6 +18,9 @@ Simple roadmap aligned with current MVP reality. Scope discipline keeps PAYLITY 
 | Pricing: product + ₦100 convenience fee | ✅ |
 | Guest product limit ₦10,000 | ✅ |
 | System build identity | ✅ |
+| Branded logo + premium fintech theme | ✅ |
+| Support card (WhatsApp + email) | ✅ |
+| Placeholder ad slots (no external scripts) | ✅ |
 
 **Explicitly out of scope for MVP**
 
@@ -44,6 +47,7 @@ Simple roadmap aligned with current MVP reality. Scope discipline keeps PAYLITY 
 | TV subscriptions | New product adapter + checkout tab |
 | OTP verification | Unlock higher product limits (`verified_phone`) |
 | Email/SMS receipts | Post-payment notifications |
+| Monetization / ad network | Replace placeholder `AdSlot` components with direct sponsorship or ad provider |
 | VTPass merchant verify in checkout | Real electricity meter validation before pay |
 | API rate limiting | Protect checkout initialize |
 | Secure fulfill endpoint | Auth or IP allowlist |

@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
 import {
@@ -82,12 +83,11 @@ export function TransactionReceiptCard({
     >
       <div className="flex items-start justify-between gap-3 border-b border-dark/5 pb-5">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
-            PAYLITY NG Receipt
+          <PaylityLogo size="sm" />
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+            Receipt
           </p>
-          <p className="mt-1 font-mono text-sm font-bold text-foreground">
-            {reference}
-          </p>
+          <p className="mt-1 font-mono text-sm font-bold text-dark">{reference}</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <StatusBadge

@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/Button";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import {
   clearOperatorKey,
   hasOperatorKey,
@@ -112,13 +113,16 @@ function OpsConsoleFrame({
       </div>
       <div className="border-b border-dark/5 bg-white px-4 py-3">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-              PAYLITY Ops
-            </p>
-            <p className="text-sm font-semibold text-foreground">
-              Internal Operations Console
-            </p>
+          <div className="flex items-center gap-3">
+            <PaylityLogo size="sm" showText={false} />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                PAYLITY Ops
+              </p>
+              <p className="text-sm font-semibold text-dark">
+                Internal Operations Console
+              </p>
+            </div>
           </div>
           <Button type="button" variant="outline" onClick={onLock}>
             Lock Console

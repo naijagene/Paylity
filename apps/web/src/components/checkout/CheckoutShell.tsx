@@ -1,6 +1,8 @@
 import { type ReactNode } from "react";
 import Link from "next/link";
 import { PageContainer } from "@/components/PageContainer";
+import { AdSlot } from "@/components/ads/AdSlot";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { getProductSchema } from "@/lib/checkout/checkoutSchemas";
 import type { CheckoutStep, ProductType } from "@/lib/checkout/types";
 
@@ -53,22 +55,19 @@ export function CheckoutShell({
             </span>
           </div>
 
-          <div className="inline-flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-sm font-black text-dark">
-              P
-            </span>
-            <span className="text-xl font-black tracking-tight text-foreground">
-              PAYLITY <span className="text-primary">NG</span>
-            </span>
-          </div>
+          <PaylityLogo size="md" />
 
-          <h1 className="mt-4 text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+          <h1 className="mt-4 text-2xl font-black tracking-tight text-dark sm:text-3xl">
             {schema.label}
           </h1>
           <p className="mt-2 text-sm text-foreground/60">
             No account needed · Guest product amount up to ₦10,000
           </p>
         </header>
+
+        <div className="mb-6">
+          <AdSlot type="checkout-banner" />
+        </div>
 
         {children}
       </PageContainer>

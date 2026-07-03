@@ -95,6 +95,10 @@ export function shouldPollTransactionStatus(status: string): boolean {
   return status === "payment_success" || status === "fulfillment_pending";
 }
 
+export function isAwaitingDelivery(status: string): boolean {
+  return status === "payment_success" || status === "fulfillment_pending";
+}
+
 export function isTerminalTransactionStatus(status: string): boolean {
   return ["fulfilled", "failed", "cancelled", "payment_failed"].includes(
     status,

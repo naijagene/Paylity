@@ -9,7 +9,7 @@ import { PaymentSuccessCard } from "@/components/transaction/PaymentSuccessCard"
 import { PaymentVerificationSkeleton } from "@/components/transaction/TransactionPageSkeleton";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
-import { WhatsAppSupportCard } from "@/components/transaction/WhatsAppSupportCard";
+import { SupportCard } from "@/components/support/SupportCard";
 import { verifyPaystackPayment } from "@/lib/api/payments";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import {
@@ -232,7 +232,7 @@ export function PaymentCallbackClient() {
             </Button>
           </div>
 
-          <WhatsAppSupportCard reference={state.reference} />
+          <SupportCard reference={state.reference} />
         </div>
       </PageContainer>
     );

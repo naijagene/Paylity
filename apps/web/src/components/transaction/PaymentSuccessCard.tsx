@@ -1,7 +1,9 @@
 import { Button } from "@/components/Button";
+import { AdSlot } from "@/components/ads/AdSlot";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
-import { WhatsAppSupportCard } from "@/components/transaction/WhatsAppSupportCard";
+import { SupportCard } from "@/components/support/SupportCard";
 import { SystemIdentity } from "@/components/system/SystemIdentity";
 import { getTimelinePhase } from "@/lib/transaction/display";
 
@@ -32,6 +34,10 @@ export function PaymentSuccessCard({
 
   return (
     <div className="animate-fade-in mx-auto w-full max-w-lg space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <PaylityLogo size="sm" />
+      </div>
+
       <section
         className="overflow-hidden rounded-3xl border border-success/15 bg-gradient-to-b from-success/10 to-white p-6 text-center shadow-sm sm:p-8"
         aria-labelledby="payment-success-title"
@@ -44,19 +50,21 @@ export function PaymentSuccessCard({
         </div>
         <h1
           id="payment-success-title"
-          className="text-2xl font-black tracking-tight text-foreground sm:text-3xl"
+          className="text-2xl font-black tracking-tight text-dark sm:text-3xl"
         >
           Payment Completed Successfully
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-foreground/65">
-          Your payment has been confirmed.
-          <br />
-          We are now processing your order.
+          Payment confirmed. Delivery is being processed.
         </p>
-        <p className="mt-5 font-mono text-sm font-bold text-foreground">
-          {reference}
+        <p className="mt-2 text-sm text-foreground/60">
+          If delivery takes longer than expected, contact support with your
+          reference.
         </p>
+        <p className="mt-5 font-mono text-sm font-bold text-dark">{reference}</p>
       </section>
+
+      <AdSlot type="status-banner" />
 
       <section
         className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm"
@@ -102,7 +110,7 @@ export function PaymentSuccessCard({
       </div>
 
       <div className="print:hidden">
-        <WhatsAppSupportCard reference={reference} />
+        <SupportCard reference={reference} />
       </div>
 
       <SystemIdentity className="print:hidden pt-2" />

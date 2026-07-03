@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { AdSlot } from "@/components/ads/AdSlot";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { ErrorStatePage } from "@/components/transaction/ErrorStatePage";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
 import { TransactionPageSkeleton } from "@/components/transaction/TransactionPageSkeleton";
 import { TransactionReceiptCard } from "@/components/transaction/TransactionReceiptCard";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
-import { WhatsAppSupportCard } from "@/components/transaction/WhatsAppSupportCard";
+import { SupportCard } from "@/components/support/SupportCard";
 import { SystemIdentity } from "@/components/system/SystemIdentity";
 import { getTransaction, type TransactionDetail } from "@/lib/api/transactions";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
@@ -19,6 +21,7 @@ import {
   getPaymentBadgeLabel,
   getPaymentBadgeVariant,
   getTimelinePhase,
+  isAwaitingDelivery,
   PRODUCT_LABELS,
   shouldPollTransactionStatus,
 } from "@/lib/transaction/display";
@@ -247,11 +250,16 @@ export function TransactionStatusClient() {
   return (
     <PageContainer className="py-8 sm:py-12">
       <div className="animate-fade-in mx-auto w-full max-w-2xl space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <PaylityLogo size="sm" />
+          <AdSlot type="status-banner" className="sm:max-w-xs" />
+        </div>
+
         <header className="text-center sm:text-left">
           <p className="text-sm font-semibold uppercase tracking-wide text-primary">
             Transaction Details
           </p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground sm:text-4xl">
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-dark sm:text-4xl">
             {transaction.reference}
           </h1>
           <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
@@ -265,6 +273,24 @@ export function TransactionStatusClient() {
             />
           </div>
         </header>
+
+        {isAwaitingDelivery(transaction.status) ? (
+          <section
+            className="rounded-3xl border border-success/20 bg-gradient-to-br from-success/10 via-white to-success/5 p-5 shadow-sm"
+            aria-live="polite"
+          >
+            <p className="text-base font-semibold text-dark">
+              Payment confirmed. Delivery is being processed.
+            </p>
+            <p className="mt-2 text-sm text-foreground/65">
+              If delivery takes longer than expected, contact support with your
+              reference.
+            </p>
+            <Button href="#customer-support" variant="outline" className="mt-4">
+              Contact Support
+            </Button>
+          </section>
+        ) : null}
 
         {isCheckingDelivery &&
         shouldPollTransactionStatus(transaction.status) ? (
@@ -335,7 +361,7 @@ export function TransactionStatusClient() {
         </div>
 
         <div className="print:hidden">
-          <WhatsAppSupportCard reference={transaction.reference} />
+          <SupportCard reference={transaction.reference} />
         </div>
 
         <SystemIdentity className="print:hidden" />

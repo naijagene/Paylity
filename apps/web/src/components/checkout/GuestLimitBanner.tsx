@@ -1,4 +1,5 @@
 import { Button } from "@/components/Button";
+import { getSupportEmailHref } from "@/lib/support/contact";
 import {
   buildWhatsAppHref,
   getWhatsAppSupportUrl,
@@ -37,16 +38,18 @@ export function GuestLimitBanner({ onReduceProductAmount }: GuestLimitBannerProp
             )}
             target="_blank"
             rel="noopener noreferrer"
-            variant="secondary"
-            className="w-full sm:w-auto"
+            className="w-full bg-success text-white hover:bg-[#0ea371] sm:w-auto"
           >
-            Chat on WhatsApp
+            WhatsApp Support
           </Button>
-        ) : (
-          <p className="self-center text-sm text-foreground/60">
-            Contact PAYLITY NG support for higher purchase limits.
-          </p>
-        )}
+        ) : null}
+        <Button
+          href={getSupportEmailHref()}
+          variant={whatsappUrl ? "outline" : "secondary"}
+          className="w-full sm:w-auto"
+        >
+          Email Support
+        </Button>
       </div>
     </div>
   );

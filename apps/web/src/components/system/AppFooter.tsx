@@ -3,8 +3,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AboutModal } from "@/components/system/AboutModal";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
+import { getSupportEmailHref, SUPPORT_EMAIL } from "@/lib/support/contact";
 import { getBuildInfo } from "@/lib/system/buildInfo";
-import { getWhatsAppSupportUrl } from "@/lib/support/whatsapp";
+import {
+  buildWhatsAppHref,
+  getWhatsAppSupportUrl,
+} from "@/lib/support/whatsapp";
 
 type AppFooterProps = {
   className?: string;
@@ -15,14 +20,17 @@ export function AppFooter({ className = "" }: AppFooterProps) {
   const [expanded, setExpanded] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const currentYear = new Date().getFullYear();
-  const supportUrl = getWhatsAppSupportUrl();
+  const whatsappUrl = getWhatsAppSupportUrl();
 
   return (
     <>
       <footer
-        className={`border-t border-dark/5 py-8 text-center text-xs text-foreground/45 ${className}`}
+        className={`border-t border-dark/5 bg-white py-8 text-center text-xs text-foreground/45 ${className}`}
         aria-label="Site footer"
       >
+        <div className="mx-auto mb-4 flex justify-center">
+          <PaylityLogo size="sm" />
+        </div>
         <p>© {currentYear} {build.appName}</p>
 
         <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
@@ -44,18 +52,22 @@ export function AppFooter({ className = "" }: AppFooterProps) {
           >
             {build.environment}
           </span>
-          {supportUrl ? (
+          {whatsappUrl ? (
             <a
-              href={supportUrl}
+              href={buildWhatsAppHref(whatsappUrl, "Hi PAYLITY NG, I need help.")}
               target="_blank"
               rel="noopener noreferrer"
-              className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              className="transition-colors hover:text-success focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
-              Support
+              WhatsApp
             </a>
-          ) : (
-            <span className="text-foreground/35">Support</span>
-          )}
+          ) : null}
+          <a
+            href={getSupportEmailHref()}
+            className="transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            {SUPPORT_EMAIL}
+          </a>
           <button
             type="button"
             onClick={() => setAboutOpen(true)}
@@ -80,7 +92,7 @@ export function AppFooter({ className = "" }: AppFooterProps) {
         {expanded ? (
           <div
             id="build-details-panel"
-            className="animate-fade-in mx-auto mt-4 max-w-sm rounded-2xl border border-dark/5 bg-white px-4 py-3 text-left text-[11px] leading-relaxed text-foreground/55"
+            className="animate-fade-in mx-auto mt-4 max-w-sm rounded-2xl border border-dark/5 bg-background px-4 py-3 text-left text-[11px] leading-relaxed text-foreground/55"
           >
             <p>
               <span className="font-semibold text-foreground/70">Version:</span>{" "}

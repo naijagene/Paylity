@@ -1,6 +1,7 @@
 import { getProductSchema } from "@/lib/checkout/checkoutSchemas";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { formatGatewayFeeLabel } from "@/lib/checkout/pricing";
+import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import type { CheckoutFields, ProductType } from "@/lib/checkout/types";
 
 type ReceiptPreviewProps = {
@@ -53,9 +54,7 @@ export function ReceiptPreview({
       <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
         Receipt preview
       </p>
-      <p className="mt-2 text-lg font-black text-foreground">
-        PAYLITY <span className="text-primary">NG</span>
-      </p>
+      <PaylityLogo size="sm" className="mt-2" />
 
       <dl className="mt-4 space-y-3">
         {rows.map((row) => (
