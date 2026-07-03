@@ -48,6 +48,11 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | `VTPASS_TEST_DATA_SERVICE_ID` | Sandbox data service ID (e.g. `mtn-data`) |
 | `VTPASS_TEST_DATA_VARIATION_CODE` | Valid sandbox data variation code |
 | `VTPASS_TEST_DATA_PHONE` | Phone number for sandbox data purchase test |
+| `VTPASS_TEST_ELECTRICITY_DISCO` | Sandbox electricity purchase test disco (e.g. `IKEDC`) |
+| `VTPASS_TEST_ELECTRICITY_METER_NUMBER` | Sandbox electricity purchase test meter |
+| `VTPASS_TEST_ELECTRICITY_METER_TYPE` | `prepaid` or `postpaid` (default `prepaid`) |
+| `VTPASS_TEST_ELECTRICITY_PHONE` | Phone number for sandbox electricity purchase test |
+| `VTPASS_TEST_ELECTRICITY_AMOUNT` | Purchase amount in NGN for sandbox electricity test (default `1000`) |
 | `VTPASS_SANDBOX_TESTS` | Enable integration test suite (default false) |
 
 ---
@@ -237,7 +242,7 @@ Full mapping: `apps/api/app/Services/Fulfillment/VTPassResponseMapper.php`
 - [ ] Merchant verify succeeds with sandbox test meter
 - [ ] Airtime sandbox purchase fulfilled via ops console
 - [ ] Data sandbox purchase fulfilled (valid variation code confirmed)
-- [ ] Electricity sandbox purchase fulfilled after verify
+- [ ] Electricity sandbox purchase fulfilled (valid test meter confirmed)
 - [ ] Invalid meter returns failed (not success)
 - [ ] Logs contain no passwords, API keys, or secrets
 - [ ] `VTPASS-CERTIFICATION-REPORT.md` updated with results

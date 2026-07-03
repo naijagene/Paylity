@@ -32,6 +32,11 @@ VTPASS_TEST_METER_TYPE=prepaid
 VTPASS_TEST_DATA_SERVICE_ID=mtn-data
 VTPASS_TEST_DATA_VARIATION_CODE=
 VTPASS_TEST_DATA_PHONE=08011111111
+VTPASS_TEST_ELECTRICITY_DISCO=IKEDC
+VTPASS_TEST_ELECTRICITY_METER_NUMBER=
+VTPASS_TEST_ELECTRICITY_METER_TYPE=prepaid
+VTPASS_TEST_ELECTRICITY_PHONE=08011111111
+VTPASS_TEST_ELECTRICITY_AMOUNT=1000
 OPERATOR_ACCESS_KEY=your_ops_key
 ```
 
@@ -173,6 +178,46 @@ If `VTPASS_TEST_DATA_VARIATION_CODE` is unset, the data purchase test skips with
 `Set VTPASS_TEST_DATA_VARIATION_CODE to a valid sandbox variation code.`
 
 Do not mark Data as **CERTIFIED** until that test passes with `fulfilled` status.
+
+---
+
+## Electricity purchase certification
+
+Electricity merchant verify alone does **not** certify purchase. Configure purchase-specific env values in `apps/api/.env`:
+
+```env
+VTPASS_TEST_ELECTRICITY_DISCO=IKEDC
+VTPASS_TEST_ELECTRICITY_METER_NUMBER=45053854956
+VTPASS_TEST_ELECTRICITY_METER_TYPE=prepaid
+VTPASS_TEST_ELECTRICITY_PHONE=08011111111
+VTPASS_TEST_ELECTRICITY_AMOUNT=1000
+```
+
+Use a sandbox meter that passes `php artisan paylity:vtpass-check` merchant verify for the selected disco **and returns a customer name**. VTPass may return HTTP `200` / code `000` even when `content` includes a meter error — the integration test requires `customer_name` before attempting purchase.
+
+The integration test:
+
+1. Verifies the meter via `ElectricityMeterVerificationService`
+2. Creates a `payment_success` electricity transaction
+3. Fulfills through `FulfillmentService`
+4. Asserts `fulfilled` status and stores the VTPass response
+
+Run:
+
+```bash
+php artisan config:clear
+php artisan test --testsuite=Integration --filter=test_sandbox_electricity_purchase
+```
+
+If `VTPASS_TEST_ELECTRICITY_METER_NUMBER` is unset, the test skips with:
+
+`Set VTPASS_TEST_ELECTRICITY_METER_NUMBER to a valid sandbox prepaid/postpaid meter.`
+
+After a successful run, inspect `response_payload.fulfillment` for delivery details (tokens, units, etc.). Field names vary by disco — record observed paths in `VTPASS-CERTIFICATION-REPORT.md`.
+
+Do not mark Electricity purchase as **CERTIFIED** until `test_sandbox_electricity_purchase` passes.
+
+**Note:** `apps/api/phpunit.xml` sets `FEATURE_VTPASS=false` and `VTPASS_SANDBOX_TESTS=false` by default. For local certification, temporarily set both to `true` in `phpunit.xml`, ensure electricity env values are in `.env`, then run the integration suite.
 
 ---
 

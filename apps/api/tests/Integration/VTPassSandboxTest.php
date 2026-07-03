@@ -20,7 +20,8 @@ use Tests\TestCase;
  * Partial certification (July 2026 sandbox run):
  * - Airtime purchase: CERTIFIED in sandbox when test_sandbox_airtime_purchase passes
  * - Electricity merchant verify: CERTIFIED in sandbox when test_sandbox_electricity_merchant_verify passes
- * - Data purchase: PENDING until VTPASS_TEST_DATA_VARIATION_CODE is set and test passes
+ * - Electricity purchase: PENDING until VTPASS_TEST_ELECTRICITY_METER_NUMBER is set and test passes
+ * - Data purchase: CERTIFIED in sandbox when test_sandbox_data_purchase passes
  * - Invalid meter rejection: SANDBOX-INCONCLUSIVE (sandbox may verify unexpected meters)
  */
 class VTPassSandboxTest extends TestCase
@@ -54,6 +55,7 @@ class VTPassSandboxTest extends TestCase
             '----------------------------------',
             'Airtime: CERTIFIED in sandbox when test_sandbox_airtime_purchase passes with status fulfilled',
             'Electricity merchant verify: CERTIFIED in sandbox when test_sandbox_electricity_merchant_verify passes',
+            'Electricity purchase: '.$this->electricityPurchaseCertificationStatus(),
             'Data: '.$this->dataCertificationStatus(),
             'Invalid meter behavior: SANDBOX-INCONCLUSIVE (see test_sandbox_invalid_meter_behavior_is_documented)',
             'Invalid network: CERTIFIED in sandbox when test_sandbox_invalid_network_returns_failed_status passes',
@@ -144,6 +146,95 @@ class VTPassSandboxTest extends TestCase
         );
     }
 
+    public function test_sandbox_electricity_purchase(): void
+    {
+        $meterNumber = trim((string) config('services.vtpass.test_electricity_meter_number', ''));
+
+        if ($meterNumber === '') {
+            $this->markTestSkipped(
+                'Set VTPASS_TEST_ELECTRICITY_METER_NUMBER to a valid sandbox prepaid/postpaid meter.',
+            );
+        }
+
+        $disco = strtoupper(trim((string) config('services.vtpass.test_electricity_disco', 'IKEDC')));
+        $meterType = strtolower(trim((string) config('services.vtpass.test_electricity_meter_type', 'prepaid'))) ?: 'prepaid';
+        $phone = trim((string) config('services.vtpass.test_electricity_phone', '')) ?: '08011111111';
+        $amount = (int) config('services.vtpass.test_electricity_amount', 1000);
+
+        if ($amount <= 0) {
+            $this->markTestSkipped(
+                'Set VTPASS_TEST_ELECTRICITY_AMOUNT to a positive sandbox purchase amount.',
+            );
+        }
+
+        $verifyResult = app(ElectricityMeterVerificationService::class)->verify(
+            $disco,
+            $meterNumber,
+            $meterType,
+        );
+
+        $this->assertTrue(
+            $verifyResult['available'],
+            'Electricity meter verification unavailable: '.($verifyResult['message'] ?? 'unknown'),
+        );
+        $this->assertSame(
+            VTPassResponseMapper::STATUS_SUCCESS,
+            $verifyResult['status'],
+            'Electricity meter must verify before purchase: '.($verifyResult['message'] ?? 'unknown'),
+        );
+        $this->assertNotEmpty(
+            $verifyResult['customer_name'],
+            'Electricity meter verify must return a customer name before purchase. Check VTPASS_TEST_ELECTRICITY_METER_NUMBER.',
+        );
+
+        $transaction = $this->createPaidTransaction([
+            'reference' => 'PYL-SBOX-ELEC-'.now()->format('His'),
+            'product_type' => 'electricity',
+            'customer_phone' => $phone,
+            'product_amount' => $amount,
+            'payable_amount' => $amount + 100,
+            'request_payload' => [
+                'disco' => $disco,
+                'meter_number' => $meterNumber,
+                'meter_type' => $meterType,
+                'customer_name' => $verifyResult['customer_name'] ?? 'Sandbox Customer',
+            ],
+        ]);
+
+        $fulfilled = app(FulfillmentService::class)->fulfill($transaction->fresh());
+
+        $this->assertSame(
+            TransactionStatus::FULFILLED,
+            $fulfilled->status,
+            'Electricity sandbox purchase did not fulfill: '.($fulfilled->failure_reason ?? 'unknown'),
+        );
+
+        $fulfillment = (array) data_get($fulfilled->response_payload, 'fulfillment', []);
+
+        $this->assertNotEmpty($fulfillment, 'Expected VTPass fulfillment response to be stored on the transaction.');
+        $this->assertTrue(
+            data_get($fulfillment, 'code') === '000'
+            || data_get($fulfillment, 'response_description') === '000'
+            || strtolower((string) data_get($fulfillment, 'response_description', '')) === 'transaction successful',
+            'Expected a successful VTPass electricity purchase response.',
+        );
+        $this->assertNotEmpty(
+            data_get($fulfillment, 'requestId')
+            ?? data_get($fulfillment, 'content')
+            ?? data_get($fulfillment, 'response_description'),
+            'Expected meaningful VTPass purchase response metadata.',
+        );
+
+        $deliveryFieldSummary = $this->summarizeElectricityDeliveryFields($fulfillment);
+
+        if ($deliveryFieldSummary !== '') {
+            fwrite(
+                STDOUT,
+                "\nElectricity purchase delivery fields observed: {$deliveryFieldSummary}\n",
+            );
+        }
+    }
+
     public function test_sandbox_invalid_meter_behavior_is_documented(): void
     {
         $result = app(ElectricityMeterVerificationService::class)->verify(
@@ -209,6 +300,53 @@ class VTPassSandboxTest extends TestCase
         }
 
         return 'Run test_sandbox_data_purchase — CERTIFIED when fulfilled';
+    }
+
+    private function electricityPurchaseCertificationStatus(): string
+    {
+        $meterNumber = trim((string) config('services.vtpass.test_electricity_meter_number', ''));
+
+        if ($meterNumber === '') {
+            return 'PENDING valid test meter (set VTPASS_TEST_ELECTRICITY_METER_NUMBER)';
+        }
+
+        return 'Run test_sandbox_electricity_purchase — CERTIFIED when fulfilled';
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function summarizeElectricityDeliveryFields(array $response): string
+    {
+        $matches = [];
+
+        $this->collectElectricityDeliveryFieldPaths($response, '', $matches);
+
+        return implode(', ', array_unique($matches));
+    }
+
+    /**
+     * @param  array<string, mixed>  $value
+     * @param  list<string>  $matches
+     */
+    private function collectElectricityDeliveryFieldPaths(mixed $value, string $prefix, array &$matches): void
+    {
+        if (! is_array($value)) {
+            return;
+        }
+
+        foreach ($value as $key => $nested) {
+            $path = $prefix === '' ? (string) $key : $prefix.'.'.$key;
+            $normalizedKey = strtolower((string) $key);
+
+            if (preg_match('/token|unit|recharge|pin|energy|kwh|tariff/', $normalizedKey) === 1) {
+                $matches[] = $path;
+            }
+
+            if (is_array($nested)) {
+                $this->collectElectricityDeliveryFieldPaths($nested, $path, $matches);
+            }
+        }
     }
 
     private function networkForDataServiceId(string $serviceId): string
