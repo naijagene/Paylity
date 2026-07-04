@@ -31,6 +31,25 @@ class PaylityCatalogClassifyCommand extends Command
             ])->values()->all(),
         );
 
+        $samples = $classificationService->sampleHiddenVariations();
+
+        if ($samples !== []) {
+            $this->newLine();
+            $this->info('Sample hidden variations:');
+            $this->table(
+                ['variation_code', 'name', 'category', 'amount'],
+                collect($samples)->map(fn (array $row) => [
+                    $row['variation_code'],
+                    $row['name'],
+                    $row['customer_category'] ?? 'unknown',
+                    $row['amount'] ?? '—',
+                ])->all(),
+            );
+        } else {
+            $this->newLine();
+            $this->warn('No hidden variations found. Check provider names/codes and rerun catalog sync if needed.');
+        }
+
         return self::SUCCESS;
     }
 }

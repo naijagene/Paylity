@@ -4,22 +4,36 @@ namespace App\Services\Catalog;
 
 class VariationDisplayClassifier
 {
+    private const ENTERPRISE_AMOUNT_THRESHOLD = 50000;
+
     /** @var list<string> */
-    private const VOICE_KEYWORDS = [
-        'voice',
-        'talk',
+    private const VOICE_SUBSTRINGS = [
         'xtratalk',
         'xtradata',
+        'xtra talk',
+        'xtra data',
+    ];
+
+    /** @var list<string> */
+    private const VOICE_WORDS = [
+        'voice',
+        'talk',
         'call',
+        'minute',
         'minutes',
     ];
 
     /** @var list<string> */
-    private const SME_KEYWORDS = [
+    private const SME_SUBSTRINGS = [
+        'corporate gifting',
+        'sme data',
+    ];
+
+    /** @var list<string> */
+    private const SME_WORDS = [
         'sme',
         'corporate',
-        'sme data',
-        'corporate gifting',
+        'gifting',
     ];
 
     /** @var array<string, int> */
@@ -48,50 +62,52 @@ class VariationDisplayClassifier
         string $name,
         ?int $amount,
         string $variationCode,
+        string $extraSearchText = '',
     ): array {
-        $normalizedName = trim($name);
-        $searchName = strtolower($normalizedName);
+        $providerName = trim($name);
+        $searchCorpus = $this->buildSearchCorpus($providerName, $variationCode, $extraSearchText);
+        $labelForExtraction = $providerName !== '' ? $providerName : $variationCode;
 
-        if ($normalizedName === '' || trim($variationCode) === '') {
-            return $this->hiddenResult($normalizedName, 'unknown', null, null, $amount);
+        if (trim($variationCode) === '') {
+            return $this->hiddenResult($labelForExtraction, 'unknown', null, null, $amount);
         }
 
-        if ($this->containsAny($searchName, self::VOICE_KEYWORDS)) {
+        if ($this->matchesVoiceBundle($searchCorpus)) {
             return $this->hiddenResult(
-                $normalizedName,
+                $labelForExtraction,
                 'voice',
-                $this->extractDataSizeLabel($normalizedName),
-                $this->extractValidityLabel($normalizedName),
+                $this->extractDataSizeLabel($labelForExtraction),
+                $this->extractValidityLabel($labelForExtraction),
                 $amount,
             );
         }
 
-        if ($this->containsAny($searchName, self::SME_KEYWORDS)) {
-            $category = str_contains($searchName, 'corporate') ? 'corporate' : 'sme';
+        if ($this->matchesSmeCorporate($searchCorpus)) {
+            $category = $this->containsWord($searchCorpus, 'corporate') ? 'corporate' : 'sme';
 
             return $this->hiddenResult(
-                $normalizedName,
+                $labelForExtraction,
                 $category,
-                $this->extractDataSizeLabel($normalizedName),
-                $this->extractValidityLabel($normalizedName),
+                $this->extractDataSizeLabel($labelForExtraction),
+                $this->extractValidityLabel($labelForExtraction),
                 $amount,
             );
         }
 
-        if ($amount !== null && $amount > 50000) {
+        if ($this->matchesEnterpriseAmount($amount, $providerName, $variationCode, $extraSearchText)) {
             return $this->hiddenResult(
-                $normalizedName,
+                $labelForExtraction,
                 'unknown',
-                $this->extractDataSizeLabel($normalizedName),
-                $this->extractValidityLabel($normalizedName),
+                $this->extractDataSizeLabel($labelForExtraction),
+                $this->extractValidityLabel($labelForExtraction),
                 $amount,
             );
         }
 
-        $dataSizeLabel = $this->extractDataSizeLabel($normalizedName);
-        $validityLabel = $this->extractValidityLabel($normalizedName);
-        $customerCategory = $this->detectCustomerCategory($searchName);
-        $displayName = $this->buildDisplayName($dataSizeLabel, $validityLabel, $normalizedName);
+        $dataSizeLabel = $this->extractDataSizeLabel($labelForExtraction);
+        $validityLabel = $this->extractValidityLabel($labelForExtraction);
+        $customerCategory = $this->detectCustomerCategory($searchCorpus);
+        $displayName = $this->buildDisplayName($dataSizeLabel, $validityLabel, $labelForExtraction);
 
         return [
             'display_name' => $displayName,
@@ -130,6 +146,103 @@ class VariationDisplayClassifier
         ];
     }
 
+    private function buildSearchCorpus(
+        string $name,
+        string $variationCode,
+        string $extraSearchText,
+    ): string {
+        return $this->normalizeSearchText(implode(' ', array_filter([
+            $name,
+            $variationCode,
+            $extraSearchText,
+        ], fn (string $value): bool => trim($value) !== '')));
+    }
+
+    private function normalizeSearchText(string $text): string
+    {
+        $text = mb_strtolower($text);
+        $text = str_replace(['_', '-', '/', '\\'], ' ', $text);
+        $text = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $text) ?? $text;
+
+        return trim(preg_replace('/\s+/', ' ', $text) ?? $text);
+    }
+
+    private function matchesVoiceBundle(string $searchCorpus): bool
+    {
+        $compact = str_replace(' ', '', $searchCorpus);
+
+        foreach (self::VOICE_SUBSTRINGS as $substring) {
+            $normalizedSubstring = str_replace(' ', '', $substring);
+
+            if (str_contains($searchCorpus, $substring)
+                || str_contains($compact, $normalizedSubstring)) {
+                return true;
+            }
+        }
+
+        foreach (self::VOICE_WORDS as $word) {
+            if ($this->containsWord($searchCorpus, $word)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesSmeCorporate(string $searchCorpus): bool
+    {
+        foreach (self::SME_SUBSTRINGS as $substring) {
+            if (str_contains($searchCorpus, $substring)) {
+                return true;
+            }
+        }
+
+        foreach (self::SME_WORDS as $word) {
+            if ($this->containsWord($searchCorpus, $word)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesEnterpriseAmount(
+        ?int $amount,
+        string $name,
+        string $variationCode,
+        string $extraSearchText,
+    ): bool {
+        if ($amount !== null && $amount > self::ENTERPRISE_AMOUNT_THRESHOLD) {
+            return true;
+        }
+
+        $rawText = implode(' ', array_filter([$name, $variationCode, $extraSearchText]));
+
+        return $this->extractMaxAmountFromText($rawText) > self::ENTERPRISE_AMOUNT_THRESHOLD;
+    }
+
+    private function extractMaxAmountFromText(string $text): int
+    {
+        $max = 0;
+
+        if (preg_match_all('/(?:n\s?)?([\d]{1,3}(?:,\d{3})+|\d+)/i', $text, $matches)) {
+            foreach ($matches[1] as $raw) {
+                $value = (int) str_replace(',', '', $raw);
+
+                if ($value > $max) {
+                    $max = $value;
+                }
+            }
+        }
+
+        return $max;
+    }
+
+    private function containsWord(string $searchCorpus, string $word): bool
+    {
+        return (bool) preg_match('/\b'.preg_quote($word, '/').'\b/u', $searchCorpus);
+    }
+
     private function buildDisplayName(
         ?string $dataSizeLabel,
         ?string $validityLabel,
@@ -142,21 +255,21 @@ class VariationDisplayClassifier
         return $fallback !== '' ? $fallback : null;
     }
 
-    private function detectCustomerCategory(string $searchName): string
+    private function detectCustomerCategory(string $searchCorpus): string
     {
-        if ($this->containsAny($searchName, ['365 days', '365 day', 'yearly', '1 year', '12 months', '12 month'])) {
+        if ($this->containsAny($searchCorpus, ['365 days', '365 day', 'yearly', '1 year', '12 months', '12 month'])) {
             return 'yearly';
         }
 
-        if ($this->containsAny($searchName, ['30 days', '30 day', 'monthly', '1 month'])) {
+        if ($this->containsAny($searchCorpus, ['30 days', '30 day', 'monthly', '1 month'])) {
             return 'monthly';
         }
 
-        if ($this->containsAny($searchName, ['7 days', '7 day', 'weekly', '1 week'])) {
+        if ($this->containsAny($searchCorpus, ['7 days', '7 day', 'weekly', '1 week'])) {
             return 'weekly';
         }
 
-        if ($this->containsAny($searchName, ['1 day', '24 hrs', '24 hours', 'daily'])) {
+        if ($this->containsAny($searchCorpus, ['1 day', '24 hrs', '24 hours', 'daily'])) {
             return 'daily';
         }
 

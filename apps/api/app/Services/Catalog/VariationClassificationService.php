@@ -81,6 +81,7 @@ class VariationClassificationService
             name: (string) $variation->name,
             amount: $variation->amount,
             variationCode: (string) $variation->variation_code,
+            extraSearchText: $this->buildExtraSearchText($variation),
         );
 
         $variation->fill([
@@ -95,5 +96,42 @@ class VariationClassificationService
         $variation->save();
 
         return $variation;
+    }
+
+    /**
+     * @return list<array{variation_code: string, name: string, customer_category: string|null, amount: int|null}>
+     */
+    public function sampleHiddenVariations(int $limit = 5): array
+    {
+        return ProviderVariation::query()
+            ->where('is_active', true)
+            ->where('is_visible', false)
+            ->orderBy('id')
+            ->limit($limit)
+            ->get(['variation_code', 'name', 'customer_category', 'amount'])
+            ->map(fn (ProviderVariation $variation) => [
+                'variation_code' => $variation->variation_code,
+                'name' => $variation->name,
+                'customer_category' => $variation->customer_category,
+                'amount' => $variation->amount,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function buildExtraSearchText(ProviderVariation $variation): string
+    {
+        $payload = is_array($variation->raw_payload) ? $variation->raw_payload : [];
+        $parts = [];
+
+        foreach (['name', 'variation_name', 'description', 'service_name', 'variation_code'] as $field) {
+            $value = $payload[$field] ?? null;
+
+            if (is_string($value) && trim($value) !== '') {
+                $parts[] = trim($value);
+            }
+        }
+
+        return implode(' ', $parts);
     }
 }

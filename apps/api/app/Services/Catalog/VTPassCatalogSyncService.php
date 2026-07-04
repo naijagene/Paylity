@@ -80,7 +80,7 @@ class VTPassCatalogSyncService
                                 'variation_code' => $variationCode,
                             ],
                             [
-                                'name' => (string) ($variation['name'] ?? $variationCode),
+                                'name' => $this->resolveVariationName($variation, $variationCode),
                                 'amount' => $amount,
                                 'fixed_price' => $fixedPrice,
                                 'is_active' => true,
@@ -146,6 +146,24 @@ class VTPassCatalogSyncService
             return null;
         }
 
-        return (int) round((float) $raw);
+        $normalized = str_replace(',', '', (string) $raw);
+
+        return (int) round((float) $normalized);
+    }
+
+    /**
+     * @param  array<string, mixed>  $variation
+     */
+    private function resolveVariationName(array $variation, string $variationCode): string
+    {
+        foreach (['name', 'variation_name', 'description', 'service_name'] as $field) {
+            $value = $variation[$field] ?? null;
+
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        return $variationCode;
     }
 }
