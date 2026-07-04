@@ -1,7 +1,11 @@
-import { getProductSchema } from "@/lib/checkout/checkoutSchemas";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { formatGatewayFeeLabel } from "@/lib/checkout/pricing";
+import { maskPhone } from "@/lib/checkout/normalizePhone";
 import { PaylityLogo } from "@/components/brand/PaylityLogo";
+import {
+  buildCheckoutProductDisplayName,
+  getCheckoutRecipientLabel,
+} from "@/lib/receipt/display";
 import type { CheckoutFields, ProductType } from "@/lib/checkout/types";
 
 type ReceiptPreviewProps = {
@@ -13,6 +17,7 @@ type ReceiptPreviewProps = {
   payableAmount: number;
   transactionReference: string | null;
   pricingMode?: "estimated" | "confirmed";
+  dataPlanName?: string;
   status?: string;
 };
 
@@ -25,22 +30,36 @@ export function ReceiptPreview({
   payableAmount,
   transactionReference,
   pricingMode = "estimated",
+  dataPlanName,
   status = "Awaiting payment",
 }: ReceiptPreviewProps) {
-  const schema = getProductSchema(product);
+  const productLabel = buildCheckoutProductDisplayName(product, fields, dataPlanName);
+  const recipient = getCheckoutRecipientLabel(product, fields);
+  const recipientValue =
+    product === "electricity"
+      ? recipient.value
+      : maskPhone(recipient.value) || recipient.value || "—";
   const gatewayFeeLabel =
     pricingMode === "confirmed"
       ? formatNaira(gatewayFee)
       : formatGatewayFeeLabel(gatewayFee);
-  const timestamp = new Date().toLocaleString("en-NG", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const timestamp = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Africa/Lagos",
+  }).format(new Date()) + " WAT";
 
   const rows = [
     { label: "Transaction Reference", value: transactionReference ?? "Pending" },
-    { label: "Product", value: schema.label },
-    { label: "Customer Phone", value: fields.customerPhone || "—" },
+    { label: "Product", value: productLabel },
+    { label: recipient.label, value: recipientValue },
+    ...(fields.customerEmail
+      ? [{ label: "Email", value: fields.customerEmail }]
+      : []),
     { label: "Product Amount", value: formatNaira(productAmount) },
     { label: "Convenience Fee", value: formatNaira(convenienceFee) },
     { label: "Gateway Charge", value: gatewayFeeLabel },

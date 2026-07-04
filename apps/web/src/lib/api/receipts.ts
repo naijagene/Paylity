@@ -1,26 +1,7 @@
 import { apiRequest } from "./client";
+import type { TransactionReceipt } from "./transactions";
 
-export type ReceiptPayload = {
-  brand: string;
-  reference: string;
-  product_type: string;
-  product_label: string;
-  customer_phone: string;
-  customer_phone_masked: string;
-  product_amount: number;
-  convenience_fee: number;
-  gateway_fee: number;
-  payable_amount: number;
-  currency: string;
-  status: string;
-  payment_status: string;
-  fulfillment_status: string;
-  failure_reason?: string | null;
-  fulfillment_reference?: string | null;
-  timestamp?: string | null;
-  verification_token?: string;
-  verification_url?: string;
-};
+export type ReceiptPayload = TransactionReceipt;
 
 export async function getReceipt(reference: string): Promise<ReceiptPayload> {
   const { data } = await apiRequest<ReceiptPayload>(

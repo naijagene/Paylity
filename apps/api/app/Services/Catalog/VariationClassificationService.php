@@ -39,13 +39,13 @@ class VariationClassificationService
             ->orderBy('id')
             ->chunkById(200, function ($variations) use (&$summary, $forceOverrides) {
                 foreach ($variations as $variation) {
-                    $this->applyClassification($variation, $forceOverrides);
+                    $result = $this->applyClassification($variation, $forceOverrides);
                     $summary['total_processed']++;
 
-                    if ($variation->is_visible) {
+                    if ($result->isVisible()) {
                         $summary['visible']++;
 
-                        if ($variation->customer_category === 'unknown') {
+                        if ($result->customerCategory === 'unknown') {
                             $summary['unknown']++;
                         }
 
@@ -53,16 +53,7 @@ class VariationClassificationService
                     }
 
                     $summary['hidden']++;
-
-                    if ($variation->customer_category === 'voice') {
-                        $summary['voice_hidden']++;
-                    } elseif (in_array($variation->customer_category, ['sme', 'corporate'], true)) {
-                        $summary['sme_corporate_hidden']++;
-                    } elseif (($variation->amount ?? 0) > 50000) {
-                        $summary['enterprise_hidden']++;
-                    } else {
-                        $summary['unknown']++;
-                    }
+                    $this->incrementHiddenSummary($summary, $result);
                 }
             });
 
@@ -72,30 +63,21 @@ class VariationClassificationService
     public function applyClassification(
         ProviderVariation $variation,
         bool $forceOverrides = false,
-    ): ProviderVariation {
+    ): VariationClassificationResult {
         if ($variation->display_override && ! $forceOverrides) {
-            return $variation;
+            return VariationClassificationResult::fromModel($variation);
         }
 
-        $classified = $this->classifier->classify(
+        $result = $this->classifier->classify(
             name: (string) $variation->name,
             amount: $variation->amount,
             variationCode: (string) $variation->variation_code,
             extraSearchText: $this->buildExtraSearchText($variation),
         );
 
-        $variation->fill([
-            'display_name' => $classified['display_name'],
-            'is_visible' => $classified['is_visible'],
-            'customer_category' => $classified['customer_category'],
-            'validity_label' => $classified['validity_label'],
-            'data_size_label' => $classified['data_size_label'],
-            'sort_order' => $classified['sort_order'],
-        ]);
+        $this->persistClassificationResult($variation, $result);
 
-        $variation->save();
-
-        return $variation;
+        return $result;
     }
 
     /**
@@ -117,6 +99,46 @@ class VariationClassificationService
             ])
             ->values()
             ->all();
+    }
+
+    private function persistClassificationResult(
+        ProviderVariation $variation,
+        VariationClassificationResult $result,
+    ): void {
+        $attributes = $result->toPersistenceArray();
+
+        ProviderVariation::query()
+            ->whereKey($variation->getKey())
+            ->update($attributes);
+
+        $variation->fill($attributes);
+        $variation->syncOriginal();
+    }
+
+    /**
+     * @param  array<string, int>  $summary
+     */
+    private function incrementHiddenSummary(array &$summary, VariationClassificationResult $result): void
+    {
+        if ($result->customerCategory === 'voice') {
+            $summary['voice_hidden']++;
+
+            return;
+        }
+
+        if (in_array($result->customerCategory, ['sme', 'corporate'], true)) {
+            $summary['sme_corporate_hidden']++;
+
+            return;
+        }
+
+        if ($result->customerCategory === 'enterprise') {
+            $summary['enterprise_hidden']++;
+
+            return;
+        }
+
+        $summary['unknown']++;
     }
 
     private function buildExtraSearchText(ProviderVariation $variation): string

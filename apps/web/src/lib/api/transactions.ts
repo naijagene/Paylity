@@ -13,8 +13,13 @@ export type TransactionReceipt = {
   reference: string;
   product_type: string;
   product_label: string;
-  customer_phone: string;
+  product_display_name?: string;
+  customer_phone?: string | null;
   customer_phone_masked: string;
+  recipient_phone?: string | null;
+  recipient_phone_masked?: string;
+  phone_display?: string;
+  customer_email?: string | null;
   product_amount: number;
   convenience_fee: number;
   gateway_fee: number;
@@ -26,6 +31,7 @@ export type TransactionReceipt = {
   failure_reason?: string | null;
   fulfillment_reference?: string | null;
   timestamp?: string | null;
+  timestamp_display?: string | null;
   verification_token?: string;
   verification_url?: string;
 };

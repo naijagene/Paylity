@@ -19,6 +19,7 @@ RC1 is **ready for staging deployment** once infrastructure, secrets, and DNS ar
 | Guest checkout (Airtime, Data, Electricity) | ✅ Complete |
 | Provider product catalog + variation validation (PAY-020) | ✅ Complete |
 | Customer-facing catalog filtering (PAY-020A) | ✅ Complete |
+| Receipt & checkout display polish (PAY-020D) | ✅ Complete |
 | Paystack init + verify + webhook | ✅ Complete |
 | Transaction engine + status UX | ✅ Complete |
 | VTPass fulfillment (manual + auto diagnostics) | ✅ Complete |
@@ -165,3 +166,18 @@ See [Product Catalog](../integrations/PRODUCT-CATALOG.md) for sync and troublesh
 | Frontend (`NEXT_PUBLIC_*`) | 1.0.0-rc1 | 2026.07.03-rc1 |
 
 Updated in `.env.example` / `.env.local.example` only — local secrets unchanged.
+
+---
+
+## PAY-020D — Receipt & checkout polish
+
+Customer receipts and checkout review now show catalog-enriched product names, masked recipient phone/meter, email when provided, and WAT timestamps on screen and in downloaded HTML receipts.
+
+| Check | Expected |
+|-------|----------|
+| Airtime receipt | `MTN Airtime` (or network) + masked phone e.g. `0801 XXX 5678` |
+| Data receipt | `MTN 1.5GB - 30 Days` style plan name |
+| Electricity receipt | `IKEDC Prepaid Electricity` + masked meter |
+| Timestamp | `05 Jul 2026, 12:07 AM WAT` on receipt card and download |
+| Missing phone | `—` |
+| Download vs on-screen | Same product name, phone, timestamp, status fields |

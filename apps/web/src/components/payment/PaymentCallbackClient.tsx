@@ -14,11 +14,14 @@ import { SupportCard } from "@/components/support/SupportCard";
 import { verifyPaystackPayment } from "@/lib/api/payments";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import {
+  getReceiptPhoneDisplay,
+  getReceiptProductLabel,
+} from "@/lib/receipt/display";
+import {
   getBadgeState,
   getHeroState,
   getTimelineState,
   isTerminalTransactionStatus,
-  PRODUCT_LABELS,
   toTransactionLike,
 } from "@/lib/transaction/display";
 import {
@@ -36,11 +39,15 @@ type VerificationState =
       status: string;
       paymentStatus: string;
       productType: string;
+      productLabel: string;
       productAmount: number;
       convenienceFee: number;
       gatewayFee: number;
       payableAmount: number;
-      customerPhone?: string;
+      customerPhone: string;
+      customerEmail?: string | null;
+      timestamp?: string | null;
+      timestampDisplay?: string | null;
       failureReason?: string;
     };
 
@@ -53,10 +60,15 @@ function mapVerificationResult(
     status: result.status,
     paymentStatus: result.payment_status,
     productType: result.product_type,
+    productLabel: getReceiptProductLabel(result.receipt, result.product_type),
     productAmount: result.product_amount,
     convenienceFee: result.convenience_fee,
     gatewayFee: result.gateway_fee,
     payableAmount: result.payable_amount,
+    customerPhone: getReceiptPhoneDisplay(result.receipt),
+    customerEmail: result.receipt?.customer_email,
+    timestamp: result.receipt?.timestamp ?? result.verified_at,
+    timestampDisplay: result.receipt?.timestamp_display,
     failureReason: result.failure_reason,
   };
 }
@@ -189,8 +201,6 @@ export function PaymentCallbackClient() {
     );
   }
 
-  const productLabel =
-    PRODUCT_LABELS[state.productType] ?? state.productType;
   const transaction = toTransactionLike(state.status);
   const hero = getHeroState(transaction);
   const badges = getBadgeState(transaction);
@@ -201,14 +211,17 @@ export function PaymentCallbackClient() {
       <PageContainer className="py-8 sm:py-12">
         <PaymentSuccessCard
           reference={state.reference}
-          productLabel={productLabel}
-          customerPhone={state.customerPhone ?? "—"}
+          productLabel={state.productLabel}
+          customerPhone={state.customerPhone}
+          customerEmail={state.customerEmail}
           productAmount={state.productAmount}
           convenienceFee={state.convenienceFee}
           gatewayFee={state.gatewayFee}
           payableAmount={state.payableAmount}
           transactionStatus={state.status}
           failureReason={state.failureReason}
+          timestamp={state.timestamp}
+          timestampDisplay={state.timestampDisplay}
         />
       </PageContainer>
     );

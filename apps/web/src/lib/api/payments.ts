@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import type { TransactionReceipt } from "./transactions";
 
 export type VerifyPaystackPaymentResponse = {
   reference: string;
@@ -13,6 +14,7 @@ export type VerifyPaystackPaymentResponse = {
   verified_at: string | null;
   fulfillment_status: string;
   failure_reason?: string;
+  receipt?: TransactionReceipt | null;
 };
 
 export async function verifyPaystackPayment(

@@ -46,24 +46,15 @@ class VariationDisplayClassifier
         'voice' => 900,
         'sme' => 910,
         'corporate' => 920,
+        'enterprise' => 930,
     ];
 
-    /**
-     * @return array{
-     *     display_name: string|null,
-     *     is_visible: bool,
-     *     customer_category: string,
-     *     validity_label: string|null,
-     *     data_size_label: string|null,
-     *     sort_order: int|null
-     * }
-     */
     public function classify(
         string $name,
         ?int $amount,
         string $variationCode,
         string $extraSearchText = '',
-    ): array {
+    ): VariationClassificationResult {
         $providerName = trim($name);
         $searchCorpus = $this->buildSearchCorpus($providerName, $variationCode, $extraSearchText);
         $labelForExtraction = $providerName !== '' ? $providerName : $variationCode;
@@ -97,7 +88,7 @@ class VariationDisplayClassifier
         if ($this->matchesEnterpriseAmount($amount, $providerName, $variationCode, $extraSearchText)) {
             return $this->hiddenResult(
                 $labelForExtraction,
-                'unknown',
+                'enterprise',
                 $this->extractDataSizeLabel($labelForExtraction),
                 $this->extractValidityLabel($labelForExtraction),
                 $amount,
@@ -109,41 +100,31 @@ class VariationDisplayClassifier
         $customerCategory = $this->detectCustomerCategory($searchCorpus);
         $displayName = $this->buildDisplayName($dataSizeLabel, $validityLabel, $labelForExtraction);
 
-        return [
+        return VariationClassificationResult::fromClassifierArray([
             'display_name' => $displayName,
             'is_visible' => true,
             'customer_category' => $customerCategory,
             'validity_label' => $validityLabel,
             'data_size_label' => $dataSizeLabel,
             'sort_order' => $this->computeSortOrder($customerCategory, $amount),
-        ];
+        ]);
     }
 
-    /**
-     * @return array{
-     *     display_name: string|null,
-     *     is_visible: bool,
-     *     customer_category: string,
-     *     validity_label: string|null,
-     *     data_size_label: string|null,
-     *     sort_order: int|null
-     * }
-     */
     private function hiddenResult(
         string $providerName,
         string $category,
         ?string $dataSizeLabel,
         ?string $validityLabel,
         ?int $amount,
-    ): array {
-        return [
+    ): VariationClassificationResult {
+        return VariationClassificationResult::fromClassifierArray([
             'display_name' => $this->buildDisplayName($dataSizeLabel, $validityLabel, $providerName),
             'is_visible' => false,
             'customer_category' => $category,
             'validity_label' => $validityLabel,
             'data_size_label' => $dataSizeLabel,
             'sort_order' => $this->computeSortOrder($category, $amount),
-        ];
+        ]);
     }
 
     private function buildSearchCorpus(

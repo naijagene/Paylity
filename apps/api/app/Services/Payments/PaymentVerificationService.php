@@ -127,6 +127,12 @@ class PaymentVerificationService
             $response['failure_reason'] = $transaction->failure_reason;
         }
 
+        $receipt = $this->receiptService->buildReceiptPayload($transaction);
+
+        if ($receipt !== null) {
+            $response['receipt'] = $receipt;
+        }
+
         if (! $configured) {
             $response['payment_status'] = 'Payment confirmation coming next.';
         }

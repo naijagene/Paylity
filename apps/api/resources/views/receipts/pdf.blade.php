@@ -28,15 +28,20 @@
         <h3>Transaction</h3>
         <table>
             <tr><td class="label">Reference</td><td class="value">{{ $receipt['reference'] }}</td></tr>
-            <tr><td class="label">Product</td><td class="value">{{ $receipt['product_label'] }}</td></tr>
-            <tr><td class="label">Timestamp</td><td class="value">{{ $receipt['timestamp'] }}</td></tr>
+            <tr><td class="label">Product</td><td class="value">{{ $receipt['product_display_name'] ?? $receipt['product_label'] }}</td></tr>
+            @if(!empty($receipt['timestamp_display']))
+            <tr><td class="label">Timestamp</td><td class="value">{{ $receipt['timestamp_display'] }}</td></tr>
+            @endif
         </table>
     </div>
 
     <div class="section">
         <h3>Customer</h3>
         <table>
-            <tr><td class="label">Phone</td><td class="value">{{ $receipt['customer_phone'] }}</td></tr>
+            <tr><td class="label">Phone</td><td class="value">{{ $receipt['phone_display'] ?? $receipt['customer_phone_masked'] ?? '—' }}</td></tr>
+            @if(!empty($receipt['customer_email']))
+            <tr><td class="label">Email</td><td class="value">{{ $receipt['customer_email'] }}</td></tr>
+            @endif
         </table>
     </div>
 

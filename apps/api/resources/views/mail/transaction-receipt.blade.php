@@ -2,8 +2,14 @@ PAYLITY NG — Transaction Receipt
 ================================
 
 Reference: {{ $transaction->reference }}
-Product: {{ $receipt['product_label'] ?? $transaction->product_type }}
-Phone: {{ $receipt['customer_phone_masked'] ?? $transaction->customer_phone }}
+Product: {{ $receipt['product_display_name'] ?? $receipt['product_label'] ?? $transaction->product_type }}
+Phone: {{ $receipt['phone_display'] ?? $receipt['customer_phone_masked'] ?? '—' }}
+@if(!empty($receipt['customer_email']))
+Email: {{ $receipt['customer_email'] }}
+@endif
+@if(!empty($receipt['timestamp_display']))
+Timestamp: {{ $receipt['timestamp_display'] }}
+@endif
 
 Product Amount: ₦{{ number_format($receipt['product_amount'] ?? $transaction->product_amount, 2) }}
 Convenience Fee: ₦{{ number_format($receipt['convenience_fee'] ?? $transaction->convenience_fee, 2) }}

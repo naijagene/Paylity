@@ -4,10 +4,19 @@ namespace App\Services;
 
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
+use App\Services\Fulfillment\FulfillmentPayloadExtractor;
+use Carbon\Carbon;
 use Illuminate\Support\Str;
 
 class ReceiptService
 {
+    private const DISPLAY_TIMEZONE = 'Africa/Lagos';
+
+    public function __construct(
+        private readonly FulfillmentPayloadExtractor $fulfillmentPayloadExtractor,
+    ) {
+    }
+
     public function ensureVerificationToken(Transaction $transaction): Transaction
     {
         if ($transaction->receipt_verification_token) {
@@ -32,13 +41,23 @@ class ReceiptService
 
         $transaction = $this->ensureVerificationToken($transaction);
 
+        $resolvedPhone = $this->resolvePhone($transaction);
+        $maskedPhone = $this->maskPhone($resolvedPhone);
+        $productDisplayName = $this->buildProductDisplayName($transaction);
+        $timestamp = $this->resolveTimestamp($transaction);
+
         return [
             'brand' => 'PAYLITY NG',
             'reference' => $transaction->reference,
             'product_type' => $transaction->product_type,
-            'product_label' => $this->productLabel($transaction->product_type),
-            'customer_phone' => $transaction->customer_phone,
-            'customer_phone_masked' => $this->maskPhone($transaction->customer_phone),
+            'product_label' => $productDisplayName,
+            'product_display_name' => $productDisplayName,
+            'customer_phone' => $resolvedPhone,
+            'customer_phone_masked' => $maskedPhone,
+            'recipient_phone' => $resolvedPhone,
+            'recipient_phone_masked' => $maskedPhone,
+            'phone_display' => $maskedPhone,
+            'customer_email' => $transaction->customer_email,
             'product_amount' => $transaction->product_amount,
             'convenience_fee' => $transaction->convenience_fee,
             'gateway_fee' => $transaction->gateway_fee,
@@ -49,7 +68,8 @@ class ReceiptService
             'fulfillment_status' => $this->fulfillmentStatusLabel($transaction),
             'failure_reason' => $transaction->failure_reason,
             'fulfillment_reference' => $transaction->fulfillment_reference,
-            'timestamp' => ($transaction->fulfilled_at ?? $transaction->updated_at)?->toIso8601String(),
+            'timestamp' => $timestamp?->toIso8601String(),
+            'timestamp_display' => $this->formatTimestampDisplay($timestamp),
             'verification_token' => $transaction->receipt_verification_token,
             'verification_url' => $this->verificationUrl($transaction),
         ];
@@ -60,19 +80,26 @@ class ReceiptService
      */
     public function buildPublicVerificationPayload(Transaction $transaction): array
     {
+        $resolvedPhone = $this->resolvePhone($transaction);
+        $productDisplayName = $this->buildProductDisplayName($transaction);
+        $timestamp = $this->resolveTimestamp($transaction);
+
         return [
             'authentic' => true,
             'reference' => $transaction->reference,
             'product_type' => $transaction->product_type,
-            'product_label' => $this->productLabel($transaction->product_type),
-            'customer_phone_masked' => $this->maskPhone($transaction->customer_phone),
+            'product_label' => $productDisplayName,
+            'product_display_name' => $productDisplayName,
+            'customer_phone_masked' => $this->maskPhone($resolvedPhone),
+            'phone_display' => $this->maskPhone($resolvedPhone),
             'payable_amount' => $transaction->payable_amount,
             'currency' => $transaction->currency,
             'status' => $transaction->status,
             'payment_status' => $this->paymentStatusLabel($transaction),
             'fulfillment_status' => $this->fulfillmentStatusLabel($transaction),
             'fulfillment_reference' => $transaction->fulfillment_reference,
-            'timestamp' => ($transaction->fulfilled_at ?? $transaction->updated_at)?->toIso8601String(),
+            'timestamp' => $timestamp?->toIso8601String(),
+            'timestamp_display' => $this->formatTimestampDisplay($timestamp),
             'verified_at' => now()->toIso8601String(),
         ];
     }
@@ -94,6 +121,173 @@ class ReceiptService
             TransactionStatus::FULFILLED,
             TransactionStatus::FAILED,
         ], true);
+    }
+
+    public function resolvePhone(Transaction $transaction): ?string
+    {
+        /** @var array<string, mixed> $request */
+        $request = (array) ($transaction->request_payload ?? []);
+        $fulfillmentDetails = $this->fulfillmentPayloadExtractor->extractPublicDetails($transaction) ?? [];
+
+        $candidates = [
+            data_get($transaction, 'recipient_phone'),
+            $transaction->customer_phone,
+            $request['recipient_phone'] ?? null,
+            $request['phone'] ?? null,
+            $request['billersCode'] ?? null,
+            $request['billers_code'] ?? null,
+            data_get($transaction->response_payload, 'customer.phone'),
+            data_get($transaction->response_payload, 'verify.data.customer.phone'),
+            $fulfillmentDetails['phone'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return trim($candidate);
+            }
+
+            if (is_numeric($candidate) && (string) $candidate !== '') {
+                return (string) $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    public function buildProductDisplayName(Transaction $transaction): string
+    {
+        /** @var array<string, mixed> $payload */
+        $payload = (array) ($transaction->request_payload ?? []);
+
+        return match ($transaction->product_type) {
+            'airtime' => $this->airtimeDisplayName($payload),
+            'data' => $this->dataDisplayName($payload),
+            'electricity' => $this->electricityDisplayName($payload),
+            default => $this->productLabel($transaction->product_type),
+        };
+    }
+
+    public function maskPhone(?string $phone): string
+    {
+        if ($phone === null || trim($phone) === '') {
+            return '—';
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if ($digits === '') {
+            return '—';
+        }
+
+        if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
+            return substr($digits, 0, 4).' XXX '.substr($digits, 7);
+        }
+
+        if (strlen($digits) >= 7) {
+            return substr($digits, 0, 4).' XXX '.substr($digits, -4);
+        }
+
+        return '—';
+    }
+
+    public function resolveTimestamp(Transaction $transaction): ?Carbon
+    {
+        $paidAt = data_get($transaction->response_payload, 'verify.data.paid_at')
+            ?? data_get($transaction->response_payload, 'verify.paid_at');
+
+        if (is_string($paidAt) && $paidAt !== '') {
+            return Carbon::parse($paidAt);
+        }
+
+        if ($transaction->fulfilled_at !== null) {
+            return $transaction->fulfilled_at;
+        }
+
+        return $transaction->created_at;
+    }
+
+    public function formatTimestampDisplay(?Carbon $timestamp): ?string
+    {
+        if ($timestamp === null) {
+            return null;
+        }
+
+        $timezone = (string) config('app.display_timezone', self::DISPLAY_TIMEZONE);
+
+        return $timestamp
+            ->copy()
+            ->timezone($timezone)
+            ->format('d M Y, h:i A').' WAT';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function airtimeDisplayName(array $payload): string
+    {
+        $network = (string) ($payload['network'] ?? '');
+
+        if ($network === '') {
+            return $this->productLabel('airtime');
+        }
+
+        return $this->formatNetworkLabel($network).' Airtime';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function dataDisplayName(array $payload): string
+    {
+        $network = (string) ($payload['network'] ?? '');
+        $planName = (string) (
+            $payload['display_name']
+            ?? $payload['plan_name']
+            ?? $payload['provider_variation_name']
+            ?? ''
+        );
+
+        if ($network !== '' && $planName !== '') {
+            return $this->formatNetworkLabel($network).' '.$planName;
+        }
+
+        if ($planName !== '') {
+            return $planName;
+        }
+
+        return $this->productLabel('data');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function electricityDisplayName(array $payload): string
+    {
+        $disco = (string) ($payload['disco'] ?? '');
+        $meterType = (string) ($payload['meter_type'] ?? $payload['meterType'] ?? '');
+
+        if ($disco === '') {
+            return $this->productLabel('electricity');
+        }
+
+        $label = strtoupper($disco);
+
+        if ($meterType !== '') {
+            $label .= ' '.ucfirst(strtolower($meterType));
+        }
+
+        return $label.' Electricity';
+    }
+
+    private function formatNetworkLabel(string $network): string
+    {
+        return match (strtolower(trim($network))) {
+            'mtn' => 'MTN',
+            'airtel' => 'Airtel',
+            'glo' => 'Glo',
+            '9mobile', 'etisalat' => '9Mobile',
+            default => strtoupper($network),
+        };
     }
 
     private function productLabel(string $productType): string
@@ -124,16 +318,5 @@ class ReceiptService
             TransactionStatus::PAYMENT_SUCCESS => 'Awaiting Delivery',
             default => 'Not Started',
         };
-    }
-
-    private function maskPhone(string $phone): string
-    {
-        $digits = preg_replace('/\D+/', '', $phone) ?? $phone;
-
-        if (strlen($digits) < 7) {
-            return '***';
-        }
-
-        return substr($digits, 0, 4).'****'.substr($digits, -3);
     }
 }

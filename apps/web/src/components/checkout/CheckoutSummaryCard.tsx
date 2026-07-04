@@ -1,7 +1,10 @@
-import { getProductSchema } from "@/lib/checkout/checkoutSchemas";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { formatGatewayFeeLabel } from "@/lib/checkout/pricing";
 import { maskPhone } from "@/lib/checkout/normalizePhone";
+import {
+  buildCheckoutProductDisplayName,
+  getCheckoutRecipientLabel,
+} from "@/lib/receipt/display";
 import type { CheckoutFields, ProductType } from "@/lib/checkout/types";
 import { GuestLimitBanner } from "./GuestLimitBanner";
 import { ReceiptPreview } from "./ReceiptPreview";
@@ -33,31 +36,30 @@ function buildSummaryItems(
   fields: CheckoutFields,
   dataPlanName?: string,
 ): SummaryItem[] {
-  const schema = getProductSchema(product);
-  const items: SummaryItem[] = [{ label: "Product", value: schema.label }];
+  const productName = buildCheckoutProductDisplayName(
+    product,
+    fields,
+    dataPlanName,
+  );
+  const items: SummaryItem[] = [{ label: "Product", value: productName }];
+  const recipient = getCheckoutRecipientLabel(product, fields);
 
   if (product === "airtime" || product === "data") {
-    items.push({ label: "Network", value: fields.network || "—" });
-    const phone = fields.useMyNumber ? fields.customerPhone : fields.recipientPhone;
-    items.push({ label: "Recipient", value: maskPhone(phone) || "—" });
-  }
-
-  if (product === "data") {
-    if (dataPlanName) {
-      items.push({ label: "Plan", value: dataPlanName });
-    } else if (fields.dataPlan) {
-      items.push({ label: "Plan", value: fields.dataPlan });
-    }
+    items.push({
+      label: recipient.label,
+      value: maskPhone(recipient.value) || recipient.value || "—",
+    });
   }
 
   if (product === "electricity") {
-    items.push({ label: "Provider", value: fields.disco || "—" });
     items.push({
-      label: "Meter type",
-      value: fields.meterType.charAt(0).toUpperCase() + fields.meterType.slice(1),
+      label: recipient.label,
+      value: recipient.value,
     });
-    items.push({ label: "Meter number", value: fields.meterNumber || "—" });
-    items.push({ label: "Customer name", value: fields.customerName || "—" });
+
+    if (fields.customerName) {
+      items.push({ label: "Customer name", value: fields.customerName });
+    }
   }
 
   return items;
@@ -172,6 +174,7 @@ export function CheckoutSummaryCard({
         payableAmount={payableAmount}
         transactionReference={transactionReference}
         pricingMode={pricingMode}
+        dataPlanName={dataPlanName}
         status={transactionReady ? "Transaction ready" : "Awaiting payment"}
       />
     </div>

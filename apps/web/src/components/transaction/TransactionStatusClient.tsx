@@ -23,9 +23,12 @@ import {
   getPaymentBadgeVariant,
   getTimelinePhase,
   isAwaitingDelivery,
-  PRODUCT_LABELS,
   shouldPollTransactionStatus,
 } from "@/lib/transaction/display";
+import {
+  getReceiptPhoneDisplay,
+  getReceiptProductLabel,
+} from "@/lib/receipt/display";
 import {
   DEFAULT_MAX_POLL_ATTEMPTS,
   hasPollingExhausted,
@@ -271,8 +274,8 @@ export function TransactionStatusClient() {
   }
 
   const { transaction } = state;
-  const productLabel =
-    PRODUCT_LABELS[transaction.product_type] ?? transaction.product_type;
+  const productLabel = getReceiptProductLabel(transaction.receipt, transaction.product_type);
+  const phoneDisplay = getReceiptPhoneDisplay(transaction.receipt);
   const pollingExhausted =
     pollExhausted &&
     hasPollingExhausted(
@@ -389,14 +392,15 @@ export function TransactionStatusClient() {
             {transaction.reference}
           </p>
           <p className="mt-2 text-sm text-muted">
-            {productLabel} · {transaction.customer_phone}
+            {productLabel} · {phoneDisplay}
           </p>
         </section>
 
         <TransactionReceiptCard
           reference={transaction.reference}
           productLabel={productLabel}
-          customerPhone={transaction.customer_phone}
+          customerPhone={phoneDisplay}
+          customerEmail={transaction.receipt?.customer_email ?? transaction.customer_email}
           productAmount={transaction.product_amount}
           convenienceFee={transaction.convenience_fee}
           gatewayFee={transaction.gateway_fee}
@@ -404,6 +408,7 @@ export function TransactionStatusClient() {
           transactionStatus={transaction.status}
           failureReason={transaction.failure_reason}
           timestamp={transaction.receipt?.timestamp ?? transaction.updated_at}
+          timestampDisplay={transaction.receipt?.timestamp_display}
           verificationUrl={transaction.receipt?.verification_url}
           printable
           showActions

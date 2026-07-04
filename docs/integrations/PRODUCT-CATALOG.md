@@ -249,6 +249,22 @@ If sync fails, check VTPass credentials and `FEATURE_VTPASS=true`, then inspect 
 
 ---
 
+## Receipt product display names (PAY-020D)
+
+`ReceiptService` builds customer-facing labels from enriched checkout `request_payload` and catalog fields:
+
+| Product | Display format | Example |
+|---------|----------------|---------|
+| Airtime | `{Network} Airtime` | `MTN Airtime` |
+| Data | `{Network} {Plan Display Name}` | `MTN 1.5GB - 30 Days` |
+| Electricity | `{Disco} {Meter Type} Electricity` | `IKEDC Prepaid Electricity` |
+
+Payload keys used (when present): `network`, `display_name`, `plan_name`, `variation_code`, `service_id`, `disco`, `meter_type`.
+
+Phone on receipts resolves from `customer_phone`, `request_payload.recipient_phone`, `billersCode`, and related fields, then masks as `0801 XXX 5678` for customer views. Ops detail continues to show full numbers.
+
+---
+
 ## Related docs
 
 - [STAGING-SMOKE-TESTS.md](../deployment/STAGING-SMOKE-TESTS.md)

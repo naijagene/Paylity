@@ -16,24 +16,30 @@ type PaymentSuccessCardProps = {
   reference: string;
   productLabel: string;
   customerPhone: string;
+  customerEmail?: string | null;
   productAmount: number;
   convenienceFee: number;
   gatewayFee: number;
   payableAmount: number;
   transactionStatus?: string;
   failureReason?: string;
+  timestamp?: string | null;
+  timestampDisplay?: string | null;
 };
 
 export function PaymentSuccessCard({
   reference,
   productLabel,
   customerPhone,
+  customerEmail,
   productAmount,
   convenienceFee,
   gatewayFee,
   payableAmount,
   transactionStatus = "payment_success",
   failureReason,
+  timestamp,
+  timestampDisplay,
 }: PaymentSuccessCardProps) {
   const handlePrint = () => {
     window.print();
@@ -101,12 +107,15 @@ export function PaymentSuccessCard({
         reference={reference}
         productLabel={productLabel}
         customerPhone={customerPhone}
+        customerEmail={customerEmail}
         productAmount={productAmount}
         convenienceFee={convenienceFee}
         gatewayFee={gatewayFee}
         payableAmount={payableAmount}
         transactionStatus={transactionStatus}
         failureReason={failureReason}
+        timestamp={timestamp}
+        timestampDisplay={timestampDisplay}
         printable
       />
 

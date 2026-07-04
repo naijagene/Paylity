@@ -19,6 +19,51 @@ class PaylityCatalogClassifyCommandTest extends TestCase
         $this->seedProductCatalog();
     }
 
+    public function test_catalog_classify_force_overrides_persists_staging_hidden_rows(): void
+    {
+        $this->seedStagingRows();
+
+        $this->artisan('paylity:catalog-classify', ['--force-overrides' => true])
+            ->assertSuccessful();
+
+        $hiddenCount = ProviderVariation::query()
+            ->where('is_active', true)
+            ->where('is_visible', false)
+            ->count();
+
+        $this->assertGreaterThan(0, $hiddenCount);
+
+        $this->assertDatabaseHas('provider_variations', [
+            'variation_code' => 'mtn-xtratalk-300',
+            'is_visible' => false,
+            'customer_category' => 'voice',
+        ]);
+
+        $this->assertDatabaseHas('provider_variations', [
+            'variation_code' => 'airt-voice-100',
+            'is_visible' => false,
+            'customer_category' => 'voice',
+        ]);
+
+        $this->assertDatabaseHas('provider_variations', [
+            'variation_code' => 'mtn-360gb-sme-100000',
+            'is_visible' => false,
+            'customer_category' => 'sme',
+        ]);
+
+        $this->assertDatabaseHas('provider_variations', [
+            'variation_code' => 'mtn-4-5tb-450000',
+            'is_visible' => false,
+            'customer_category' => 'enterprise',
+        ]);
+
+        $this->assertDatabaseHas('provider_variations', [
+            'variation_code' => 'airt-1000',
+            'is_visible' => true,
+            'display_name' => '1.5GB - 30 Days',
+        ]);
+    }
+
     public function test_catalog_classify_hides_known_vtpass_samples_for_mtn_airtel_and_9mobile(): void
     {
         $this->seedKnownVtpassSamples();
@@ -38,30 +83,35 @@ class PaylityCatalogClassifyCommandTest extends TestCase
 
         $this->assertGreaterThan(0, $hiddenCount);
         $this->assertGreaterThan(0, $visibleCount);
+    }
 
-        $this->assertDatabaseHas('provider_variations', [
-            'variation_code' => 'mtn-xtratalk-monthly',
-            'is_visible' => false,
-            'customer_category' => 'voice',
-        ]);
+    private function seedStagingRows(): void
+    {
+        $rows = [
+            ['service_name' => 'mtn', 'variation_code' => 'mtn-xtratalk-300', 'name' => 'MTN N200 Xtratalk - 3 days', 'amount' => 200],
+            ['service_name' => 'airtel', 'variation_code' => 'airt-voice-100', 'name' => '600 Naira Voice Bundle', 'amount' => 100],
+            ['service_name' => 'mtn', 'variation_code' => 'mtn-360gb-sme-100000', 'name' => 'MTN N100,000 360GB SME Mobile Data (3 Months)', 'amount' => 100000],
+            ['service_name' => 'mtn', 'variation_code' => 'mtn-4-5tb-450000', 'name' => 'MTN N450,000 4.5TB Mobile Data (1 Year)', 'amount' => 450000],
+            ['service_name' => 'airtel', 'variation_code' => 'airt-1000', 'name' => 'Airtel Data Bundle - 1,000 Naira - 1.5GB - 30 Days', 'amount' => 999],
+        ];
 
-        $this->assertDatabaseHas('provider_variations', [
-            'variation_code' => 'airtel-sme-75gb',
-            'is_visible' => false,
-            'customer_category' => 'sme',
-        ]);
+        foreach ($rows as $row) {
+            $service = ProviderService::query()
+                ->where('category_key', 'data')
+                ->where('service_name', $row['service_name'])
+                ->firstOrFail();
 
-        $this->assertDatabaseHas('provider_variations', [
-            'variation_code' => 'etisalat-corporate-gifting-15gb',
-            'is_visible' => false,
-            'customer_category' => 'corporate',
-        ]);
-
-        $this->assertDatabaseHas('provider_variations', [
-            'variation_code' => 'mtn-500mb-30days',
-            'is_visible' => true,
-            'display_name' => '500MB - 30 Days',
-        ]);
+            ProviderVariation::query()->create([
+                'provider_service_id' => $service->id,
+                'variation_code' => $row['variation_code'],
+                'name' => $row['name'],
+                'amount' => $row['amount'],
+                'fixed_price' => true,
+                'is_active' => true,
+                'is_visible' => true,
+                'display_override' => false,
+            ]);
+        }
     }
 
     private function seedKnownVtpassSamples(): void

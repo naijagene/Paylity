@@ -9,6 +9,7 @@ import {
 } from "@/lib/transaction/display";
 import { ReceiptActions } from "@/components/receipt/ReceiptActions";
 import { ReceiptQrCode } from "@/components/receipt/ReceiptQrCode";
+import { formatReceiptTimestamp } from "@/lib/receipt/display";
 
 type ReceiptSectionProps = {
   title: string;
@@ -55,6 +56,7 @@ export type TransactionReceiptCardProps = {
   reference: string;
   productLabel: string;
   customerPhone: string;
+  customerEmail?: string | null;
   productAmount: number;
   convenienceFee: number;
   gatewayFee: number;
@@ -62,6 +64,7 @@ export type TransactionReceiptCardProps = {
   transactionStatus: string;
   failureReason?: string | null;
   timestamp?: string | null;
+  timestampDisplay?: string | null;
   verificationUrl?: string | null;
   printable?: boolean;
   showActions?: boolean;
@@ -71,6 +74,7 @@ export function TransactionReceiptCard({
   reference,
   productLabel,
   customerPhone,
+  customerEmail,
   productAmount,
   convenienceFee,
   gatewayFee,
@@ -78,6 +82,7 @@ export function TransactionReceiptCard({
   transactionStatus,
   failureReason,
   timestamp,
+  timestampDisplay,
   verificationUrl,
   printable = false,
   showActions = false,
@@ -85,6 +90,7 @@ export function TransactionReceiptCard({
   const transaction = toTransactionLike(transactionStatus);
   const badges = getBadgeState(transaction);
   const receiptStatuses = getReceiptStatuses(transaction);
+  const formattedTimestamp = formatReceiptTimestamp(timestamp, timestampDisplay);
 
   return (
     <article
@@ -116,18 +122,18 @@ export function TransactionReceiptCard({
         <dl>
           <ReceiptRow label="Reference" value={reference} />
           <ReceiptRow label="Product" value={productLabel} />
-          {timestamp ? (
-            <ReceiptRow
-              label="Timestamp"
-              value={new Date(timestamp).toLocaleString("en-NG")}
-            />
+          {formattedTimestamp ? (
+            <ReceiptRow label="Timestamp" value={formattedTimestamp} />
           ) : null}
         </dl>
       </ReceiptSection>
 
       <ReceiptSection title="Customer">
         <dl>
-          <ReceiptRow label="Phone" value={customerPhone} />
+          <ReceiptRow label="Phone" value={customerPhone || "—"} />
+          {customerEmail ? (
+            <ReceiptRow label="Email" value={customerEmail} />
+          ) : null}
         </dl>
       </ReceiptSection>
 
