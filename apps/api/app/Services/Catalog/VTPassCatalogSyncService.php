@@ -13,6 +13,7 @@ class VTPassCatalogSyncService
     public function __construct(
         private readonly VTPassService $vtpassService,
         private readonly ProductCatalogService $productCatalogService,
+        private readonly VariationClassificationService $classificationService,
     ) {
     }
 
@@ -73,7 +74,7 @@ class VTPassCatalogSyncService
                             ->where('variation_code', $variationCode)
                             ->first();
 
-                        ProviderVariation::query()->updateOrCreate(
+                        $providerVariation = ProviderVariation::query()->updateOrCreate(
                             [
                                 'provider_service_id' => $service->id,
                                 'variation_code' => $variationCode,
@@ -86,6 +87,8 @@ class VTPassCatalogSyncService
                                 'raw_payload' => $variation,
                             ],
                         );
+
+                        $this->classificationService->applyClassification($providerVariation);
 
                         if ($existing) {
                             $summary['variations_updated']++;

@@ -62,7 +62,7 @@ export function buildInitializeCheckoutPayload(
       recipient_phone: recipientPhone,
       variation_code: fields.dataPlan,
       service_id: plan?.serviceId,
-      plan_name: plan?.name,
+      plan_name: plan?.displayName ?? plan?.name,
     };
   }
 

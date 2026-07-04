@@ -167,6 +167,13 @@ class OpsTransactionService
             'service_id' => $payload['service_id'] ?? null,
             'variation_code' => $payload['variation_code'] ?? null,
             'plan_name' => $payload['plan_name'] ?? null,
+            'provider_variation_name' => $payload['provider_variation_name'] ?? null,
+            'display_name' => $payload['display_name'] ?? null,
+            'is_visible' => $payload['catalog_is_visible'] ?? null,
+            'display_override' => $payload['display_override'] ?? null,
+            'customer_category' => $payload['customer_category'] ?? null,
+            'data_size_label' => $payload['data_size_label'] ?? null,
+            'validity_label' => $payload['validity_label'] ?? null,
             'catalog_validated' => (bool) ($payload['catalog_validated'] ?? false),
         ];
     }

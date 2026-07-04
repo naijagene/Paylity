@@ -20,11 +20,31 @@ class CatalogController extends Controller
     {
         $validated = $request->validate([
             'category' => ['nullable', 'string', Rule::in(['airtime', 'data', 'electricity'])],
+            'include_hidden' => ['nullable', 'boolean'],
         ]);
 
+        $includeHidden = (bool) ($validated['include_hidden'] ?? false)
+            && $this->operatorKeyValid($request);
+
         return ApiResponse::success(
-            data: $this->productCatalogService->catalogResponse($validated['category'] ?? null),
+            data: $this->productCatalogService->catalogResponse(
+                category: $validated['category'] ?? null,
+                includeHidden: $includeHidden,
+            ),
             message: 'Product catalog retrieved successfully.',
         );
+    }
+
+    private function operatorKeyValid(Request $request): bool
+    {
+        $configuredKey = (string) config('services.operator.access_key');
+
+        if ($configuredKey === '') {
+            return false;
+        }
+
+        $providedKey = (string) $request->header('X-Operator-Key', '');
+
+        return $providedKey !== '' && hash_equals($configuredKey, $providedKey);
     }
 }

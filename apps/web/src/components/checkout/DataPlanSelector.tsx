@@ -12,6 +12,14 @@ type DataPlanSelectorProps = {
   error?: string;
 };
 
+function PlanBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full bg-dark/[0.06] px-2.5 py-1 text-xs font-semibold text-foreground/70">
+      {label}
+    </span>
+  );
+}
+
 export function DataPlanSelector({
   network,
   selectedPlanId,
@@ -37,12 +45,17 @@ export function DataPlanSelector({
         </p>
       ) : plans.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-dark/10 px-4 py-6 text-center text-sm text-foreground/50">
-          No data plans are available for this network right now.
+          No data plans are currently available for this network.
         </p>
       ) : (
         <div className="flex flex-col gap-3">
           {plans.map((plan) => {
             const isSelected = selectedPlanId === plan.variationCode;
+            const showProviderName =
+              plan.providerName.trim() !== "" &&
+              plan.providerName.trim().toLowerCase() !==
+                plan.displayName.trim().toLowerCase();
+
             return (
               <button
                 key={plan.variationCode}
@@ -55,13 +68,24 @@ export function DataPlanSelector({
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-foreground">{plan.name}</p>
-                    <p className="mt-1 text-sm text-foreground/60">
-                      {plan.network}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-foreground">{plan.displayName}</p>
+                    {showProviderName ? (
+                      <p className="mt-1 truncate text-xs text-foreground/45">
+                        {plan.providerName}
+                      </p>
+                    ) : null}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {plan.isPopular ? <PlanBadge label="Popular" /> : null}
+                      {plan.dataSizeLabel ? (
+                        <PlanBadge label={plan.dataSizeLabel} />
+                      ) : null}
+                      {plan.validityLabel ? (
+                        <PlanBadge label={plan.validityLabel} />
+                      ) : null}
+                    </div>
                   </div>
-                  <p className="text-base font-bold text-dark">
+                  <p className="shrink-0 text-base font-bold text-dark">
                     {formatNaira(plan.price)}
                   </p>
                 </div>

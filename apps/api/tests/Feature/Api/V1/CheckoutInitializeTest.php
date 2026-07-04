@@ -16,6 +16,11 @@ class CheckoutInitializeTest extends TestCase
     {
         parent::setUp();
         $this->seedProductCatalog();
+
+        config([
+            'services.paystack.enabled' => false,
+            'services.paystack.secret_key' => null,
+        ]);
     }
 
     public function test_checkout_initialize_works_for_max_guest_product_amount(): void

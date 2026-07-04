@@ -24,7 +24,75 @@ The catalog does **not** change Paystack logic, payment flow, or checkout UI lay
 | `provider_services` | VTPass service_id per network/disco |
 | `provider_variations` | VTPass variation_code per data service |
 
+Customer-facing display fields on `provider_variations` (PAY-020A):
+
+| Field | Purpose |
+|-------|---------|
+| `display_name` | Clean checkout label (e.g. `500MB - 30 Days`) |
+| `is_visible` | Whether plan appears in public checkout |
+| `is_popular` | Optional badge in checkout |
+| `sort_order` | Secondary sort after amount |
+| `customer_category` | daily, weekly, monthly, yearly, voice, sme, corporate, unknown |
+| `validity_label` | e.g. `30 Days` |
+| `data_size_label` | e.g. `500MB` |
+| `display_override` | When true, sync/classify preserves manual edits |
+
 Baseline services are seeded by `ProductCatalogSeeder`. Data variations are synced from VTPass.
+
+---
+
+## Raw provider catalog vs customer-facing catalog
+
+VTPass returns the **full** provider catalog (voice bundles, SME plans, long names, etc.). PAYLITY keeps every synced variation in `provider_variations` with the raw `name` and `raw_payload` unchanged for fulfillment and ops.
+
+Checkout uses a **filtered customer-facing view**:
+
+| Rule | Default visibility |
+|------|-------------------|
+| Voice / talk / Xtratalk / Xtradata / call / minutes | Hidden |
+| SME / corporate / corporate gifting | Hidden |
+| Amount > ₦50,000 | Hidden |
+| Empty name or missing variation_code | Hidden |
+| Normal data bundles (500MB, 1GB, 5GB, etc.) | Visible |
+
+`display_name` is generated as `{data_size_label} - {validity_label}` when both can be extracted, otherwise the provider name is used.
+
+---
+
+## Reclassification command
+
+After migration or when VTPass names change:
+
+```bash
+php artisan paylity:catalog-classify
+```
+
+Options:
+
+- `--force-overrides` — overwrite variations with `display_override=true`
+
+Prints: total processed, visible, hidden, voice hidden, SME/corporate hidden, enterprise hidden, unknown.
+
+Recommended deploy sequence:
+
+```bash
+php artisan migrate --force
+php artisan paylity:catalog-classify
+php artisan paylity:catalog-sync vtpass
+php artisan paylity:catalog-classify
+php artisan optimize:clear
+```
+
+---
+
+## Manual display overrides
+
+Set `display_override=true` on a variation to preserve ops/manual edits to:
+
+- `display_name`, `is_visible`, `is_popular`, `sort_order`
+- `customer_category`, `validity_label`, `data_size_label`
+
+Catalog sync and `paylity:catalog-classify` skip these rows unless `--force-overrides` is used. Raw `name`, `amount`, and `raw_payload` still update from VTPass on sync.
 
 ---
 
@@ -62,7 +130,16 @@ GET /api/v1/catalog/products
 GET /api/v1/catalog/products?category=data
 GET /api/v1/catalog/products?category=airtime
 GET /api/v1/catalog/products?category=electricity
+GET /api/v1/catalog/products?category=data&include_hidden=1
 ```
+
+Public checkout (default):
+
+- Returns only **visible** data variations
+- Sorts by network, then `amount` ascending, then `sort_order`
+- Includes `catalog_meta`: `total_variations`, `visible_variations`, `hidden_variations`
+
+`include_hidden=1` is honored only when a valid `X-Operator-Key` header is sent (same key as ops console). Public requests ignore this flag.
 
 Example (abbreviated):
 
@@ -83,13 +160,22 @@ Example (abbreviated):
         "variations": [
           {
             "variation_code": "mtn-10mb-100",
-            "name": "MTN 10MB",
+            "name": "MTN 10MB (raw provider name)",
+            "display_name": "10MB - 1 Day",
             "amount": 100,
-            "fixed_price": true
+            "fixed_price": true,
+            "validity_label": "1 Day",
+            "data_size_label": "10MB",
+            "customer_category": "daily"
           }
         ]
       }
-    ]
+    ],
+    "catalog_meta": {
+      "total_variations": 42,
+      "visible_variations": 18,
+      "hidden_variations": 24
+    }
   }
 }
 ```
@@ -149,6 +235,17 @@ Fulfillment uses enriched `request_payload`:
 | 5 | Ensure checkout used catalog API plan (not stale frontend hardcoded ID) |
 
 If sync fails, check VTPass credentials and `FEATURE_VTPASS=true`, then inspect command summary for per-service failures.
+
+---
+
+## Troubleshooting bad plan names in checkout
+
+| Symptom | Action |
+|---------|--------|
+| Voice/Xtratalk plans still visible | Run `php artisan paylity:catalog-classify`; confirm `is_visible=false` in DB |
+| Valid plan missing from checkout | Check `is_visible`, `is_active`; set `display_override=true` to preserve manual visibility |
+| Wrong customer label | Update `display_name` and set `display_override=true`, or fix classifier and re-run classify |
+| Ops shows raw name but checkout differs | Expected — ops shows `provider_variation_name` + `display_name` |
 
 ---
 

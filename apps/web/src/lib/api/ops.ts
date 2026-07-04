@@ -170,6 +170,13 @@ export type OpsTransactionDetail = {
     service_id?: string | null;
     variation_code?: string | null;
     plan_name?: string | null;
+    provider_variation_name?: string | null;
+    display_name?: string | null;
+    is_visible?: boolean | null;
+    display_override?: boolean | null;
+    customer_category?: string | null;
+    data_size_label?: string | null;
+    validity_label?: string | null;
     catalog_validated?: boolean;
   };
   fulfillment_payload?: {

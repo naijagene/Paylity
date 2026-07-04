@@ -19,6 +19,11 @@ class ProductCatalogTest extends TestCase
     {
         parent::setUp();
         $this->seedProductCatalog();
+
+        config([
+            'services.paystack.enabled' => false,
+            'services.paystack.secret_key' => null,
+        ]);
     }
 
     public function test_catalog_products_endpoint_returns_categories_and_services(): void
@@ -77,9 +82,11 @@ class ProductCatalogTest extends TestCase
             'provider_service_id' => $service->id,
             'variation_code' => 'mtn-10mb-100',
             'name' => 'MTN 10MB',
+            'display_name' => 'MTN 10MB',
             'amount' => 100,
             'fixed_price' => true,
             'is_active' => true,
+            'is_visible' => true,
         ]);
 
         $response = $this->postJson('/api/v1/checkout/initialize', [

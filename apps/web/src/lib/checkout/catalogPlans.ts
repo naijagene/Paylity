@@ -7,9 +7,54 @@ export type CatalogDataPlan = {
   serviceId: string;
   network: string;
   name: string;
+  displayName: string;
+  providerName: string;
   price: number;
   fixedPrice: boolean;
+  isPopular: boolean;
+  validityLabel?: string | null;
+  dataSizeLabel?: string | null;
+  sortOrder?: number | null;
 };
+
+function mapVariationToPlan(
+  service: NonNullable<ProductCatalog["data_services"]>[number],
+  variation: NonNullable<ProductCatalog["data_services"]>[number]["variations"][number],
+): CatalogDataPlan | null {
+  if (variation.amount === null || variation.amount <= 0) {
+    return null;
+  }
+
+  const displayName = variation.display_name || variation.name;
+
+  return {
+    variationCode: variation.variation_code,
+    serviceId: service.service_id,
+    network: service.network,
+    name: displayName,
+    displayName,
+    providerName: variation.name,
+    price: variation.amount,
+    fixedPrice: variation.fixed_price,
+    isPopular: variation.is_popular ?? false,
+    validityLabel: variation.validity_label,
+    dataSizeLabel: variation.data_size_label,
+    sortOrder: variation.sort_order,
+  };
+}
+
+function sortPlans(plans: CatalogDataPlan[]): CatalogDataPlan[] {
+  return [...plans].sort((left, right) => {
+    if (left.price !== right.price) {
+      return left.price - right.price;
+    }
+
+    const leftOrder = left.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = right.sortOrder ?? Number.MAX_SAFE_INTEGER;
+
+    return leftOrder - rightOrder;
+  });
+}
 
 export function hasCatalogDataVariations(catalog: ProductCatalog | null): boolean {
   return (catalog?.data_services ?? []).some(
@@ -35,16 +80,11 @@ export function getCatalogDataPlansForNetwork(
     return [];
   }
 
-  return service.variations
-    .filter((variation) => variation.amount !== null && variation.amount > 0)
-    .map((variation) => ({
-      variationCode: variation.variation_code,
-      serviceId: service.service_id,
-      network: service.network,
-      name: variation.name,
-      price: variation.amount as number,
-      fixedPrice: variation.fixed_price,
-    }));
+  const plans = service.variations
+    .map((variation) => mapVariationToPlan(service, variation))
+    .filter((plan): plan is CatalogDataPlan => plan !== null);
+
+  return sortPlans(plans);
 }
 
 export function findCatalogDataPlan(
@@ -62,15 +102,22 @@ export function getDevelopmentFallbackDataPlans(network: string): CatalogDataPla
     return [];
   }
 
-  return DATA_PLANS.filter((plan) => !network || plan.network === network).map(
-    (plan) => ({
-      variationCode: plan.id,
-      serviceId: `${plan.network.toLowerCase()}-data`,
-      network: plan.network,
-      name: plan.name,
-      price: plan.price,
-      fixedPrice: true,
-    }),
+  return sortPlans(
+    DATA_PLANS.filter((plan) => !network || plan.network === network).map(
+      (plan) => ({
+        variationCode: plan.id,
+        serviceId: `${plan.network.toLowerCase()}-data`,
+        network: plan.network,
+        name: plan.name,
+        displayName: plan.name,
+        providerName: plan.name,
+        price: plan.price,
+        fixedPrice: true,
+        isPopular: false,
+        validityLabel: plan.validity || null,
+        dataSizeLabel: plan.size || null,
+      }),
+    ),
   );
 }
 
@@ -170,9 +217,9 @@ export function catalogDataPlanToLegacy(plan: CatalogDataPlan): DataPlan {
   return {
     id: plan.variationCode,
     network: plan.network,
-    name: plan.name,
-    size: plan.name,
-    validity: "",
+    name: plan.displayName,
+    size: plan.dataSizeLabel || plan.displayName,
+    validity: plan.validityLabel || "",
     price: plan.price,
   };
 }

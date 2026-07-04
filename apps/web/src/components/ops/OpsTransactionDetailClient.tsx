@@ -513,6 +513,38 @@ export function OpsTransactionDetailClient() {
                 {transaction.catalog?.catalog_validated ? "Yes" : "No"}
               </p>
             </div>
+            <div className="sm:col-span-2">
+              <p className="text-foreground/60">Provider variation name</p>
+              <p className="font-medium">
+                {transaction.catalog?.provider_variation_name || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Display name</p>
+              <p className="font-medium">{transaction.catalog?.display_name || "—"}</p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Customer category</p>
+              <p className="font-medium">
+                {transaction.catalog?.customer_category || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Visible in checkout</p>
+              <p className="font-medium">
+                {transaction.catalog?.is_visible === undefined
+                  ? "—"
+                  : transaction.catalog.is_visible
+                    ? "Yes"
+                    : "No"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Display override</p>
+              <p className="font-medium">
+                {transaction.catalog?.display_override ? "Yes" : "No"}
+              </p>
+            </div>
             <div>
               <p className="text-foreground/60">Service ID</p>
               <p className="font-mono text-xs">
@@ -532,6 +564,18 @@ export function OpsTransactionDetailClient() {
             <div className="sm:col-span-2">
               <p className="text-foreground/60">Selected plan name</p>
               <p className="font-medium">{transaction.catalog?.plan_name || "—"}</p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Data size label</p>
+              <p className="font-medium">
+                {transaction.catalog?.data_size_label || "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-foreground/60">Validity label</p>
+              <p className="font-medium">
+                {transaction.catalog?.validity_label || "—"}
+              </p>
             </div>
             <div>
               <p className="text-foreground/60">Billers code</p>

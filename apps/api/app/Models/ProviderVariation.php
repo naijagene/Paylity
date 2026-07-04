@@ -11,9 +11,17 @@ class ProviderVariation extends Model
         'provider_service_id',
         'variation_code',
         'name',
+        'display_name',
         'amount',
         'fixed_price',
         'is_active',
+        'is_visible',
+        'is_popular',
+        'sort_order',
+        'customer_category',
+        'validity_label',
+        'data_size_label',
+        'display_override',
         'raw_payload',
     ];
 
@@ -23,6 +31,10 @@ class ProviderVariation extends Model
             'amount' => 'integer',
             'fixed_price' => 'boolean',
             'is_active' => 'boolean',
+            'is_visible' => 'boolean',
+            'is_popular' => 'boolean',
+            'sort_order' => 'integer',
+            'display_override' => 'boolean',
             'raw_payload' => 'array',
         ];
     }

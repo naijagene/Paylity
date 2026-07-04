@@ -18,6 +18,7 @@ RC1 is **ready for staging deployment** once infrastructure, secrets, and DNS ar
 |------|------------|
 | Guest checkout (Airtime, Data, Electricity) | ✅ Complete |
 | Provider product catalog + variation validation (PAY-020) | ✅ Complete |
+| Customer-facing catalog filtering (PAY-020A) | ✅ Complete |
 | Paystack init + verify + webhook | ✅ Complete |
 | Transaction engine + status UX | ✅ Complete |
 | VTPass fulfillment (manual + auto diagnostics) | ✅ Complete |
@@ -88,7 +89,9 @@ Paystack test-mode payment initialization and backend verification are implement
 php artisan paylity:preflight   # no FAIL
 php artisan migrate --force
 php artisan db:seed --class=ProductCatalogSeeder
+php artisan paylity:catalog-classify
 php artisan paylity:catalog-sync vtpass
+php artisan paylity:catalog-classify
 php artisan optimize:clear
 # Run docs/deployment/STAGING-SMOKE-TESTS.md
 ```
