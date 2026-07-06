@@ -1,0 +1,21 @@
+{
+  "name": "PAYLITY NG",
+  "short_name": "PAYLITY",
+  "description": "Buy airtime, data, and electricity securely in seconds.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -36,6 +36,7 @@ import {
 import {
   updateTransactionSessionStatus,
 } from "@/lib/transaction/session";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { BackHomeLink } from "@/components/transaction/BackHomeLink";
 
 const REFERENCE_PATTERN = /^PYL-\d{8}-[A-Z0-9]{6}$/;
@@ -382,18 +383,27 @@ export function TransactionStatusClient() {
         ) : null}
 
         <section
-          className="rounded-2xl border border-border bg-card p-5 shadow-sm"
-          aria-label="Reference details"
+          className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-7"
+          aria-label="Transaction reference details"
         >
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Reference
-          </h2>
-          <p className="mt-2 font-mono text-lg font-bold text-dark">
-            {transaction.reference}
-          </p>
-          <p className="mt-2 text-sm text-muted">
-            {productLabel} · {phoneDisplay}
-          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                Transaction Reference
+              </h2>
+              <p className="mt-3 font-mono text-lg font-bold text-dark sm:text-xl">
+                {transaction.reference}
+              </p>
+              <p className="mt-3 text-sm text-muted">
+                {productLabel} · {phoneDisplay}
+              </p>
+            </div>
+            <CopyButton
+              value={transaction.reference}
+              label="Copy"
+              className="w-full sm:w-auto"
+            />
+          </div>
         </section>
 
         <TransactionReceiptCard

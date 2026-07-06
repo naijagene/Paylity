@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/verification";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import { formatNaira } from "@/lib/checkout/formatNaira";
+import { formatReceiptTimestamp } from "@/lib/receipt/display";
 import {
   getFulfillmentBadgeLabel,
   getFulfillmentBadgeVariant,
@@ -24,6 +25,19 @@ type PageState =
   | { kind: "offline" }
   | { kind: "error"; message: string }
   | { kind: "verified"; result: ReceiptVerificationResult };
+
+function VerificationShield() {
+  return (
+    <div
+      className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success text-white shadow-lg shadow-success/20"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 24 24" className="h-10 w-10" fill="currentColor">
+        <path d="M12 1 3 5v6c0 5.25 3.75 10.15 9 11 5.25-.85 9-5.75 9-11V5l-9-4Zm-1 14-3-3 1.4-1.4L11 12.2l4.6-4.6L17 9l-6 6Z" />
+      </svg>
+    </div>
+  );
+}
 
 export function ReceiptVerificationClient({ token }: { token: string }) {
   const [state, setState] = useState<PageState>({ kind: "loading" });
@@ -65,7 +79,7 @@ export function ReceiptVerificationClient({ token }: { token: string }) {
 
   return (
     <PageContainer className="py-8 sm:py-12">
-      <div className="animate-fade-in mx-auto w-full max-w-xl space-y-6">
+      <div className="animate-fade-in mx-auto w-full max-w-xl space-y-7">
         <header className="border-b border-border pb-5">
           <PaylityLogo size="md" href="/" />
         </header>
@@ -78,8 +92,8 @@ export function ReceiptVerificationClient({ token }: { token: string }) {
             Verify Authenticity
           </h1>
           <p className="mt-2 text-sm text-muted">
-            This page confirms a PAYLITY receipt without exposing sensitive
-            customer details.
+            Confirm a PAYLITY receipt without exposing sensitive customer
+            details.
           </p>
         </section>
 
@@ -105,30 +119,42 @@ export function ReceiptVerificationClient({ token }: { token: string }) {
         ) : null}
 
         {state.kind === "verified" ? (
-          <section className="space-y-4 rounded-2xl border border-border-green bg-success-light/30 p-5 shadow-sm">
-            <p className="text-base font-semibold text-dark">
-              This receipt is authentic.
-            </p>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted">Reference</dt>
+          <section className="space-y-5 rounded-3xl border border-border-green bg-success-light/30 p-6 shadow-sm sm:p-7">
+            <div className="text-center">
+              <VerificationShield />
+              <p className="mt-5 text-lg font-bold text-dark">
+                Verified by PAYLITY
+              </p>
+              {state.result.verified_at ? (
+                <p className="mt-2 text-sm text-muted">
+                  Verified{" "}
+                  {formatReceiptTimestamp(
+                    state.result.verified_at,
+                    null,
+                  ) ?? new Date(state.result.verified_at).toLocaleString("en-NG")}
+                </p>
+              ) : null}
+            </div>
+            <dl className="space-y-4 text-sm">
+              <div className="flex justify-between gap-4 border-b border-dark/5 pb-4">
+                <dt className="text-muted">Transaction Reference</dt>
                 <dd className="font-mono font-semibold text-dark">
                   {state.result.reference}
                 </dd>
               </div>
-              <div className="flex justify-between gap-4">
+              <div className="flex justify-between gap-4 border-b border-dark/5 pb-4">
                 <dt className="text-muted">Product</dt>
                 <dd className="font-semibold text-dark">
                   {state.result.product_label}
                 </dd>
               </div>
-              <div className="flex justify-between gap-4">
+              <div className="flex justify-between gap-4 border-b border-dark/5 pb-4">
                 <dt className="text-muted">Phone</dt>
                 <dd className="font-semibold text-dark">
                   {state.result.customer_phone_masked}
                 </dd>
               </div>
-              <div className="flex justify-between gap-4">
+              <div className="flex justify-between gap-4 border-b border-dark/5 pb-4">
                 <dt className="text-muted">Amount</dt>
                 <dd className="font-semibold text-dark">
                   {formatNaira(state.result.payable_amount)}
@@ -136,9 +162,10 @@ export function ReceiptVerificationClient({ token }: { token: string }) {
               </div>
               {state.result.timestamp ? (
                 <div className="flex justify-between gap-4">
-                  <dt className="text-muted">Timestamp</dt>
+                  <dt className="text-muted">Transaction Time</dt>
                   <dd className="font-semibold text-dark">
-                    {new Date(state.result.timestamp).toLocaleString("en-NG")}
+                    {formatReceiptTimestamp(state.result.timestamp, null) ??
+                      new Date(state.result.timestamp).toLocaleString("en-NG")}
                   </dd>
                 </div>
               ) : null}

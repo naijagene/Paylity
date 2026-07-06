@@ -238,7 +238,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
 
   const footer =
     state.step === "form" ? (
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-dark/5 bg-white/95 px-4 py-4 backdrop-blur-sm">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-dark/5 bg-white/95 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
         <div className="mx-auto w-full max-w-lg sm:max-w-2xl lg:max-w-4xl">
           {catalogError && product === "data" ? (
             <p className="mb-3 rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
@@ -256,7 +256,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         </div>
       </div>
     ) : (
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-dark/5 bg-white/95 px-4 py-4 backdrop-blur-sm">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-dark/5 bg-white/95 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
         <div className="mx-auto w-full max-w-lg space-y-3 sm:max-w-2xl lg:max-w-4xl">
           {apiError ? (
             <p className="rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
@@ -288,12 +288,12 @@ function CheckoutEngine({ product }: { product: ProductType }) {
                 : ""}
             </Button>
           ) : (
-            <Button
-              type="button"
-              className="w-full"
-              onClick={handleInitializeTransaction}
-              disabled={paymentBlocked}
-            >
+          <Button
+            type="button"
+            className="min-h-12 w-full"
+            onClick={handleInitializeTransaction}
+            disabled={paymentBlocked}
+          >
               {isInitializing
                 ? "Initializing transaction..."
                 : `Initialize Transaction · ${formatNaira(summaryPricing.payableAmount)}`}
