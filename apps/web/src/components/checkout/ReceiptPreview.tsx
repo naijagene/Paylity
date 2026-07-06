@@ -53,40 +53,43 @@ export function ReceiptPreview({
     timeZone: "Africa/Lagos",
   }).format(new Date()) + " WAT";
 
-  const rows = [
-    { label: "Transaction Reference", value: transactionReference ?? "Pending" },
-    { label: "Product", value: productLabel },
+  const detailRows = [
     { label: recipient.label, value: recipientValue },
     ...(fields.customerEmail
       ? [{ label: "Email", value: fields.customerEmail }]
       : []),
     { label: "Product Amount", value: formatNaira(productAmount) },
     { label: "Convenience Fee", value: formatNaira(convenienceFee) },
-    { label: "Gateway Charge", value: gatewayFeeLabel },
+    { label: "Payment Processing Fee", value: gatewayFeeLabel },
     { label: "Total Paid", value: formatNaira(payableAmount) },
     { label: "Status", value: status },
     { label: "Timestamp", value: timestamp },
   ];
 
   return (
-    <div className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm sm:p-6">
+    <div className="rounded-3xl border border-dark/5 bg-white p-6 shadow-sm sm:p-7">
       <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
         Receipt preview
       </p>
-      <PaylityLogo size="sm" className="mt-2" />
+      <PaylityLogo size="sm" className="mt-3" />
 
-      <dl className="mt-4 space-y-3">
-        {rows.map((row) => (
+      <div className="mt-6 space-y-2 border-b border-dark/5 pb-5">
+        <h3 className="font-display text-xl font-extrabold text-dark sm:text-2xl">
+          {productLabel}
+        </h3>
+        <p className="font-mono text-sm font-bold text-dark sm:text-base">
+          {transactionReference ?? "Awaiting payment"}
+        </p>
+      </div>
+
+      <dl className="mt-5 space-y-4">
+        {detailRows.map((row) => (
           <div
             key={row.label}
-            className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3 last:border-b-0 last:pb-0"
+            className="flex items-start justify-between gap-4 border-b border-dark/5 pb-4 last:border-b-0 last:pb-0"
           >
             <dt className="text-sm text-foreground/60">{row.label}</dt>
-            <dd
-              className={`max-w-[60%] text-right text-sm font-semibold text-foreground ${
-                row.label === "Transaction Reference" ? "font-mono text-xs" : ""
-              }`}
-            >
+            <dd className="max-w-[62%] text-right text-sm font-semibold text-foreground">
               {row.value}
             </dd>
           </div>

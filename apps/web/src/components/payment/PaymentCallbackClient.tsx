@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
 import { ErrorStatePage } from "@/components/transaction/ErrorStatePage";
+import { PaymentProcessingCard } from "@/components/payment/PaymentProcessingCard";
 import { PaymentSuccessCard } from "@/components/transaction/PaymentSuccessCard";
 import { PaymentVerificationSkeleton } from "@/components/transaction/TransactionPageSkeleton";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
@@ -12,6 +13,7 @@ import { StatusBadge } from "@/components/transaction/StatusBadge";
 import { BackHomeLink } from "@/components/transaction/BackHomeLink";
 import { SupportCard } from "@/components/support/SupportCard";
 import { verifyPaystackPayment } from "@/lib/api/payments";
+import { getTransaction } from "@/lib/api/transactions";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import {
   getReceiptPhoneDisplay,
@@ -22,11 +24,16 @@ import {
   getHeroState,
   getTimelineState,
   isTerminalTransactionStatus,
+  shouldRedirectToTransactionStatus,
+  shouldShowFulfillmentProcessingPage,
   toTransactionLike,
 } from "@/lib/transaction/display";
+import { DEFAULT_MAX_POLL_ATTEMPTS } from "@/lib/transaction/polling";
 import {
   saveTransactionSession,
 } from "@/lib/transaction/session";
+
+const POLL_INTERVAL_MS = 5000;
 
 type VerificationState =
   | { kind: "loading" }
@@ -99,6 +106,7 @@ export function PaymentCallbackClient() {
   const [state, setState] = useState<VerificationState>(() =>
     reference ? { kind: "loading" } : { kind: "missing_reference" },
   );
+  const pollAttemptsRef = useRef(0);
 
   const checkAgain = useCallback(async () => {
     if (!reference) {
@@ -131,11 +139,12 @@ export function PaymentCallbackClient() {
 
         const mapped = mapVerificationResult(result);
         setState(mapped);
-
         saveTransactionSession(result.reference, result.status);
 
-        if (!isTerminalTransactionStatus(result.status)) {
-          router.replace(`/transaction/${encodeURIComponent(reference)}`);
+        if (isTerminalTransactionStatus(result.status)) {
+          if (shouldRedirectToTransactionStatus(result.status)) {
+            router.replace(`/transaction/${encodeURIComponent(reference)}`);
+          }
         }
       })
       .catch((error) => {
@@ -148,6 +157,67 @@ export function PaymentCallbackClient() {
       cancelled = true;
     };
   }, [reference, router]);
+
+  const processingStatus =
+    state.kind === "verified" ? state.status : null;
+
+  useEffect(() => {
+    if (!reference || !processingStatus) {
+      return;
+    }
+
+    if (!shouldShowFulfillmentProcessingPage(processingStatus)) {
+      return;
+    }
+
+    let cancelled = false;
+    pollAttemptsRef.current = 0;
+
+    const pollStatus = async () => {
+      pollAttemptsRef.current += 1;
+
+      try {
+        const transaction = await getTransaction(reference);
+
+        if (cancelled) {
+          return;
+        }
+
+        saveTransactionSession(transaction.reference, transaction.status);
+
+        if (isTerminalTransactionStatus(transaction.status)) {
+          if (shouldRedirectToTransactionStatus(transaction.status)) {
+            router.replace(`/transaction/${encodeURIComponent(reference)}`);
+          }
+          return;
+        }
+
+        setState((current) =>
+          current.kind === "verified"
+            ? { ...current, status: transaction.status }
+            : current,
+        );
+      } catch {
+        // Keep showing the processing page during transient polling errors.
+      }
+    };
+
+    void pollStatus();
+    const intervalId = window.setInterval(() => {
+      if (pollAttemptsRef.current >= DEFAULT_MAX_POLL_ATTEMPTS) {
+        window.clearInterval(intervalId);
+        router.replace(`/transaction/${encodeURIComponent(reference)}`);
+        return;
+      }
+
+      void pollStatus();
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [reference, router, processingStatus]);
 
   if (state.kind === "missing_reference") {
     return (
@@ -197,6 +267,25 @@ export function PaymentCallbackClient() {
           onPrimaryClick={() => void checkAgain()}
           primaryLabel="Retry"
         />
+      </PageContainer>
+    );
+  }
+
+  if (
+    state.kind === "verified" &&
+    shouldRedirectToTransactionStatus(state.status)
+  ) {
+    return (
+      <PageContainer>
+        <PaymentVerificationSkeleton />
+      </PageContainer>
+    );
+  }
+
+  if (shouldShowFulfillmentProcessingPage(state.status)) {
+    return (
+      <PageContainer className="py-8 sm:py-12">
+        <PaymentProcessingCard reference={state.reference} />
       </PageContainer>
     );
   }

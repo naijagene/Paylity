@@ -31,7 +31,7 @@ export function formatGatewayFeeLabel(
   isKnown: boolean = IS_GATEWAY_FEE_KNOWN,
 ): string {
   if (!isKnown) {
-    return "Calculated securely during payment";
+    return "Applied securely at checkout";
   }
 
   return formatNaira(gatewayFee);

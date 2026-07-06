@@ -3,11 +3,13 @@ import { formatGatewayFeeLabel } from "@/lib/checkout/pricing";
 import { maskPhone } from "@/lib/checkout/normalizePhone";
 import {
   buildCheckoutProductDisplayName,
+  formatNetworkLabel,
   getCheckoutRecipientLabel,
 } from "@/lib/receipt/display";
 import type { CheckoutFields, ProductType } from "@/lib/checkout/types";
 import { GuestLimitBanner } from "./GuestLimitBanner";
 import { ReceiptPreview } from "./ReceiptPreview";
+import { TrustIndicators } from "./TrustIndicators";
 
 type SummaryItem = {
   label: string;
@@ -45,6 +47,10 @@ function buildSummaryItems(
   const recipient = getCheckoutRecipientLabel(product, fields);
 
   if (product === "airtime" || product === "data") {
+    items.push({
+      label: "Network",
+      value: fields.network ? formatNetworkLabel(fields.network) : "—",
+    });
     items.push({
       label: recipient.label,
       value: maskPhone(recipient.value) || recipient.value || "—",
@@ -103,43 +109,43 @@ export function CheckoutSummaryCard({
       ) : null}
 
       <div className="rounded-3xl border border-dark/5 bg-white p-5 shadow-sm sm:p-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-foreground">Review your payment</h2>
           <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-dark">
             {pricingLabel}
           </span>
         </div>
 
-        <dl className="space-y-3">
+        <dl className="space-y-4">
           {items.map((item) => (
             <div
               key={item.label}
-              className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3"
+              className="flex items-start justify-between gap-4 border-b border-dark/5 pb-4"
             >
               <dt className="text-sm text-foreground/60">{item.label}</dt>
-              <dd className="text-right text-sm font-semibold text-foreground">
+              <dd className="max-w-[62%] text-right text-sm font-semibold text-foreground">
                 {item.value}
               </dd>
             </div>
           ))}
 
-          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3">
+          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-4">
             <dt className="text-sm text-foreground/60">Product Amount</dt>
             <dd className="text-right text-sm font-semibold text-foreground">
               {formatNaira(productAmount)}
             </dd>
           </div>
 
-          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3">
+          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-4">
             <dt className="text-sm text-foreground/60">Convenience Fee</dt>
             <dd className="text-right text-sm font-semibold text-foreground">
               {formatNaira(convenienceFee)}
             </dd>
           </div>
 
-          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-3">
-            <dt className="text-sm text-foreground/60">Gateway Charge</dt>
-            <dd className="max-w-[60%] text-right text-sm font-semibold text-foreground">
+          <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-4">
+            <dt className="text-sm text-foreground/60">Payment Processing Fee</dt>
+            <dd className="max-w-[62%] text-right text-sm font-semibold text-foreground">
               {gatewayFeeLabel}
             </dd>
           </div>
@@ -158,11 +164,7 @@ export function CheckoutSummaryCard({
           </div>
         ) : null}
 
-        <div className="mt-5 flex items-center justify-center gap-4 rounded-2xl bg-dark/[0.03] px-4 py-3 text-xs font-semibold text-foreground/70 sm:text-sm">
-          <span>🔒 Secure payment</span>
-          <span>·</span>
-          <span>⚡ Instant delivery</span>
-        </div>
+        <TrustIndicators className="mt-6" />
       </div>
 
       <ReceiptPreview

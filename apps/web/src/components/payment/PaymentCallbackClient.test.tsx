@@ -3,16 +3,23 @@ import { useSearchParams } from "next/navigation";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PaymentCallbackClient } from "./PaymentCallbackClient";
 import { verifyPaystackPayment } from "@/lib/api/payments";
+import { getTransaction } from "@/lib/api/transactions";
+
+const mockReplace = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useSearchParams: vi.fn(),
   useRouter: vi.fn(() => ({
-    replace: vi.fn(),
+    replace: mockReplace,
   })),
 }));
 
 vi.mock("@/lib/api/payments", () => ({
   verifyPaystackPayment: vi.fn(),
+}));
+
+vi.mock("@/lib/api/transactions", () => ({
+  getTransaction: vi.fn(),
 }));
 
 vi.mock("next/image", () => ({
@@ -21,6 +28,7 @@ vi.mock("next/image", () => ({
 
 const mockedUseSearchParams = vi.mocked(useSearchParams);
 const mockedVerifyPaystackPayment = vi.mocked(verifyPaystackPayment);
+const mockedGetTransaction = vi.mocked(getTransaction);
 
 const baseVerificationResult = {
   reference: "PYL-20260703-FULFIL",
@@ -49,7 +57,7 @@ describe("PaymentCallbackClient", () => {
     vi.unstubAllEnvs();
   });
 
-  it("shows completed success for fulfilled transactions without pending spinner", async () => {
+  it("redirects fulfilled transactions to the status page", async () => {
     mockedVerifyPaystackPayment.mockResolvedValue({
       ...baseVerificationResult,
       status: "fulfilled",
@@ -58,25 +66,13 @@ describe("PaymentCallbackClient", () => {
     render(<PaymentCallbackClient />);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("heading", {
-          name: "Payment Completed Successfully",
-        }),
-      ).toBeInTheDocument();
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/transaction/PYL-20260703-FULFIL",
+      );
     });
-
-    expect(screen.getByText("Your order has been delivered.")).toBeInTheDocument();
-    expect(screen.queryByText("Payment Pending")).not.toBeInTheDocument();
-    expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Order progress timeline"),
-    ).toHaveTextContent("Delivered");
-    expect(
-      screen.getByRole("link", { name: /View Transaction Status/i }),
-    ).toBeInTheDocument();
   });
 
-  it("shows delivery processing copy for payment_success without pending spinner", async () => {
+  it("shows branded processing page for payment_success", async () => {
     mockedVerifyPaystackPayment.mockResolvedValue({
       ...baseVerificationResult,
       status: "payment_success",
@@ -88,23 +84,46 @@ describe("PaymentCallbackClient", () => {
     await waitFor(() => {
       expect(
         screen.getByRole("heading", {
-          name: "Payment Completed Successfully",
+          name: "We're processing your transaction",
         }),
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Delivery is being processed.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This usually takes a few seconds. Please do not close this page.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Your transaction is secure")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Pay bills, buy airtime & data, and more — all in one place.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Payment Pending")).not.toBeInTheDocument();
-    expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
-    expect(screen.getByText("Processing Order")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: "Payment Completed Successfully",
+      }),
+    ).not.toBeInTheDocument();
   });
 
-  it("shows delivery failed copy for failed fulfillment after successful payment", async () => {
+  it("redirects once delivery status resolves during polling", async () => {
     mockedVerifyPaystackPayment.mockResolvedValue({
       ...baseVerificationResult,
-      status: "failed",
-      fulfillment_status: "failed",
-      failure_reason: "VTPass timeout",
+      status: "payment_success",
+      fulfillment_status: "pending",
+    });
+    mockedGetTransaction.mockResolvedValue({
+      reference: "PYL-20260703-FULFIL",
+      product_type: "airtime",
+      customer_phone: "08031234567",
+      product_amount: 1000,
+      convenience_fee: 100,
+      gateway_fee: 0,
+      payable_amount: 1100,
+      currency: "NGN",
+      status: "fulfilled",
     });
 
     render(<PaymentCallbackClient />);
@@ -112,41 +131,32 @@ describe("PaymentCallbackClient", () => {
     await waitFor(() => {
       expect(
         screen.getByRole("heading", {
-          name: "Payment Successful, Delivery Failed",
+          name: "We're processing your transaction",
         }),
       ).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText(
-        "Unfortunately the service provider could not complete delivery.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("VTPass timeout").length).toBeGreaterThan(0);
-    expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Status: Delivery Failed"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getAllByLabelText("Status: Payment Successful").length,
-    ).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/transaction/PYL-20260703-FULFIL",
+      );
+    });
   });
 
-  it("shows retry delivery CTA when feature flag is enabled", async () => {
-    vi.stubEnv("NEXT_PUBLIC_FEATURE_RETRY_DELIVERY", "true");
-
+  it("shows delivery failed copy for failed fulfillment after successful payment", async () => {
     mockedVerifyPaystackPayment.mockResolvedValue({
       ...baseVerificationResult,
       status: "failed",
       fulfillment_status: "failed",
+      failure_reason: "Delivery timeout",
     });
 
     render(<PaymentCallbackClient />);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("link", { name: /Retry Delivery/i }),
-      ).toBeInTheDocument();
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/transaction/PYL-20260703-FULFIL",
+      );
     });
   });
 
@@ -187,7 +197,7 @@ describe("PaymentCallbackClient", () => {
     expect(document.querySelector(".animate-spin")).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", {
-        name: "Payment Completed Successfully",
+        name: "We're processing your transaction",
       }),
     ).not.toBeInTheDocument();
   });

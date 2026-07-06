@@ -31,6 +31,7 @@ import {
   isAwaitingDelivery as isAwaitingDeliveryShared,
   isTerminalTransactionStatus as isTerminalTransactionStatusShared,
   shouldPollTransactionStatus as shouldPollTransactionStatusShared,
+  getNormalizedStatus,
   type HeroState,
   type StatusBadgeVariant,
   type TimelinePhase,
@@ -86,4 +87,13 @@ export function isAwaitingDelivery(status: string): boolean {
 
 export function isTerminalTransactionStatus(status: string): boolean {
   return isTerminalTransactionStatusShared({ status });
+}
+
+export function shouldShowFulfillmentProcessingPage(status: string): boolean {
+  return shouldPollTransactionStatus(status);
+}
+
+export function shouldRedirectToTransactionStatus(status: string): boolean {
+  const normalized = getNormalizedStatus({ status });
+  return normalized === "fulfilled" || normalized === "failed";
 }

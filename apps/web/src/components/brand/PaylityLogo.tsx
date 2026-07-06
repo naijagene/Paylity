@@ -12,7 +12,7 @@ type PaylityLogoProps = {
   /** Kept for API compatibility; official PNG is always the full lockup. */
   showText?: boolean;
   darkMode?: boolean;
-  href?: string;
+  href?: string | null;
   className?: string;
   priority?: boolean;
 };

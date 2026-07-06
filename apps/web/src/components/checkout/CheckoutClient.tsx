@@ -361,22 +361,8 @@ function CheckoutEngine({ product }: { product: ProductType }) {
 
       {isInitializing || isRedirecting ? (
         <PaymentPendingOverlay
+          product={product}
           transactionRef={state.transactionRef}
-          title={
-            isRedirecting
-              ? "Redirecting to secure payment…"
-              : "Initializing your transaction"
-          }
-          subtitle={
-            isRedirecting
-              ? "Please wait while we connect you to Paystack"
-              : "Please don't close this page"
-          }
-          footerMessage={
-            isRedirecting
-              ? undefined
-              : "Payment integration coming next"
-          }
         />
       ) : null}
     </>
