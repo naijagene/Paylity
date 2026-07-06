@@ -189,6 +189,11 @@ class ReceiptDisplayTest extends TestCase
         $this->assertStringContainsString('Delivered', $html);
         $this->assertStringContainsString('WAT', $html);
         $this->assertStringContainsString('/verify/verifytoken1234567890abcdef1234', $html);
+        $this->assertStringContainsString('receipt-card', $html);
+        $this->assertStringContainsString('charges-box', $html);
+        $this->assertStringContainsString('Payment Processing Fee', $html);
+        $this->assertStringContainsString('badge-success', $html);
+        $this->assertStringContainsString('PAYLITY', $html);
     }
 
     public function test_missing_phone_shows_dash(): void

@@ -2,78 +2,315 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PAYLITY Receipt — {{ $receipt['reference'] }}</title>
     <style>
-        body { font-family: DejaVu Sans, Arial, sans-serif; color: #0f172a; margin: 24px; }
-        .brand { font-size: 22px; font-weight: 800; color: #0b2d5c; }
-        .subtitle { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; }
-        .section { margin-top: 20px; }
-        .section h3 { font-size: 11px; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
-        table { width: 100%; border-collapse: collapse; }
-        td { padding: 6px 0; font-size: 13px; }
-        td.label { color: #64748b; width: 45%; }
-        td.value { text-align: right; font-weight: 600; }
-        .total { border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 15px; font-weight: 800; }
-        .qr { margin-top: 24px; text-align: center; }
-        .verify { margin-top: 8px; font-size: 11px; color: #64748b; word-break: break-all; }
-        .footer { margin-top: 28px; font-size: 11px; color: #64748b; }
+        :root {
+            --background: #f8fafc;
+            --foreground: #0f172a;
+            --muted: #64748b;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --border-green: #d1fae5;
+            --success: #10b981;
+            --success-light: #ecfdf5;
+            --error: #dc2626;
+            --amber-700: #b45309;
+            --amber-50: #fffbeb;
+            --amber-200: #fde68a;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            background: var(--background);
+            color: var(--foreground);
+            font-family: "Segoe UI", Inter, Arial, sans-serif;
+            line-height: 1.5;
+        }
+
+        .page {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .receipt-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 28px 32px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+        }
+
+        .receipt-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+            padding-bottom: 24px;
+            margin-bottom: 28px;
+        }
+
+        .brand-lockup {
+            font-size: 22px;
+            font-weight: 800;
+            color: #0b2d5c;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-accent {
+            color: var(--success);
+        }
+
+        .receipt-kicker {
+            margin-top: 16px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: rgba(15, 23, 42, 0.45);
+        }
+
+        .product-name {
+            margin: 8px 0 0;
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--foreground);
+            line-height: 1.2;
+        }
+
+        .reference {
+            margin: 12px 0 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--foreground);
+        }
+
+        .timestamp {
+            margin: 8px 0 0;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .badges {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 8px;
+            align-content: flex-start;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .badge-pending {
+            background: var(--amber-50);
+            color: var(--amber-700);
+            border-color: var(--amber-200);
+        }
+
+        .badge-failed {
+            background: rgba(220, 38, 38, 0.1);
+            color: var(--error);
+            border-color: rgba(220, 38, 38, 0.2);
+        }
+
+        .section {
+            margin-bottom: 28px;
+        }
+
+        .section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section-title {
+            margin: 0 0 12px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: rgba(15, 23, 42, 0.45);
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 8px 0;
+        }
+
+        .row-label {
+            font-size: 14px;
+            color: rgba(15, 23, 42, 0.6);
+        }
+
+        .row-value {
+            max-width: 58%;
+            text-align: right;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--foreground);
+        }
+
+        .charges-box {
+            background: rgba(15, 23, 42, 0.02);
+            border-radius: 16px;
+            padding: 16px 20px;
+        }
+
+        .charges-divider {
+            border-top: 1px solid rgba(15, 23, 42, 0.05);
+            margin: 12px 0;
+        }
+
+        .row-emphasis .row-value {
+            font-size: 16px;
+            font-weight: 800;
+        }
+
+        .verification {
+            text-align: center;
+            padding-top: 8px;
+        }
+
+        .verification img {
+            display: block;
+            margin: 0 auto;
+            border-radius: 8px;
+        }
+
+        .verify-url {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--muted);
+            word-break: break-all;
+        }
+
+        .footer {
+            margin-top: 28px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .receipt-card {
+                box-shadow: none;
+                border: 1px solid var(--border);
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="brand">PAYLITY NG</div>
-    <div class="subtitle">Transaction Receipt</div>
-    <p style="font-family: monospace; font-weight: 700;">{{ $receipt['reference'] }}</p>
+    <div class="page">
+        <article class="receipt-card" aria-label="Transaction receipt">
+            <header class="receipt-header">
+                <div>
+                    <div class="brand-lockup">PAYLITY <span class="brand-accent">NG</span></div>
+                    <p class="receipt-kicker">Receipt</p>
+                    <h1 class="product-name">{{ $receipt['product_display_name'] ?? $receipt['product_label'] }}</h1>
+                    <p class="reference">{{ $receipt['reference'] }}</p>
+                    @if(!empty($receipt['timestamp_display']))
+                        <p class="timestamp">{{ $receipt['timestamp_display'] }}</p>
+                    @endif
+                </div>
+                <div class="badges">
+                    <span class="badge badge-{{ $paymentBadgeVariant }}">{{ $paymentBadgeLabel }}</span>
+                    <span class="badge badge-{{ $fulfillmentBadgeVariant }}">{{ $fulfillmentBadgeLabel }}</span>
+                </div>
+            </header>
 
-    <div class="section">
-        <h3>Transaction</h3>
-        <table>
-            <tr><td class="label">Reference</td><td class="value">{{ $receipt['reference'] }}</td></tr>
-            <tr><td class="label">Product</td><td class="value">{{ $receipt['product_display_name'] ?? $receipt['product_label'] }}</td></tr>
-            @if(!empty($receipt['timestamp_display']))
-            <tr><td class="label">Timestamp</td><td class="value">{{ $receipt['timestamp_display'] }}</td></tr>
-            @endif
-        </table>
+            <section class="section">
+                <h2 class="section-title">Customer</h2>
+                <div class="row">
+                    <span class="row-label">Phone</span>
+                    <span class="row-value">{{ $receipt['phone_display'] ?? $receipt['customer_phone_masked'] ?? '—' }}</span>
+                </div>
+                @if(!empty($receipt['customer_email']))
+                <div class="row">
+                    <span class="row-label">Email</span>
+                    <span class="row-value">{{ $receipt['customer_email'] }}</span>
+                </div>
+                @endif
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">Charges</h2>
+                <div class="charges-box">
+                    <div class="row">
+                        <span class="row-label">Product Amount</span>
+                        <span class="row-value">₦{{ number_format($receipt['product_amount'], 2) }}</span>
+                    </div>
+                    <div class="row">
+                        <span class="row-label">Convenience Fee</span>
+                        <span class="row-value">₦{{ number_format($receipt['convenience_fee'], 2) }}</span>
+                    </div>
+                    <div class="row">
+                        <span class="row-label">Payment Processing Fee</span>
+                        <span class="row-value">₦{{ number_format($receipt['gateway_fee'], 2) }}</span>
+                    </div>
+                    <div class="charges-divider"></div>
+                    <div class="row row-emphasis">
+                        <span class="row-label">Total Paid</span>
+                        <span class="row-value">₦{{ number_format($receipt['payable_amount'], 2) }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">Status</h2>
+                <div class="row">
+                    <span class="row-label">Payment</span>
+                    <span class="row-value">{{ $receipt['payment_status'] }}</span>
+                </div>
+                <div class="row">
+                    <span class="row-label">Fulfillment</span>
+                    <span class="row-value">{{ $receipt['fulfillment_status'] }}</span>
+                </div>
+                @if(!empty($receipt['failure_reason']))
+                <div class="row">
+                    <span class="row-label">Failure Reason</span>
+                    <span class="row-value">{{ $receipt['failure_reason'] }}</span>
+                </div>
+                @endif
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">Verification</h2>
+                <div class="verification">
+                    <img src="{{ $qrCodeDataUri }}" alt="Verification QR code" width="120" height="120">
+                    <div class="verify-url">Verify: {{ $receipt['verification_url'] }}</div>
+                </div>
+            </section>
+
+            <footer class="footer">
+                Generated by PAYLITY NG. Verify authenticity using the QR code or URL above.
+            </footer>
+        </article>
     </div>
-
-    <div class="section">
-        <h3>Customer</h3>
-        <table>
-            <tr><td class="label">Phone</td><td class="value">{{ $receipt['phone_display'] ?? $receipt['customer_phone_masked'] ?? '—' }}</td></tr>
-            @if(!empty($receipt['customer_email']))
-            <tr><td class="label">Email</td><td class="value">{{ $receipt['customer_email'] }}</td></tr>
-            @endif
-        </table>
-    </div>
-
-    <div class="section">
-        <h3>Charges</h3>
-        <table>
-            <tr><td class="label">Product Amount</td><td class="value">₦{{ number_format($receipt['product_amount'], 2) }}</td></tr>
-            <tr><td class="label">Convenience Fee</td><td class="value">₦{{ number_format($receipt['convenience_fee'], 2) }}</td></tr>
-            <tr><td class="label">Gateway Charge</td><td class="value">₦{{ number_format($receipt['gateway_fee'], 2) }}</td></tr>
-            <tr class="total"><td class="label">Total Paid</td><td class="value">₦{{ number_format($receipt['payable_amount'], 2) }}</td></tr>
-        </table>
-    </div>
-
-    <div class="section">
-        <h3>Status</h3>
-        <table>
-            <tr><td class="label">Payment</td><td class="value">{{ $receipt['payment_status'] }}</td></tr>
-            <tr><td class="label">Fulfillment</td><td class="value">{{ $receipt['fulfillment_status'] }}</td></tr>
-            @if(!empty($receipt['failure_reason']))
-            <tr><td class="label">Failure Reason</td><td class="value">{{ $receipt['failure_reason'] }}</td></tr>
-            @endif
-            @if(!empty($receipt['fulfillment_reference']))
-            <tr><td class="label">Fulfillment Ref</td><td class="value">{{ $receipt['fulfillment_reference'] }}</td></tr>
-            @endif
-        </table>
-    </div>
-
-    <div class="qr">
-        <img src="{{ $qrCodeDataUri }}" alt="Verification QR code" width="120" height="120">
-        <div class="verify">Verify: {{ $receipt['verification_url'] }}</div>
-    </div>
-
-    <div class="footer">Generated by PAYLITY NG. Verify authenticity using the QR code or URL above.</div>
 </body>
 </html>

@@ -7,7 +7,6 @@ import { PageContainer } from "@/components/PageContainer";
 import { ErrorStatePage } from "@/components/transaction/ErrorStatePage";
 import { PaymentProcessingCard } from "@/components/payment/PaymentProcessingCard";
 import { PaymentSuccessCard } from "@/components/transaction/PaymentSuccessCard";
-import { PaymentVerificationSkeleton } from "@/components/transaction/TransactionPageSkeleton";
 import { TransactionTimeline } from "@/components/transaction/TransactionTimeline";
 import { StatusBadge } from "@/components/transaction/StatusBadge";
 import { BackHomeLink } from "@/components/transaction/BackHomeLink";
@@ -35,32 +34,34 @@ import {
 
 const POLL_INTERVAL_MS = 5000;
 
+type VerifiedState = {
+  kind: "verified";
+  reference: string;
+  status: string;
+  paymentStatus: string;
+  productType: string;
+  productLabel: string;
+  productAmount: number;
+  convenienceFee: number;
+  gatewayFee: number;
+  payableAmount: number;
+  customerPhone: string;
+  customerEmail?: string | null;
+  timestamp?: string | null;
+  timestampDisplay?: string | null;
+  failureReason?: string;
+};
+
 type VerificationState =
-  | { kind: "loading" }
   | { kind: "missing_reference" }
-  | { kind: "offline" }
-  | { kind: "error"; message: string }
-  | {
-      kind: "verified";
-      reference: string;
-      status: string;
-      paymentStatus: string;
-      productType: string;
-      productLabel: string;
-      productAmount: number;
-      convenienceFee: number;
-      gatewayFee: number;
-      payableAmount: number;
-      customerPhone: string;
-      customerEmail?: string | null;
-      timestamp?: string | null;
-      timestampDisplay?: string | null;
-      failureReason?: string;
-    };
+  | { kind: "processing"; reference: string }
+  | { kind: "offline"; reference: string }
+  | { kind: "error"; reference: string; message: string }
+  | VerifiedState;
 
 function mapVerificationResult(
   result: Awaited<ReturnType<typeof verifyPaystackPayment>>,
-): VerificationState {
+): VerifiedState {
   return {
     kind: "verified",
     reference: result.reference,
@@ -80,22 +81,50 @@ function mapVerificationResult(
   };
 }
 
-function mapVerificationError(error: unknown): VerificationState {
+function mapVerificationError(
+  reference: string,
+  error: unknown,
+): VerificationState {
   if (error instanceof ApiOfflineError) {
-    return { kind: "offline" };
+    return { kind: "offline", reference };
   }
 
   if (error instanceof ApiError) {
     return {
       kind: "error",
+      reference,
       message: error.message,
     };
   }
 
   return {
     kind: "error",
+    reference,
     message: "Something went wrong while confirming your payment.",
   };
+}
+
+function getCallbackReference(state: VerificationState): string | null {
+  if (state.kind === "missing_reference") {
+    return null;
+  }
+
+  return state.reference;
+}
+
+function shouldShowProcessingCard(state: VerificationState): boolean {
+  if (state.kind === "processing") {
+    return true;
+  }
+
+  if (state.kind === "verified") {
+    return (
+      shouldShowFulfillmentProcessingPage(state.status) ||
+      shouldRedirectToTransactionStatus(state.status)
+    );
+  }
+
+  return false;
 }
 
 export function PaymentCallbackClient() {
@@ -104,7 +133,9 @@ export function PaymentCallbackClient() {
   const reference =
     searchParams.get("reference") ?? searchParams.get("trxref");
   const [state, setState] = useState<VerificationState>(() =>
-    reference ? { kind: "loading" } : { kind: "missing_reference" },
+    reference
+      ? { kind: "processing", reference }
+      : { kind: "missing_reference" },
   );
   const pollAttemptsRef = useRef(0);
 
@@ -114,13 +145,13 @@ export function PaymentCallbackClient() {
       return;
     }
 
-    setState({ kind: "loading" });
+    setState({ kind: "processing", reference });
 
     try {
       const result = await verifyPaystackPayment(reference);
       setState(mapVerificationResult(result));
     } catch (error) {
-      setState(mapVerificationError(error));
+      setState(mapVerificationError(reference, error));
     }
   }, [reference]);
 
@@ -131,7 +162,7 @@ export function PaymentCallbackClient() {
 
     let cancelled = false;
 
-    verifyPaystackPayment(reference)
+    void verifyPaystackPayment(reference)
       .then((result) => {
         if (cancelled) {
           return;
@@ -141,15 +172,16 @@ export function PaymentCallbackClient() {
         setState(mapped);
         saveTransactionSession(result.reference, result.status);
 
-        if (isTerminalTransactionStatus(result.status)) {
-          if (shouldRedirectToTransactionStatus(result.status)) {
-            router.replace(`/transaction/${encodeURIComponent(reference)}`);
-          }
+        if (
+          isTerminalTransactionStatus(result.status) &&
+          shouldRedirectToTransactionStatus(result.status)
+        ) {
+          router.replace(`/transaction/${encodeURIComponent(reference)}`);
         }
       })
       .catch((error) => {
         if (!cancelled) {
-          setState(mapVerificationError(error));
+          setState(mapVerificationError(reference, error));
         }
       });
 
@@ -185,10 +217,11 @@ export function PaymentCallbackClient() {
 
         saveTransactionSession(transaction.reference, transaction.status);
 
-        if (isTerminalTransactionStatus(transaction.status)) {
-          if (shouldRedirectToTransactionStatus(transaction.status)) {
-            router.replace(`/transaction/${encodeURIComponent(reference)}`);
-          }
+        if (
+          isTerminalTransactionStatus(transaction.status) &&
+          shouldRedirectToTransactionStatus(transaction.status)
+        ) {
+          router.replace(`/transaction/${encodeURIComponent(reference)}`);
           return;
         }
 
@@ -235,15 +268,17 @@ export function PaymentCallbackClient() {
     );
   }
 
-  if (state.kind === "loading") {
+  const callbackReference = getCallbackReference(state);
+
+  if (callbackReference && shouldShowProcessingCard(state)) {
     return (
-      <PageContainer>
-        <PaymentVerificationSkeleton />
+      <PageContainer className="py-8 sm:py-12">
+        <PaymentProcessingCard reference={callbackReference} />
       </PageContainer>
     );
   }
 
-  if (state.kind === "offline") {
+  if (state.kind === "offline" && callbackReference) {
     return (
       <PageContainer>
         <ErrorStatePage
@@ -257,7 +292,7 @@ export function PaymentCallbackClient() {
     );
   }
 
-  if (state.kind === "error") {
+  if (state.kind === "error" && callbackReference) {
     return (
       <PageContainer>
         <ErrorStatePage
@@ -271,21 +306,10 @@ export function PaymentCallbackClient() {
     );
   }
 
-  if (
-    state.kind === "verified" &&
-    shouldRedirectToTransactionStatus(state.status)
-  ) {
-    return (
-      <PageContainer>
-        <PaymentVerificationSkeleton />
-      </PageContainer>
-    );
-  }
-
-  if (shouldShowFulfillmentProcessingPage(state.status)) {
+  if (state.kind !== "verified") {
     return (
       <PageContainer className="py-8 sm:py-12">
-        <PaymentProcessingCard reference={state.reference} />
+        <PaymentProcessingCard reference={callbackReference ?? reference ?? ""} />
       </PageContainer>
     );
   }

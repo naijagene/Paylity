@@ -57,6 +57,30 @@ describe("PaymentCallbackClient", () => {
     vi.unstubAllEnvs();
   });
 
+  it("shows processing card immediately before verify resolves", () => {
+    let resolveVerify!: (value: typeof baseVerificationResult & { status: string }) => void;
+    mockedVerifyPaystackPayment.mockReturnValue(
+      new Promise((resolve) => {
+        resolveVerify = resolve;
+      }),
+    );
+
+    render(<PaymentCallbackClient />);
+
+    expect(
+      screen.getByRole("heading", {
+        name: "We're processing your transaction",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("payment-verification-skeleton")).not.toBeInTheDocument();
+
+    resolveVerify({
+      ...baseVerificationResult,
+      status: "payment_success",
+      fulfillment_status: "pending",
+    });
+  });
+
   it("redirects fulfilled transactions to the status page", async () => {
     mockedVerifyPaystackPayment.mockResolvedValue({
       ...baseVerificationResult,
