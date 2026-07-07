@@ -6,6 +6,8 @@ use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Services\Fulfillment\AutoFulfillmentRecorder;
 use App\Services\Fulfillment\FulfillmentAttemptRecorder;
+use App\Services\Platform\SystemSettingsService;
+use App\Support\Platform\SystemSettingKeys;
 use App\Services\TransactionEventService;
 use App\Services\WebhookEventService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -17,6 +19,7 @@ class OpsTransactionService
         private readonly TransactionEventService $transactionEventService,
         private readonly FulfillmentAttemptRecorder $fulfillmentAttemptRecorder,
         private readonly WebhookEventService $webhookEventService,
+        private readonly SystemSettingsService $systemSettings,
     ) {
     }
 
@@ -101,6 +104,8 @@ class OpsTransactionService
             'ip_address' => $transaction->ip_address,
             'user_agent' => $transaction->user_agent,
             'verified_phone' => $transaction->verified_phone,
+            'otp_required' => $this->wasOtpRequired($transaction),
+            'otp_verified' => (bool) $transaction->verified_phone,
             'created_at' => $transaction->created_at?->toIso8601String(),
             'updated_at' => $transaction->updated_at?->toIso8601String(),
             'fulfilled_at' => $transaction->fulfilled_at?->toIso8601String(),
@@ -150,6 +155,15 @@ class OpsTransactionService
                 ->whereIn('status', $successfulPaymentStatuses)
                 ->sum('payable_amount'),
         ];
+    }
+
+    private function wasOtpRequired(Transaction $transaction): bool
+    {
+        $otpThreshold = $this->systemSettings->getInt(SystemSettingKeys::OTP_THRESHOLD, 10_000);
+        $guestLimit = $this->systemSettings->getInt(SystemSettingKeys::GUEST_LIMIT, 20_000);
+
+        return $transaction->product_amount > $otpThreshold
+            && $transaction->product_amount <= $guestLimit;
     }
 
     /**

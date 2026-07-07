@@ -95,9 +95,10 @@ class CheckoutInitializeTest extends TestCase
             ->assertStatus(422)
             ->assertJson([
                 'success' => false,
-                'message' => 'Phone verification is required for this purchase amount.',
+                'message' => 'OTP verification is required for this purchase.',
                 'errors' => [
                     'code' => 'OTP_REQUIRED',
+                    'otp_required' => true,
                 ],
             ]);
 

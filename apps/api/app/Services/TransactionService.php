@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\OtpPurpose;
 use App\Enums\TransactionStatus;
 use App\Exceptions\FraudCheckException;
 use App\Exceptions\PaystackConfigurationException;
@@ -10,7 +11,10 @@ use App\Exceptions\ProductCatalogValidationException;
 use App\Models\Transaction;
 use App\Services\Catalog\ProductCatalogService;
 use App\Services\Fulfillment\FulfillmentPayloadExtractor;
+use App\Services\Otp\OtpService;
 use App\Services\Payments\PaystackService;
+use App\Services\Platform\PurchasePolicyContext;
+use App\Services\Platform\PurchasePolicyService;
 use Illuminate\Support\Facades\DB;
 
 class TransactionService
@@ -31,6 +35,8 @@ class TransactionService
         private readonly ReceiptService $receiptService,
         private readonly TransactionEventService $transactionEventService,
         private readonly ProductCatalogService $productCatalogService,
+        private readonly PurchasePolicyService $purchasePolicyService,
+        private readonly OtpService $otpService,
     ) {
     }
 
@@ -48,6 +54,7 @@ class TransactionService
 
         $productType = $input['product_type'];
         $productAmount = (int) $input['product_amount'];
+        $customerPhone = (string) $input['customer_phone'];
         $convenienceFee = $this->feeService->convenienceFeeFor($productType);
         $gatewayFee = $this->feeService->gatewayFee();
         $payableAmount = $this->feeService->payableAmount(
@@ -56,11 +63,41 @@ class TransactionService
             $gatewayFee,
         );
 
+        $verifiedPhone = false;
+        $policyEvaluation = $this->purchasePolicyService->evaluate(
+            new PurchasePolicyContext(
+                productAmount: $productAmount,
+                customerPhone: $customerPhone,
+                ipAddress: $ipAddress,
+            ),
+        );
+
+        if ($policyEvaluation->otpRequired) {
+            $verificationToken = trim((string) ($input['verification_token'] ?? ''));
+
+            if ($verificationToken === '') {
+                throw new FraudCheckException(
+                    'OTP verification is required for this purchase.',
+                    'OTP_REQUIRED',
+                );
+            }
+
+            $otpRecord = $this->otpService->assertValidVerificationToken(
+                verificationToken: $verificationToken,
+                phone: $customerPhone,
+                productAmount: $productAmount,
+                purpose: OtpPurpose::CHECKOUT,
+            );
+
+            $this->otpService->consumeVerificationToken($otpRecord);
+            $verifiedPhone = true;
+        }
+
         $this->fraudService->assertCanInitialize(
             productAmount: $productAmount,
-            customerPhone: $input['customer_phone'],
+            customerPhone: $customerPhone,
             ipAddress: $ipAddress,
-            verifiedPhone: false,
+            verifiedPhone: $verifiedPhone,
         );
 
         $validatedPayload = $this->productCatalogService->validateAndEnrichCheckout(
@@ -69,7 +106,7 @@ class TransactionService
             payload: (array) ($input['payload'] ?? []),
         );
 
-        $transaction = DB::transaction(function () use ($input, $productAmount, $convenienceFee, $gatewayFee, $payableAmount, $ipAddress, $userAgent, $productType, $validatedPayload) {
+        $transaction = DB::transaction(function () use ($input, $productAmount, $convenienceFee, $gatewayFee, $payableAmount, $ipAddress, $userAgent, $productType, $validatedPayload, $verifiedPhone) {
             $reference = $this->referenceGenerator->generate();
 
             while (Transaction::query()->where('reference', $reference)->exists()) {
@@ -91,7 +128,7 @@ class TransactionService
                 'request_payload' => $validatedPayload,
                 'ip_address' => $ipAddress,
                 'user_agent' => $userAgent,
-                'verified_phone' => false,
+                'verified_phone' => $verifiedPhone,
             ]);
 
             $this->transactionEventService->record(

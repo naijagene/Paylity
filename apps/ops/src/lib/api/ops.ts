@@ -136,6 +136,8 @@ export type OpsTransactionDetail = {
   ip_address?: string | null;
   user_agent?: string | null;
   verified_phone?: boolean;
+  otp_required?: boolean;
+  otp_verified?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
   fulfilled_at?: string | null;
@@ -208,6 +210,12 @@ export type OpsMonitoringSummary = {
   average_fulfillment_seconds: number | null;
   date_from: string;
   date_to: string;
+  otp?: {
+    enabled: boolean;
+    pending: number;
+    verified_today: number;
+    failed_today: number;
+  };
 };
 
 export type OpsNote = {

@@ -15,7 +15,8 @@ import {
 import type { ProductCatalog } from "@/lib/api/catalog";
 import {
   calculatePayableAmount,
-  isOverGuestProductLimit,
+  isOverGuestHardLimit,
+  requiresOtpVerification,
 } from "@/lib/checkout/pricing";
 import type {
   CheckoutFields,
@@ -59,6 +60,11 @@ function createInitialState(product: ProductType): CheckoutState {
     customProductAmount: "",
     transactionRef: null,
     transactionInitialized: false,
+    phoneVerified: false,
+    verificationToken: null,
+    otpReference: null,
+    maskedPhone: null,
+    otpResendAvailableAt: null,
   };
 }
 
@@ -80,6 +86,11 @@ function normalizeStoredState(
       convenienceFee: parsed.convenienceFee ?? CONVENIENCE_FEE,
       gatewayFee: parsed.gatewayFee ?? GATEWAY_FEE,
       transactionInitialized: parsed.transactionInitialized ?? false,
+      phoneVerified: parsed.phoneVerified ?? false,
+      verificationToken: parsed.verificationToken ?? null,
+      otpReference: parsed.otpReference ?? null,
+      maskedPhone: parsed.maskedPhone ?? null,
+      otpResendAvailableAt: parsed.otpResendAvailableAt ?? null,
     };
   }
 
@@ -96,6 +107,11 @@ function normalizeStoredState(
     customProductAmount: parsed.customAmount ?? "",
     transactionRef: parsed.transactionRef ?? null,
     transactionInitialized: false,
+    phoneVerified: false,
+    verificationToken: null,
+    otpReference: null,
+    maskedPhone: null,
+    otpResendAvailableAt: null,
   };
 }
 
@@ -109,6 +125,11 @@ function stripStaleTransactionState(stored: CheckoutState): CheckoutState {
     step: stored.transactionInitialized ? "form" : stored.step,
     transactionRef: null,
     transactionInitialized: false,
+    phoneVerified: false,
+    verificationToken: null,
+    otpReference: null,
+    maskedPhone: null,
+    otpResendAvailableAt: null,
   };
 }
 
@@ -312,7 +333,44 @@ export function useCheckoutState(
     }));
   }, []);
 
-  const isOverGuestLimit = isOverGuestProductLimit(productAmount);
+  const setOtpVerification = useCallback(
+    (payload: {
+      verificationToken: string;
+      otpReference: string;
+      maskedPhone: string;
+      otpResendAvailableAt: string;
+    }) => {
+      setState((prev) => ({
+        ...prev,
+        phoneVerified: true,
+        verificationToken: payload.verificationToken,
+        otpReference: payload.otpReference,
+        maskedPhone: payload.maskedPhone,
+        otpResendAvailableAt: payload.otpResendAvailableAt,
+      }));
+    },
+    [],
+  );
+
+  const setOtpSession = useCallback(
+    (payload: {
+      otpReference: string;
+      maskedPhone: string;
+      otpResendAvailableAt: string;
+    }) => {
+      setState((prev) => ({
+        ...prev,
+        otpReference: payload.otpReference,
+        maskedPhone: payload.maskedPhone,
+        otpResendAvailableAt: payload.otpResendAvailableAt,
+      }));
+    },
+    [],
+  );
+
+  const isOverGuestLimit = isOverGuestHardLimit(productAmount);
+  const requiresOtp =
+    requiresOtpVerification(productAmount) && !state.phoneVerified;
 
   return {
     product,
@@ -325,10 +383,13 @@ export function useCheckoutState(
     fieldErrors,
     setFieldErrors,
     isOverGuestLimit,
+    requiresOtp,
     setProduct,
     updateField,
     setStep,
     setTransactionInitialized,
+    setOtpVerification,
+    setOtpSession,
     setCustomProductAmount,
     selectProductAmount,
     resetMeterVerification,

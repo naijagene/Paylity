@@ -71,7 +71,7 @@ class PurchasePolicyService
 
         if ($evaluation->otpRequired && ! $context->verifiedPhone) {
             throw new FraudCheckException(
-                'Phone verification is required for this purchase amount.',
+                'OTP verification is required for this purchase.',
                 'OTP_REQUIRED',
             );
         }
@@ -94,7 +94,8 @@ class PurchasePolicyService
         $otpThreshold = $this->settings->getInt(SystemSettingKeys::OTP_THRESHOLD, 10_000);
         $registrationThreshold = $this->settings->getInt(SystemSettingKeys::REGISTRATION_THRESHOLD, 20_000);
 
-        $otpRequired = $this->settings->getBool(SystemSettingKeys::OTP_ENABLED)
+        $otpRequired = $this->featureFlags->isEnabled(FeatureFlagKeys::OTP_VERIFICATION)
+            && $this->settings->getBool(SystemSettingKeys::OTP_ENABLED)
             && ! $context->verifiedPhone
             && $context->productAmount > $otpThreshold
             && $context->productAmount <= $guestLimit;

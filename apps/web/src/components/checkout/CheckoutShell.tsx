@@ -17,6 +17,7 @@ type CheckoutShellProps = {
 const stepLabels: Record<CheckoutStep, string> = {
   form: "Enter details",
   review: "Review payment",
+  otp: "Verify phone",
   processing: "Processing",
 };
 
@@ -34,13 +35,13 @@ export function CheckoutShell({
       <PageContainer>
         <header className="mb-6 border-b border-border pb-5">
           <div className="mb-5 flex items-center justify-between gap-4">
-            {step === "review" && onBack ? (
+            {onBack ? (
               <button
                 type="button"
                 onClick={onBack}
                 className="text-sm font-medium text-muted transition-colors hover:text-success"
               >
-                ← Edit details
+                ← {step === "otp" ? "Back to review" : "Edit details"}
               </button>
             ) : (
               <Link
@@ -61,7 +62,7 @@ export function CheckoutShell({
             {schema.label}
           </h1>
           <p className="mt-2 text-sm text-muted">
-            No account needed · Guest product amount up to ₦10,000
+            No account needed · Guest checkout up to ₦20,000 with phone verification
           </p>
         </header>
 

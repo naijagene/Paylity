@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PageContainer } from "@/components/PageContainer";
 import { fetchFeatureFlags } from "@/lib/api/admin";
 import { fetchPublicHealth } from "@/lib/api/health";
+import { fetchOpsMonitoring } from "@/lib/api/ops";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import {
   healthClasses,
@@ -28,14 +29,15 @@ export function MonitoringClient() {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([fetchPublicHealth(), fetchFeatureFlags()])
-      .then(([health, flags]) => {
+    Promise.all([fetchPublicHealth(), fetchFeatureFlags(), fetchOpsMonitoring()])
+      .then(([health, flags, monitoring]) => {
         if (cancelled) {
           return;
         }
 
         const paystack = flags.find((flag) => flag.key === "paystack");
         const vtpass = flags.find((flag) => flag.key === "vtpass");
+        const otp = monitoring.otp;
 
         setItems([
           {
@@ -62,6 +64,13 @@ export function MonitoringClient() {
             label: "Queue",
             indicator: "warning",
             detail: "Queue health checks are not configured in MVOC yet",
+          },
+          {
+            label: "OTP",
+            indicator: otp?.enabled ? "healthy" : "warning",
+            detail: otp
+              ? `${otp.pending} pending · ${otp.verified_today} verified today · ${otp.failed_today} failed today`
+              : "OTP monitoring unavailable",
           },
         ]);
       })
@@ -105,7 +114,7 @@ export function MonitoringClient() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           {(loading
-            ? ["API", "Database", "Paystack", "VTPass", "Queue"]
+            ? ["API", "Database", "Paystack", "VTPass", "Queue", "OTP"]
             : items.map((item) => item.label)
           ).map((label, index) => {
             const item = items[index];

@@ -24,6 +24,7 @@ RC1 is **ready for staging deployment** once infrastructure, secrets, and DNS ar
 | Transaction engine + status UX | ✅ Complete |
 | VTPass fulfillment (manual + auto diagnostics) | ✅ Complete |
 | Ops console | ✅ Complete |
+| OTP verification for high-value guest checkout (PAY-023) | ✅ Complete |
 | Brand theme + official logo | ✅ Complete |
 | Pre-launch hardening + rate limits | ✅ Complete |
 | Staging deployment docs | ✅ Added in PAY-016 |
@@ -56,6 +57,7 @@ Paystack test-mode payment initialization and backend verification are implement
 | Auto-fulfillment | **Disabled by default** (`FEATURE_VTPASS_AUTO_FULFILL=false`) |
 | Data vending | Not certified — treat as blocked for public launch |
 | Customer accounts | Not built |
+| Live SMS OTP provider | Not configured (`otp_provider=log`, `sms_provider_live=false`) |
 | Wallet / referral | Not built |
 | Live electricity meter verify at scale | Sandbox certified; live catalog/credentials TBD |
 | WhatsApp support | Requires real `NEXT_PUBLIC_WHATSAPP_URL` on staging |

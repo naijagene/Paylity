@@ -1,6 +1,6 @@
 export type ProductType = "airtime" | "data" | "electricity";
 
-export type CheckoutStep = "form" | "review" | "processing";
+export type CheckoutStep = "form" | "review" | "otp" | "processing";
 
 export type MeterType = "prepaid" | "postpaid";
 
@@ -29,6 +29,11 @@ export type CheckoutState = {
   customProductAmount: string;
   transactionRef: string | null;
   transactionInitialized: boolean;
+  phoneVerified: boolean;
+  verificationToken: string | null;
+  otpReference: string | null;
+  maskedPhone: string | null;
+  otpResendAvailableAt: string | null;
 };
 
 export type FieldErrors = Partial<

@@ -85,6 +85,42 @@ class PlatformSettingsSeeder extends Seeder
                 'type' => 'integer',
                 'description' => 'Maximum allowed checkout product amount.',
             ],
+            [
+                'key' => SystemSettingKeys::OTP_LENGTH,
+                'value' => '6',
+                'type' => 'integer',
+                'description' => 'Number of digits in OTP codes.',
+            ],
+            [
+                'key' => SystemSettingKeys::OTP_EXPIRY_MINUTES,
+                'value' => '10',
+                'type' => 'integer',
+                'description' => 'Minutes before an OTP expires.',
+            ],
+            [
+                'key' => SystemSettingKeys::OTP_MAX_ATTEMPTS,
+                'value' => '5',
+                'type' => 'integer',
+                'description' => 'Maximum OTP verification attempts per request.',
+            ],
+            [
+                'key' => SystemSettingKeys::OTP_RESEND_COOLDOWN_SECONDS,
+                'value' => '60',
+                'type' => 'integer',
+                'description' => 'Minimum seconds before an OTP can be resent.',
+            ],
+            [
+                'key' => SystemSettingKeys::OTP_PROVIDER,
+                'value' => 'log',
+                'type' => 'string',
+                'description' => 'OTP delivery provider key (log or sms).',
+            ],
+            [
+                'key' => SystemSettingKeys::OTP_MESSAGE_TEMPLATE,
+                'value' => 'Your PAYLITY verification code is :code. It expires in :minutes minutes.',
+                'type' => 'string',
+                'description' => 'SMS/log message template for OTP delivery.',
+            ],
         ];
 
         foreach ($settings as $setting) {
@@ -143,6 +179,16 @@ class PlatformSettingsSeeder extends Seeder
                 'key' => FeatureFlagKeys::VTPASS_AUTO_FULFILL,
                 'enabled' => false,
                 'description' => 'Automatically fulfill transactions after successful payment.',
+            ],
+            [
+                'key' => FeatureFlagKeys::OTP_VERIFICATION,
+                'enabled' => true,
+                'description' => 'Phone OTP verification for high-value guest checkout.',
+            ],
+            [
+                'key' => FeatureFlagKeys::SMS_PROVIDER_LIVE,
+                'enabled' => false,
+                'description' => 'Use the configured live SMS provider for OTP delivery.',
             ],
         ];
 

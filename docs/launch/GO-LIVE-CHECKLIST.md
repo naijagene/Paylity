@@ -50,6 +50,9 @@ Check `[x]` only when verified in the target environment.
 - [ ] `FEATURE_PAYSTACK` — intended value documented
 - [ ] `FEATURE_VTPASS` — intended value documented
 - [ ] `FEATURE_VTPASS_AUTO_FULFILL=false` for initial launch
+- [ ] `otp_verification` enabled for RC1 guest checkout policy
+- [ ] `sms_provider_live=false` until live SMS provider is configured
+- [ ] `otp_provider=log` only in local/staging; live SMS provider selected before production OTP go-live
 - [ ] Frontend `NEXT_PUBLIC_ENVIRONMENT=Production`
 - [ ] Build number / version bumped and visible in footer
 
@@ -68,6 +71,9 @@ Check `[x]` only when verified in the target environment.
 - [ ] Ad slots are **placeholder only** — no external ad scripts in MVP
 - [ ] Real ad provider / direct sponsorship setup planned for post-MVP
 - [ ] `OPERATOR_ACCESS_KEY` set for ops console
+- [ ] OTP checkout policy verified: ≤ ₦10,000 no OTP, ₦10,001–₦20,000 OTP required, > ₦20,000 blocked
+- [ ] OTP request/verify/resend rate limits tested
+- [ ] See [OTP Identity Module](../security/OTP-IDENTITY.md)
 - [ ] `php artisan paylity:preflight` passes with no FAIL items
 - [ ] Privacy and Terms pages reviewed (`/privacy`, `/terms`)
 - [ ] `APP_VERSION` / `APP_BUILD` match release tag

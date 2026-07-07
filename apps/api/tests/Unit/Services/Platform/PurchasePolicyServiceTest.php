@@ -76,6 +76,13 @@ class PurchasePolicyServiceTest extends TestCase
         ]);
 
         app(\App\Services\Platform\SystemSettingsService::class)->forgetCache();
+
+        FeatureFlag::query()->create([
+            'key' => FeatureFlagKeys::OTP_VERIFICATION,
+            'enabled' => true,
+        ]);
+
+        app(\App\Services\Platform\FeatureFlagService::class)->forgetCache();
     }
 
     public function test_evaluate_marks_otp_required_above_threshold(): void
@@ -122,7 +129,7 @@ class PurchasePolicyServiceTest extends TestCase
     public function test_assert_can_initialize_blocks_otp_required_amounts(): void
     {
         $this->expectException(FraudCheckException::class);
-        $this->expectExceptionMessage('Phone verification is required for this purchase amount.');
+        $this->expectExceptionMessage('OTP verification is required for this purchase.');
 
         try {
             $this->service->assertCanInitialize(new PurchasePolicyContext(

@@ -49,6 +49,24 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(120)->by($request->ip());
         });
 
+        RateLimiter::for('otp-request', function (Request $request) {
+            $phone = (string) $request->input('phone', '');
+
+            return [
+                Limit::perMinute(5)->by($request->ip()),
+                Limit::perMinute(3)->by($phone !== '' ? $phone : $request->ip()),
+            ];
+        });
+
+        RateLimiter::for('otp-verify', function (Request $request) {
+            $reference = (string) $request->input('otp_reference', '');
+
+            return [
+                Limit::perMinute(20)->by($request->ip()),
+                Limit::perMinute(10)->by($reference !== '' ? $reference : $request->ip()),
+            ];
+        });
+
         config(['cors.allowed_origins' => CorsOriginResolver::allowedOrigins()]);
     }
 }

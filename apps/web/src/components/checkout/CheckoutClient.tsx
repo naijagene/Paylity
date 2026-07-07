@@ -6,6 +6,7 @@ import { Button } from "@/components/Button";
 import { CheckoutForm } from "@/components/checkout/CheckoutForm";
 import { CheckoutShell } from "@/components/checkout/CheckoutShell";
 import { CheckoutSummaryCard } from "@/components/checkout/CheckoutSummaryCard";
+import { OtpVerificationGate } from "@/components/checkout/OtpVerificationGate";
 import { PaymentPendingOverlay } from "@/components/checkout/PaymentPendingOverlay";
 import { ProductTabs } from "@/components/checkout/ProductTabs";
 import {
@@ -39,10 +40,13 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     fieldErrors,
     setFieldErrors,
     isOverGuestLimit,
+    requiresOtp,
     setProduct,
     updateField,
     setStep,
     setTransactionInitialized,
+    setOtpVerification,
+    setOtpSession,
     setCustomProductAmount,
     selectProductAmount,
     markMeterVerified,
@@ -131,7 +135,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     state.fields,
   ]);
 
-  const handleInitializeTransaction = useCallback(async () => {
+  const runCheckoutInitialize = useCallback(async (verificationTokenOverride?: string | null) => {
     setApiError(null);
 
     if (!checkoutAvailability.allowed) {
@@ -164,6 +168,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         state.fields,
         productAmount,
         catalog,
+        state.verificationToken ?? verificationTokenOverride,
       );
       const transaction = await initializeCheckout(payload);
       setTransactionInitialized(transaction);
@@ -180,6 +185,8 @@ function CheckoutEngine({ product }: { product: ProductType }) {
       if (error instanceof ApiError) {
         if (error.errors?.code === "INVALID_PRODUCT_VARIATION") {
           setApiError(INVALID_VARIATION_MESSAGE);
+        } else if (error.errors?.code === "OTP_REQUIRED") {
+          setStep("otp");
         } else {
           setApiError(error.message);
         }
@@ -202,9 +209,34 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     productAmount,
     scrollToFirstError,
     setFieldErrors,
+    setStep,
     setTransactionInitialized,
     state.fields,
+    state.verificationToken,
   ]);
+
+  const handleProceedFromReview = useCallback(() => {
+    if (requiresOtp) {
+      setStep("otp");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    void runCheckoutInitialize();
+  }, [requiresOtp, runCheckoutInitialize, setStep]);
+
+  const handleOtpVerified = useCallback(
+    (payload: {
+      verificationToken: string;
+      otpReference: string;
+      maskedPhone: string;
+      otpResendAvailableAt: string;
+    }) => {
+      setOtpVerification(payload);
+      void runCheckoutInitialize(payload.verificationToken);
+    },
+    [runCheckoutInitialize, setOtpVerification],
+  );
 
   const handleVerifyMeter = useCallback(async () => {
     if (!state.fields.meterNumber.trim()) return;
@@ -231,6 +263,12 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [setStep]);
 
+  const handleBackToReview = useCallback(() => {
+    setApiError(null);
+    setStep("review");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [setStep]);
+
   const paymentBlocked =
     isOverGuestLimit ||
     !checkoutAvailability.allowed ||
@@ -252,6 +290,20 @@ function CheckoutEngine({ product }: { product: ProductType }) {
             disabled={isOverGuestLimit || (product === "data" && catalogLoading)}
           >
             Continue to Review
+          </Button>
+        </div>
+      </div>
+    ) : state.step === "otp" ? (
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-dark/5 bg-white/95 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+        <div className="mx-auto w-full max-w-lg sm:max-w-2xl lg:max-w-4xl">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handleBackToReview}
+            disabled={isInitializing}
+          >
+            Back to review
           </Button>
         </div>
       </div>
@@ -288,15 +340,17 @@ function CheckoutEngine({ product }: { product: ProductType }) {
                 : ""}
             </Button>
           ) : (
-          <Button
-            type="button"
-            className="min-h-12 w-full"
-            onClick={handleInitializeTransaction}
-            disabled={paymentBlocked}
-          >
+            <Button
+              type="button"
+              className="min-h-12 w-full"
+              onClick={handleProceedFromReview}
+              disabled={paymentBlocked}
+            >
               {isInitializing
                 ? "Initializing transaction..."
-                : `Initialize Transaction · ${formatNaira(summaryPricing.payableAmount)}`}
+                : requiresOtp
+                  ? "Verify phone to continue"
+                  : `Initialize Transaction · ${formatNaira(summaryPricing.payableAmount)}`}
             </Button>
           )}
 
@@ -313,7 +367,13 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         product={product}
         step={state.step}
         footer={footer}
-        onBack={handleBackToForm}
+        onBack={
+          state.step === "otp"
+            ? handleBackToReview
+            : state.step === "review"
+              ? handleBackToForm
+              : undefined
+        }
       >
         {state.step === "form" ? (
           <>
@@ -341,6 +401,17 @@ function CheckoutEngine({ product }: { product: ProductType }) {
               />
             </div>
           </>
+        ) : state.step === "otp" ? (
+          <OtpVerificationGate
+            phone={state.fields.customerPhone}
+            product={product}
+            productAmount={productAmount}
+            otpReference={state.otpReference}
+            maskedPhone={state.maskedPhone}
+            resendAvailableAt={state.otpResendAvailableAt}
+            onVerified={handleOtpVerified}
+            onOtpSession={setOtpSession}
+          />
         ) : (
           <CheckoutSummaryCard
             product={product}

@@ -4,9 +4,10 @@ import {
 } from "./catalogPlans";
 import type { ProductCatalog } from "@/lib/api/catalog";
 import {
-  GUEST_MAX_PRODUCT_AMOUNT,
+  GUEST_HARD_LIMIT,
+  GUEST_OTP_THRESHOLD,
   MIN_PRODUCT_AMOUNT,
-  isOverGuestProductLimit,
+  isOverGuestHardLimit,
 } from "./pricing";
 import { isValidNigerianPhone } from "./normalizePhone";
 import type { CheckoutFields, FieldErrors, ProductType } from "./types";
@@ -17,7 +18,9 @@ export const ERROR_MESSAGES = {
   PRODUCT_AMOUNT_MIN: (min: number) =>
     `Minimum amount is ₦${min.toLocaleString("en-NG")}`,
   PRODUCT_AMOUNT_MAX_GUEST:
-    "Guest checkout supports purchases up to ₦10,000. Please verify your phone number via OTP to continue.",
+    `Guest checkout supports purchases up to ${formatGuestLimitMessage()}. Amounts above ₦${GUEST_OTP_THRESHOLD.toLocaleString("en-NG")} require phone verification.`,
+  PRODUCT_AMOUNT_HARD_LIMIT:
+    `Purchases above ₦${GUEST_HARD_LIMIT.toLocaleString("en-NG")} require a customer account. Customer accounts are coming soon.`,
   METER_INVALID: "Enter a valid meter number",
   PLAN_REQUIRED: "Select a data plan to continue",
   PLAN_UNAVAILABLE:
@@ -30,6 +33,10 @@ export const ERROR_MESSAGES = {
   REQUIRED: "This field is required",
   METER_NOT_VERIFIED: "Verify your meter before continuing",
 } as const;
+
+function formatGuestLimitMessage(): string {
+  return `₦${GUEST_OTP_THRESHOLD.toLocaleString("en-NG")} without verification, or up to ₦${GUEST_HARD_LIMIT.toLocaleString("en-NG")} after OTP`;
+}
 
 function validateEmail(value: string): string | undefined {
   if (!value.trim()) return undefined;
@@ -53,8 +60,8 @@ function validateProductAmount(
   if (!productAmount || productAmount < min) {
     return ERROR_MESSAGES.PRODUCT_AMOUNT_MIN(min);
   }
-  if (isOverGuestProductLimit(productAmount)) {
-    return ERROR_MESSAGES.PRODUCT_AMOUNT_MAX_GUEST;
+  if (isOverGuestHardLimit(productAmount)) {
+    return ERROR_MESSAGES.PRODUCT_AMOUNT_HARD_LIMIT;
   }
   return undefined;
 }
@@ -113,8 +120,10 @@ export function validateCheckoutForm(
 
       if (!plan) {
         errors.dataPlan = ERROR_MESSAGES.PLAN_UNAVAILABLE;
-      } else if (plan.price > GUEST_MAX_PRODUCT_AMOUNT) {
-        errors.productAmount = ERROR_MESSAGES.PRODUCT_AMOUNT_MAX_GUEST;
+      } else if (plan.price > GUEST_HARD_LIMIT) {
+        errors.productAmount = ERROR_MESSAGES.PRODUCT_AMOUNT_HARD_LIMIT;
+      } else if (plan.price > GUEST_OTP_THRESHOLD) {
+        // Allowed with OTP — no field error.
       }
     }
   }
@@ -140,4 +149,4 @@ export function validateCheckoutForm(
   return errors;
 }
 
-export { isOverGuestProductLimit };
+export { isOverGuestHardLimit as isOverGuestProductLimit };

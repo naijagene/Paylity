@@ -10,6 +10,7 @@ export type InitializeCheckoutRequest = {
   customer_name?: string;
   product_amount: number;
   payload: Record<string, unknown>;
+  verification_token?: string;
 };
 
 export type InitializeCheckoutResponse = {
@@ -32,18 +33,19 @@ export function buildInitializeCheckoutPayload(
   fields: CheckoutFields,
   productAmount: number,
   catalog?: ProductCatalog | null,
+  verificationToken?: string | null,
 ): InitializeCheckoutRequest {
   const recipientPhone = fields.useMyNumber
     ? fields.customerPhone
     : fields.recipientPhone;
 
-  const base = {
+  const base: InitializeCheckoutRequest = {
     product_type: product,
     customer_phone: fields.customerPhone,
     customer_email: fields.customerEmail || undefined,
     customer_name: fields.customerName || undefined,
     product_amount: productAmount,
-    payload: {} as Record<string, unknown>,
+    payload: {},
   };
 
   if (product === "airtime") {
@@ -73,6 +75,10 @@ export function buildInitializeCheckoutPayload(
       meter_number: fields.meterNumber,
       customer_name: fields.customerName,
     };
+  }
+
+  if (verificationToken) {
+    base.verification_token = verificationToken;
   }
 
   return base;

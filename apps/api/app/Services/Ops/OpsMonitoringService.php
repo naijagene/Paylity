@@ -2,16 +2,24 @@
 
 namespace App\Services\Ops;
 
+use App\Enums\OtpStatus;
 use App\Enums\TransactionStatus;
+use App\Models\OtpVerification;
 use App\Models\Transaction;
+use App\Services\Otp\OtpService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class OpsMonitoringService
 {
+    public function __construct(
+        private readonly OtpService $otpService,
+    ) {
+    }
+
     /**
-     * @return array<string, int|float|null>
+     * @return array<string, int|float|null|array<string, mixed>>
      */
     public function summary(?string $dateFrom = null, ?string $dateTo = null): array
     {
@@ -46,6 +54,18 @@ class OpsMonitoringService
             'average_fulfillment_seconds' => $avgFulfillmentSeconds,
             'date_from' => $from->toDateString(),
             'date_to' => $to->toDateString(),
+            'otp' => [
+                'enabled' => $this->otpService->isEnabled(),
+                'pending' => (int) OtpVerification::query()->where('status', OtpStatus::PENDING)->count(),
+                'verified_today' => (int) OtpVerification::query()
+                    ->where('status', OtpStatus::VERIFIED)
+                    ->whereDate('verified_at', today())
+                    ->count(),
+                'failed_today' => (int) OtpVerification::query()
+                    ->where('status', OtpStatus::FAILED)
+                    ->whereDate('updated_at', today())
+                    ->count(),
+            ],
         ];
     }
 

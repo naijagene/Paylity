@@ -16,4 +16,10 @@ final class SystemSettingKeys
     public const DAILY_IP_PRODUCT_LIMIT = 'daily_ip_product_limit';
     public const MIN_PRODUCT_AMOUNT = 'min_product_amount';
     public const MAX_PRODUCT_AMOUNT = 'max_product_amount';
+    public const OTP_LENGTH = 'otp_length';
+    public const OTP_EXPIRY_MINUTES = 'otp_expiry_minutes';
+    public const OTP_MAX_ATTEMPTS = 'otp_max_attempts';
+    public const OTP_RESEND_COOLDOWN_SECONDS = 'otp_resend_cooldown_seconds';
+    public const OTP_PROVIDER = 'otp_provider';
+    public const OTP_MESSAGE_TEMPLATE = 'otp_message_template';
 }

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\FraudCheckException;
+use App\Exceptions\OtpException;
 use App\Exceptions\PaystackConfigurationException;
 use App\Exceptions\PaystackException;
 use App\Exceptions\ProductCatalogValidationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\InitializeCheckoutRequest;
+use App\Services\Platform\PurchasePolicyContext;
+use App\Services\Platform\PurchasePolicyService;
 use App\Services\TransactionService;
 use App\Support\ApiResponse;
 use App\Support\ProviderErrorSanitizer;
@@ -17,6 +20,7 @@ class CheckoutController extends Controller
 {
     public function __construct(
         private readonly TransactionService $transactionService,
+        private readonly PurchasePolicyService $purchasePolicyService,
     ) {
     }
 
@@ -29,10 +33,40 @@ class CheckoutController extends Controller
                 userAgent: $request->userAgent(),
             );
         } catch (FraudCheckException $exception) {
+            if ($exception->errorCode === 'OTP_REQUIRED') {
+                $evaluation = $this->purchasePolicyService->evaluate(
+                    new PurchasePolicyContext(
+                        productAmount: (int) $request->input('product_amount'),
+                        customerPhone: (string) $request->input('customer_phone'),
+                        ipAddress: $request->ip(),
+                    ),
+                );
+
+                return ApiResponse::error(
+                    message: 'OTP verification is required for this purchase.',
+                    errors: [
+                        'code' => 'OTP_REQUIRED',
+                        'otp_required' => true,
+                        'policy' => [
+                            'guest_limit' => $evaluation->guestLimit,
+                            'otp_threshold' => $evaluation->otpThreshold,
+                            'registration_threshold' => $evaluation->registrationThreshold,
+                        ],
+                    ],
+                    status: 422,
+                );
+            }
+
             return ApiResponse::error(
                 message: $exception->getMessage(),
                 errors: ['code' => $exception->errorCode],
                 status: 422,
+            );
+        } catch (OtpException $exception) {
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+                errors: ['code' => $exception->errorCode],
+                status: $exception->status,
             );
         } catch (ProductCatalogValidationException $exception) {
             return ApiResponse::error(

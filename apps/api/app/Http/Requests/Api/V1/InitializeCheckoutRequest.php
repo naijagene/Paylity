@@ -29,6 +29,7 @@ class InitializeCheckoutRequest extends FormRequest
             'customer_name' => ['nullable', 'string', 'max:255'],
             'product_amount' => ['required', 'integer', 'min:'.$minAmount, 'max:'.$maxAmount],
             'payload' => ['nullable', 'array'],
+            'verification_token' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

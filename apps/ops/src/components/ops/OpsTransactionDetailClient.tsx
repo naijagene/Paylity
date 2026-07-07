@@ -365,6 +365,18 @@ export function OpsTransactionDetailClient() {
               </dd>
             </div>
             <div>
+              <dt className="text-foreground/60">OTP Required</dt>
+              <dd className="font-semibold">
+                {transaction.otp_required ? "Yes" : "No"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-foreground/60">OTP Verified</dt>
+              <dd className="font-semibold">
+                {transaction.otp_verified ?? transaction.verified_phone ? "Yes" : "No"}
+              </dd>
+            </div>
+            <div>
               <dt className="text-foreground/60">Verified Phone</dt>
               <dd className="font-semibold">
                 {transaction.verified_phone ? "Yes" : "No"}

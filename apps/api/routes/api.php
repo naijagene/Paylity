@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Admin\SettingsController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\OtpController;
 use App\Http\Controllers\Api\V1\Ops\OpsMonitoringController;
 use App\Http\Controllers\Api\V1\Ops\OpsNoteController;
 use App\Http\Controllers\Api\V1\Ops\OpsSummaryController;
@@ -22,6 +23,15 @@ Route::get('/catalog/products', [CatalogController::class, 'products']);
 
 Route::middleware('throttle:checkout')->group(function () {
     Route::post('/checkout/initialize', [CheckoutController::class, 'initialize']);
+});
+
+Route::middleware('throttle:otp-request')->group(function () {
+    Route::post('/otp/request', [OtpController::class, 'request']);
+});
+
+Route::middleware('throttle:otp-verify')->group(function () {
+    Route::post('/otp/verify', [OtpController::class, 'verify']);
+    Route::post('/otp/resend', [OtpController::class, 'resend']);
 });
 
 Route::middleware('throttle:transaction-lookup')->group(function () {

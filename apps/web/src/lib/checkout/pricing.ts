@@ -1,7 +1,13 @@
 import { formatNaira } from "./formatNaira";
 
-/** Maximum product amount for guest checkout (excludes fees). */
-export const GUEST_MAX_PRODUCT_AMOUNT = 10_000;
+/** Amounts up to this value do not require OTP. */
+export const GUEST_OTP_THRESHOLD = 10_000;
+
+/** Maximum unverified guest product amount when OTP verified. */
+export const GUEST_HARD_LIMIT = 20_000;
+
+/** @deprecated Use GUEST_OTP_THRESHOLD or GUEST_HARD_LIMIT explicitly. */
+export const GUEST_MAX_PRODUCT_AMOUNT = GUEST_HARD_LIMIT;
 
 /** Minimum product amount for airtime/electricity. */
 export const MIN_PRODUCT_AMOUNT = 50;
@@ -22,8 +28,16 @@ export function calculatePayableAmount(
   return productAmount + CONVENIENCE_FEE + gatewayFee;
 }
 
+export function requiresOtpVerification(productAmount: number): boolean {
+  return productAmount > GUEST_OTP_THRESHOLD && productAmount <= GUEST_HARD_LIMIT;
+}
+
+export function isOverGuestHardLimit(productAmount: number): boolean {
+  return productAmount > GUEST_HARD_LIMIT;
+}
+
 export function isOverGuestProductLimit(productAmount: number): boolean {
-  return productAmount > GUEST_MAX_PRODUCT_AMOUNT;
+  return isOverGuestHardLimit(productAmount);
 }
 
 export function formatGatewayFeeLabel(
