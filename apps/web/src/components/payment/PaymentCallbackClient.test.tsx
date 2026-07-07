@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { useSearchParams } from "next/navigation";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PaymentCallbackClient } from "./PaymentCallbackClient";
 import { verifyPaystackPayment } from "@/lib/api/payments";
 import { getTransaction } from "@/lib/api/transactions";
+import { renderWithProviders } from "@/test/renderWithProviders";
 
 const mockReplace = vi.fn();
 
@@ -65,7 +66,7 @@ describe("PaymentCallbackClient", () => {
       }),
     );
 
-    render(<PaymentCallbackClient />);
+    renderWithProviders(<PaymentCallbackClient />);
 
     expect(
       screen.getByRole("heading", {
@@ -87,7 +88,7 @@ describe("PaymentCallbackClient", () => {
       status: "fulfilled",
     });
 
-    render(<PaymentCallbackClient />);
+    renderWithProviders(<PaymentCallbackClient />);
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith(
@@ -103,7 +104,7 @@ describe("PaymentCallbackClient", () => {
       fulfillment_status: "pending",
     });
 
-    render(<PaymentCallbackClient />);
+    renderWithProviders(<PaymentCallbackClient />);
 
     await waitFor(() => {
       expect(
@@ -150,7 +151,7 @@ describe("PaymentCallbackClient", () => {
       status: "fulfilled",
     });
 
-    render(<PaymentCallbackClient />);
+    renderWithProviders(<PaymentCallbackClient />);
 
     await waitFor(() => {
       expect(
@@ -175,7 +176,7 @@ describe("PaymentCallbackClient", () => {
       failure_reason: "Delivery timeout",
     });
 
-    render(<PaymentCallbackClient />);
+    renderWithProviders(<PaymentCallbackClient />);
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith(
@@ -191,7 +192,7 @@ describe("PaymentCallbackClient", () => {
       payment_status: "failed",
     });
 
-    render(<PaymentCallbackClient />);
+    renderWithProviders(<PaymentCallbackClient />);
 
     await waitFor(() => {
       expect(
@@ -210,7 +211,7 @@ describe("PaymentCallbackClient", () => {
       fulfillment_status: "pending",
     });
 
-    render(<PaymentCallbackClient />);
+    renderWithProviders(<PaymentCallbackClient />);
 
     await waitFor(() => {
       expect(

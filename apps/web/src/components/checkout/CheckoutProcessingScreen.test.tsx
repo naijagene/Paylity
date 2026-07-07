@@ -25,7 +25,7 @@ describe("CheckoutProcessingScreen", () => {
         "Please keep this page open. Your purchase is being securely processed.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Preparing payment...")).toBeInTheDocument();
+    expect(screen.getByText("Preparing your purchase...")).toBeInTheDocument();
     expect(
       screen.getByText("Usually takes less than 15 seconds"),
     ).toBeInTheDocument();

@@ -32,6 +32,7 @@ describe("PaymentProcessingCard", () => {
         "Pay bills, buy airtime & data, and more — all in one place.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("PYL-20260706-PROC01")).toBeInTheDocument();
+    expect(screen.getByText("Preparing your purchase...")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
   });
 });

@@ -11,7 +11,7 @@ export type TransactionLike = {
   status?: string | null;
 };
 
-export type StatusBadgeVariant = "success" | "pending" | "failed";
+export type StatusBadgeVariant = "success" | "processing" | "failed" | "info";
 
 export type TimelinePhase =
   | "awaiting"
@@ -135,19 +135,19 @@ export function getBadgeState(transaction: TransactionLike): BadgeState {
     case "created":
     case "payment_pending":
       return {
-        payment: { label: "Payment Pending", variant: "pending" },
-        fulfillment: { label: "Awaiting Payment", variant: "pending" },
+        payment: { label: "Payment Pending", variant: "info" },
+        fulfillment: { label: "Awaiting Payment", variant: "info" },
       };
     case "payment_failed":
       return {
         payment: { label: "Payment Failed", variant: "failed" },
-        fulfillment: { label: "Not Started", variant: "pending" },
+        fulfillment: { label: "Not Started", variant: "info" },
       };
     case "payment_success":
     case "fulfillment_pending":
       return {
         payment: { label: "Payment Successful", variant: "success" },
-        fulfillment: { label: "Processing", variant: "pending" },
+        fulfillment: { label: "Processing", variant: "processing" },
       };
     case "fulfilled":
       return {

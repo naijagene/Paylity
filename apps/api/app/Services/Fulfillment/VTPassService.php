@@ -4,6 +4,8 @@ namespace App\Services\Fulfillment;
 
 use App\Exceptions\VTPassConfigurationException;
 use App\Exceptions\VTPassException;
+use App\Services\Platform\FeatureFlagService;
+use App\Support\Platform\FeatureFlagKeys;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -16,17 +18,24 @@ class VTPassService
     public function __construct(
         private readonly VTPassRequestLogger $requestLogger,
         private readonly VTPassResponseMapper $responseMapper,
+        private readonly FeatureFlagService $featureFlags,
     ) {
     }
 
     public function isEnabled(): bool
     {
-        return (bool) config('services.vtpass.enabled');
+        return $this->featureFlags->isEnabled(
+            FeatureFlagKeys::VTPASS,
+            (bool) config('services.vtpass.enabled'),
+        );
     }
 
     public function isAutoFulfillEnabled(): bool
     {
-        return $this->isEnabled() && (bool) config('services.vtpass.auto_fulfill');
+        return $this->isEnabled() && $this->featureFlags->isEnabled(
+            FeatureFlagKeys::VTPASS_AUTO_FULFILL,
+            (bool) config('services.vtpass.auto_fulfill'),
+        );
     }
 
     public function hasCredentials(): bool

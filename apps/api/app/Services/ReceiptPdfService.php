@@ -62,21 +62,21 @@ class ReceiptPdfService
         return match ($status) {
             'created', 'payment_pending' => [
                 'paymentBadgeLabel' => 'Payment Pending',
-                'paymentBadgeVariant' => 'pending',
+                'paymentBadgeVariant' => 'info',
                 'fulfillmentBadgeLabel' => 'Awaiting Payment',
-                'fulfillmentBadgeVariant' => 'pending',
+                'fulfillmentBadgeVariant' => 'info',
             ],
             'payment_failed' => [
                 'paymentBadgeLabel' => 'Payment Failed',
                 'paymentBadgeVariant' => 'failed',
                 'fulfillmentBadgeLabel' => 'Not Started',
-                'fulfillmentBadgeVariant' => 'pending',
+                'fulfillmentBadgeVariant' => 'info',
             ],
             'payment_success', 'fulfillment_pending' => [
                 'paymentBadgeLabel' => 'Payment Successful',
                 'paymentBadgeVariant' => 'success',
                 'fulfillmentBadgeLabel' => 'Processing',
-                'fulfillmentBadgeVariant' => 'pending',
+                'fulfillmentBadgeVariant' => 'processing',
             ],
             'fulfilled' => [
                 'paymentBadgeLabel' => 'Payment Successful',
@@ -92,9 +92,9 @@ class ReceiptPdfService
             ],
             default => [
                 'paymentBadgeLabel' => 'Payment Pending',
-                'paymentBadgeVariant' => 'pending',
+                'paymentBadgeVariant' => 'info',
                 'fulfillmentBadgeLabel' => 'Awaiting Payment',
-                'fulfillmentBadgeVariant' => 'pending',
+                'fulfillmentBadgeVariant' => 'info',
             ],
         };
     }

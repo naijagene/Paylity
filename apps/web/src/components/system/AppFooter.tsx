@@ -9,6 +9,7 @@ import { getBuildInfo } from "@/lib/system/buildInfo";
 
 type AppFooterProps = {
   className?: string;
+  showBuildDetails?: boolean;
 };
 
 const FOOTER_LINKS = [
@@ -23,7 +24,10 @@ function formatDisplayVersion(version: string): string {
   return version.replace("-rc1", " RC1").replace(/-/g, ".");
 }
 
-export function AppFooter({ className = "" }: AppFooterProps) {
+export function AppFooter({
+  className = "",
+  showBuildDetails = false,
+}: AppFooterProps) {
   const build = getBuildInfo();
   const [expanded, setExpanded] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -52,15 +56,17 @@ export function AppFooter({ className = "" }: AppFooterProps) {
               <p className="mt-2 text-sm font-semibold text-success">
                 Version {displayVersion}
               </p>
-              <button
-                type="button"
-                onClick={() => setExpanded((value) => !value)}
-                className="mt-2 min-h-11 text-sm font-semibold text-muted underline-offset-2 transition-colors hover:text-dark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2"
-                aria-expanded={expanded}
-                aria-controls="build-details-panel"
-              >
-                Build details
-              </button>
+              {showBuildDetails ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((value) => !value)}
+                  className="mt-2 min-h-11 text-sm font-semibold text-muted underline-offset-2 transition-colors hover:text-dark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2"
+                  aria-expanded={expanded}
+                  aria-controls="build-details-panel"
+                >
+                  Build details
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -88,7 +94,7 @@ export function AppFooter({ className = "" }: AppFooterProps) {
             )}
           </div>
 
-          {expanded ? (
+          {showBuildDetails && expanded ? (
             <div
               id="build-details-panel"
               className="animate-fade-in mt-5 rounded-2xl border border-border bg-background px-4 py-4 text-left text-[11px] leading-relaxed text-muted"

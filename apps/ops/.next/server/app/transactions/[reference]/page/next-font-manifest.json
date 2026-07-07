@@ -1,0 +1,13 @@
+{
+  "pages": {},
+  "app": {
+    "[project]/apps/ops/src/app/transactions/[reference]/page": [
+      "static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2",
+      "static/media/e2334d715941921e-s.p.3o_v2fun1jzxk.woff2",
+      "static/media/47fe1b7cd6e6ed85-s.p.3bh2vc0w-r-ll.woff2",
+      "static/media/829ba4228c966254-s.p.2mm3nq9i83l-m.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pagesUsingSizeAdjust": false
+}

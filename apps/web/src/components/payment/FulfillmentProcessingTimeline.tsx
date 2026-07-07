@@ -13,7 +13,7 @@ function StepIcon({ state }: { state: TimelineStep["state"] }) {
   if (state === "complete") {
     return (
       <span
-        className="flex h-7 w-7 items-center justify-center rounded-full bg-success text-sm font-bold text-white"
+        className="flex h-7 w-7 animate-success-pop items-center justify-center rounded-full bg-success text-sm font-bold text-white motion-reduce:animate-none"
         aria-hidden="true"
       >
         ✓

@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\Admin\FeatureFlagController;
+use App\Http\Controllers\Api\V1\Admin\SettingsController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -41,6 +43,13 @@ Route::middleware('throttle:payment-verify')->group(function () {
 
 Route::middleware('throttle:webhook')->group(function () {
     Route::post('/payments/paystack/webhook', [PaystackController::class, 'webhook']);
+});
+
+Route::middleware(['operator', 'throttle:ops'])->group(function () {
+    Route::get('/settings', [SettingsController::class, 'index']);
+    Route::put('/settings', [SettingsController::class, 'update']);
+    Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
+    Route::put('/feature-flags', [FeatureFlagController::class, 'update']);
 });
 
 Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function () {

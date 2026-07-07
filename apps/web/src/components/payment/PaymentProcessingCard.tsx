@@ -1,6 +1,13 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import { CONTENT_MAX_WIDTH_CLASS } from "@/components/PageContainer";
 import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import { FulfillmentProcessingTimeline } from "@/components/payment/FulfillmentProcessingTimeline";
+import {
+  PROCESSING_MESSAGE_INTERVAL_MS,
+  PROCESSING_STATUS_MESSAGES,
+} from "@/lib/ui/processingMessages";
 
 type PaymentProcessingCardProps = {
   reference: string;
@@ -32,6 +39,36 @@ function PromoCard() {
 }
 
 export function PaymentProcessingCard({ reference }: PaymentProcessingCardProps) {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [progress, setProgress] = useState(12);
+
+  useEffect(() => {
+    const messageTimer = window.setInterval(() => {
+      setMessageIndex((current) => (current + 1) % PROCESSING_STATUS_MESSAGES.length);
+    }, PROCESSING_MESSAGE_INTERVAL_MS);
+
+    const progressTimer = window.setInterval(() => {
+      setProgress((current) => {
+        if (current >= 92) {
+          return current;
+        }
+
+        const step = current < 60 ? 8 : current < 80 ? 4 : 2;
+        return Math.min(current + step, 92);
+      });
+    }, 900);
+
+    return () => {
+      window.clearInterval(messageTimer);
+      window.clearInterval(progressTimer);
+    };
+  }, []);
+
+  const statusMessage = useMemo(
+    () => PROCESSING_STATUS_MESSAGES[messageIndex],
+    [messageIndex],
+  );
+
   return (
     <div
       className={`animate-fade-in mx-auto w-full ${CONTENT_MAX_WIDTH_CLASS} space-y-6`}
@@ -60,6 +97,28 @@ export function PaymentProcessingCard({ reference }: PaymentProcessingCardProps)
         <p className="mt-3 text-sm leading-relaxed text-muted">
           This usually takes a few seconds. Please do not close this page.
         </p>
+
+        <div
+          className="mx-auto mt-6 max-w-md rounded-2xl border border-border bg-background px-4 py-4 text-left"
+          aria-live="polite"
+        >
+          <p className="text-sm font-semibold text-dark">{statusMessage}</p>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-dark/10">
+            <div
+              className="h-full rounded-full bg-success transition-all duration-700 ease-out motion-reduce:transition-none"
+              style={{ width: `${progress}%` }}
+              role="progressbar"
+              aria-valuenow={progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Processing progress"
+            />
+          </div>
+          <p className="mt-3 text-xs font-medium text-muted">
+            Usually takes less than 15 seconds
+          </p>
+        </div>
+
         <p className="mt-5 font-mono text-sm font-bold text-dark">{reference}</p>
       </section>
 

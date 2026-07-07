@@ -1,0 +1,11 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/monitoring/page": "/monitoring",
+  "/page": "/",
+  "/platform/page": "/platform",
+  "/profile/page": "/profile",
+  "/reports/page": "/reports",
+  "/transactions/[reference]/page": "/transactions/[reference]",
+  "/transactions/page": "/transactions"
+}

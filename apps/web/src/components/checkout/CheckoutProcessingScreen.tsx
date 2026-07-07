@@ -4,14 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { PaylityLogo } from "@/components/brand/PaylityLogo";
 import type { ProductType } from "@/lib/checkout/types";
-
-const STATUS_MESSAGES = [
-  "Preparing payment...",
-  "Verifying payment...",
-  "Submitting request...",
-  "Waiting for confirmation...",
-  "Finalizing your purchase...",
-] as const;
+import {
+  PROCESSING_MESSAGE_INTERVAL_MS,
+  PROCESSING_STATUS_MESSAGES,
+} from "@/lib/ui/processingMessages";
 
 const CUSTOMER_TIPS = [
   "Keep this page open until processing completes.",
@@ -44,8 +40,8 @@ export function CheckoutProcessingScreen({
 
   useEffect(() => {
     const messageTimer = window.setInterval(() => {
-      setMessageIndex((current) => (current + 1) % STATUS_MESSAGES.length);
-    }, 2400);
+      setMessageIndex((current) => (current + 1) % PROCESSING_STATUS_MESSAGES.length);
+    }, PROCESSING_MESSAGE_INTERVAL_MS);
 
     const tipTimer = window.setInterval(() => {
       setTipIndex((current) => (current + 1) % CUSTOMER_TIPS.length);
@@ -70,7 +66,7 @@ export function CheckoutProcessingScreen({
   }, []);
 
   const statusMessage = useMemo(
-    () => STATUS_MESSAGES[messageIndex],
+    () => PROCESSING_STATUS_MESSAGES[messageIndex],
     [messageIndex],
   );
   const customerTip = useMemo(() => CUSTOMER_TIPS[tipIndex], [tipIndex]);
@@ -107,7 +103,7 @@ export function CheckoutProcessingScreen({
             <p className="text-sm font-semibold text-dark">{statusMessage}</p>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-dark/10">
               <div
-                className="h-full rounded-full bg-success transition-all duration-700 ease-out"
+                className="h-full rounded-full bg-success transition-all duration-700 ease-out motion-reduce:transition-none"
                 style={{ width: `${progress}%` }}
                 role="progressbar"
                 aria-valuenow={progress}

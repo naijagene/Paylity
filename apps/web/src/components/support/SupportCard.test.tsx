@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderWithProviders } from "@/test/renderWithProviders";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SupportCard } from "./SupportCard";
 
@@ -10,7 +11,7 @@ describe("SupportCard", () => {
   it("shows email support", () => {
     vi.stubEnv("NEXT_PUBLIC_WHATSAPP_URL", "");
 
-    render(<SupportCard reference="PYL-20260702-ABC123" />);
+    renderWithProviders(<SupportCard reference="PYL-20260702-ABC123" />);
 
     expect(
       screen.getByRole("link", {
@@ -26,7 +27,7 @@ describe("SupportCard", () => {
       "https://wa.me/2348012345678",
     );
 
-    render(<SupportCard reference="PYL-20260702-ABC123" />);
+    renderWithProviders(<SupportCard reference="PYL-20260702-ABC123" />);
 
     expect(
       screen.getByRole("link", { name: /Chat with PAYLITY Support on WhatsApp/i }),
@@ -37,7 +38,7 @@ describe("SupportCard", () => {
   it("shows WhatsApp coming soon card when URL is not configured", () => {
     vi.stubEnv("NEXT_PUBLIC_WHATSAPP_URL", "");
 
-    render(<SupportCard reference="PYL-20260702-ABC123" />);
+    renderWithProviders(<SupportCard reference="PYL-20260702-ABC123" />);
 
     expect(
       screen.getByLabelText(/WhatsApp Support coming soon/i),
@@ -52,7 +53,7 @@ describe("SupportCard", () => {
       "https://wa.me/2348000000000",
     );
 
-    render(<SupportCard reference="PYL-20260702-ABC123" />);
+    renderWithProviders(<SupportCard reference="PYL-20260702-ABC123" />);
 
     expect(
       screen.getByLabelText(/WhatsApp Support coming soon/i),
@@ -60,5 +61,18 @@ describe("SupportCard", () => {
     expect(
       screen.queryByRole("link", { name: /Chat with PAYLITY Support on WhatsApp/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows transaction reference with copy action", () => {
+    vi.stubEnv("NEXT_PUBLIC_WHATSAPP_URL", "");
+
+    renderWithProviders(<SupportCard reference="PYL-20260702-ABC123" />);
+
+    expect(screen.getByText("PYL-20260702-ABC123")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /Copy Reference PYL-20260702-ABC123/i,
+      }),
+    ).toBeInTheDocument();
   });
 });

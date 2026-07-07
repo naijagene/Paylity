@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CopyButton } from "@/components/ui/CopyButton";
 import {
   getSupportEmailHref,
   SUPPORT_EMAIL,
@@ -67,11 +68,27 @@ export function SupportCard({
           <div>
             <p className="font-display text-lg font-bold text-dark">Need help?</p>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Our support team can help with payment or delivery questions.{" "}
-              <span className="font-semibold text-dark">
-                Include your transaction reference when contacting us.
-              </span>
+              Our support team can help with payment or delivery questions.
             </p>
+            {reference ? (
+              <div className="mt-4 rounded-xl border border-border bg-background px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Transaction Reference
+                </p>
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="font-mono text-sm font-bold text-dark">{reference}</p>
+                  <CopyButton
+                    value={reference}
+                    label="Copy Reference"
+                    className="w-full sm:w-auto"
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-muted">
+                Include your transaction reference when contacting us.
+              </p>
+            )}
           </div>
         </div>
 

@@ -5,13 +5,23 @@ namespace App\Services\Payments;
 use App\Exceptions\PaystackConfigurationException;
 use App\Exceptions\PaystackException;
 use App\Models\Transaction;
+use App\Services\Platform\FeatureFlagService;
+use App\Support\Platform\FeatureFlagKeys;
 use Illuminate\Support\Facades\Http;
 
 class PaystackService
 {
+    public function __construct(
+        private readonly FeatureFlagService $featureFlags,
+    ) {
+    }
+
     public function isEnabled(): bool
     {
-        return (bool) config('services.paystack.enabled');
+        return $this->featureFlags->isEnabled(
+            FeatureFlagKeys::PAYSTACK,
+            (bool) config('services.paystack.enabled'),
+        );
     }
 
     public function hasSecretKey(): bool

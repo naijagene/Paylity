@@ -2,20 +2,22 @@
 
 namespace Tests\Feature\Api\V1;
 
-use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\SeedsProductCatalog;
+use Tests\Concerns\SeedsPlatformSettings;
 use Tests\TestCase;
 
 class CheckoutInitializeTest extends TestCase
 {
     use RefreshDatabase;
     use SeedsProductCatalog;
+    use SeedsPlatformSettings;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seedProductCatalog();
+        $this->seedPlatformSettings();
 
         config([
             'services.paystack.enabled' => false,
@@ -80,7 +82,7 @@ class CheckoutInitializeTest extends TestCase
         $this->assertGreaterThan(10_000, $response->json('data.payable_amount'));
     }
 
-    public function test_checkout_blocks_product_amount_above_guest_limit(): void
+    public function test_checkout_blocks_product_amount_above_otp_threshold_without_verification(): void
     {
         $response = $this->postJson('/api/v1/checkout/initialize', [
             'product_type' => 'airtime',
@@ -93,7 +95,28 @@ class CheckoutInitializeTest extends TestCase
             ->assertStatus(422)
             ->assertJson([
                 'success' => false,
-                'message' => 'Guest product amount is limited to ₦10,000.',
+                'message' => 'Phone verification is required for this purchase amount.',
+                'errors' => [
+                    'code' => 'OTP_REQUIRED',
+                ],
+            ]);
+
+        $this->assertDatabaseCount('transactions', 0);
+    }
+
+    public function test_checkout_blocks_product_amount_above_guest_limit(): void
+    {
+        $response = $this->postJson('/api/v1/checkout/initialize', [
+            'product_type' => 'airtime',
+            'customer_phone' => '08031234567',
+            'product_amount' => 20_001,
+            'payload' => [],
+        ]);
+
+        $response
+            ->assertStatus(422)
+            ->assertJson([
+                'success' => false,
                 'errors' => [
                     'code' => 'GUEST_LIMIT_EXCEEDED',
                 ],

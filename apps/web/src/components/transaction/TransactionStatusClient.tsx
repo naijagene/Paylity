@@ -26,6 +26,7 @@ import {
   shouldPollTransactionStatus,
 } from "@/lib/transaction/display";
 import {
+  formatReceiptTimestamp,
   getReceiptPhoneDisplay,
   getReceiptProductLabel,
 } from "@/lib/receipt/display";
@@ -277,6 +278,10 @@ export function TransactionStatusClient() {
   const { transaction } = state;
   const productLabel = getReceiptProductLabel(transaction.receipt, transaction.product_type);
   const phoneDisplay = getReceiptPhoneDisplay(transaction.receipt);
+  const purchaseTimestamp = formatReceiptTimestamp(
+    transaction.receipt?.timestamp ?? transaction.created_at,
+    transaction.receipt?.timestamp_display,
+  );
   const pollingExhausted =
     pollExhausted &&
     hasPollingExhausted(
@@ -397,6 +402,9 @@ export function TransactionStatusClient() {
               <p className="mt-3 text-sm text-muted">
                 {productLabel} · {phoneDisplay}
               </p>
+              {purchaseTimestamp ? (
+                <p className="mt-2 text-sm text-muted">{purchaseTimestamp}</p>
+              ) : null}
             </div>
             <CopyButton
               value={transaction.reference}
@@ -438,7 +446,10 @@ export function TransactionStatusClient() {
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted">
             Status Timeline
           </h2>
-          <TransactionTimeline phase={getTimelinePhase(transaction.status)} />
+          <TransactionTimeline
+            phase={getTimelinePhase(transaction.status)}
+            animated
+          />
         </section>
 
         <div className="space-y-3 print:hidden">
