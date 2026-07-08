@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PAYLITY">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <path
+    d="M144 128h224c61.856 0 112 50.144 112 112s-50.144 112-112 112H272v96H144V128zm128 160h96c26.51 0 48-21.49 48-48s-21.49-48-48-48h-96v96z"
+    fill="#10b981"
+  />
+</svg>
