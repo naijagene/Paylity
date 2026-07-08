@@ -10,6 +10,7 @@ use App\Services\Otp\OtpService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class OpsMonitoringService
 {
@@ -45,6 +46,7 @@ class OpsMonitoringService
             ->count();
 
         $avgFulfillmentSeconds = $this->averageFulfillmentSeconds($from, $to);
+        $queueMetrics = $this->queueMetrics();
 
         return [
             'revenue' => $revenue,
@@ -54,6 +56,7 @@ class OpsMonitoringService
             'average_fulfillment_seconds' => $avgFulfillmentSeconds,
             'date_from' => $from->toDateString(),
             'date_to' => $to->toDateString(),
+            'queue' => $queueMetrics,
             'otp' => [
                 'enabled' => $this->otpService->isEnabled(),
                 'pending' => (int) OtpVerification::query()->where('status', OtpStatus::PENDING)->count(),
@@ -86,5 +89,36 @@ class OpsMonitoringService
         });
 
         return round($totalSeconds / $transactions->count(), 1);
+    }
+
+    /**
+     * @return array{connection: string, pending_jobs: int, failed_jobs: int, status: string}
+     */
+    private function queueMetrics(): array
+    {
+        $connection = (string) config('queue.default', 'sync');
+        $pendingJobs = 0;
+        $failedJobs = 0;
+
+        if ($connection === 'database' && Schema::hasTable('jobs')) {
+            $pendingJobs = (int) DB::table('jobs')->count();
+        }
+
+        if (Schema::hasTable('failed_jobs')) {
+            $failedJobs = (int) DB::table('failed_jobs')->count();
+        }
+
+        $status = match (true) {
+            $failedJobs > 0 => 'degraded',
+            $connection === 'sync' => 'warning',
+            default => 'ok',
+        };
+
+        return [
+            'connection' => $connection,
+            'pending_jobs' => $pendingJobs,
+            'failed_jobs' => $failedJobs,
+            'status' => $status,
+        ];
     }
 }

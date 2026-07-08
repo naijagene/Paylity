@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
 import { KpiCard, SectionCard } from "@/components/ui/OpsCards";
-import { fetchFeatureFlags } from "@/lib/api/admin";
+import { fetchFeatureFlags, fetchSystemSettings } from "@/lib/api/admin";
 import { fetchPublicHealth } from "@/lib/api/health";
 import { fetchOpsMonitoring, fetchOpsSummary, searchOpsTransactions } from "@/lib/api/ops";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
@@ -38,6 +38,7 @@ export function ExecutiveDashboardClient() {
     avgFulfillment: "—",
   });
   const [healthCards, setHealthCards] = useState<PlatformHealth[]>([]);
+  const [incidentWarning, setIncidentWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,12 +48,13 @@ export function ExecutiveDashboardClient() {
       setError(null);
 
       try {
-        const [summary, monitoring, health, flags, failedItems] = await Promise.all([
+        const [summary, monitoring, health, flags, failedItems, settings] = await Promise.all([
           fetchOpsSummary(),
           fetchOpsMonitoring(),
           fetchPublicHealth(),
           fetchFeatureFlags(),
           searchOpsTransactions({ status: "failed", per_page: 1 }),
+          fetchSystemSettings(),
         ]);
 
         if (cancelled) {
@@ -61,6 +63,20 @@ export function ExecutiveDashboardClient() {
 
         const paystack = flags.find((flag) => flag.key === "paystack");
         const vtpass = flags.find((flag) => flag.key === "vtpass");
+        const incidentMode = settings.find((setting) => setting.key === "incident_mode");
+        const maintenanceMode = settings.find((setting) => setting.key === "maintenance_mode");
+
+        if (Boolean(incidentMode?.value)) {
+          setIncidentWarning(
+            "Incident mode is enabled. Customer checkout is paused and the homepage incident banner is visible.",
+          );
+        } else if (Boolean(maintenanceMode?.value)) {
+          setIncidentWarning(
+            "Maintenance mode is enabled. Customer checkout is temporarily disabled.",
+          );
+        } else {
+          setIncidentWarning(null);
+        }
 
         setKpis({
           revenue: formatNaira(monitoring.revenue ?? summary.revenue_today ?? 0),
@@ -85,8 +101,17 @@ export function ExecutiveDashboardClient() {
           },
           {
             label: "Database",
-            indicator: mapDatabaseHealth(health.checks?.database),
+            indicator: mapDatabaseHealth(
+              typeof health.checks?.database === "string" ? health.checks.database : undefined,
+            ),
             detail: health.checks?.database === "ok" ? "Connected" : "Check connection",
+          },
+          {
+            label: "Cache",
+            indicator: mapDatabaseHealth(
+              typeof health.checks?.cache === "string" ? health.checks.cache : undefined,
+            ),
+            detail: health.checks?.cache === "ok" ? "Operational" : "Check cache store",
           },
           {
             label: "Paystack",
@@ -100,8 +125,15 @@ export function ExecutiveDashboardClient() {
           },
           {
             label: "Queue",
-            indicator: "warning",
-            detail: "Queue monitoring not configured yet",
+            indicator:
+              monitoring.queue?.status === "ok"
+                ? "healthy"
+                : monitoring.queue?.status === "degraded"
+                  ? "offline"
+                  : "warning",
+            detail: monitoring.queue
+              ? `${monitoring.queue.connection} · pending ${monitoring.queue.pending_jobs} · failed ${monitoring.queue.failed_jobs}`
+              : "Queue metrics unavailable",
           },
         ]);
 
@@ -159,6 +191,12 @@ export function ExecutiveDashboardClient() {
             Monitor today&apos;s performance, platform health, and jump into common operator actions.
           </p>
         </header>
+
+        {incidentWarning ? (
+          <p className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+            {incidentWarning}
+          </p>
+        ) : null}
 
         {error ? (
           <p className="rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">

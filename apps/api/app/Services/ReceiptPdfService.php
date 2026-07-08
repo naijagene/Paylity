@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Transaction;
+use Illuminate\Support\Facades\Cache;
 
 class ReceiptPdfService
 {
@@ -15,6 +16,22 @@ class ReceiptPdfService
      * @return array{html: string, filename: string}
      */
     public function render(Transaction $transaction): array
+    {
+        $cacheKey = sprintf(
+            'receipt.html.%s.%s',
+            $transaction->reference,
+            $transaction->updated_at?->timestamp ?? '0',
+        );
+
+        return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($transaction): array {
+            return $this->buildReceiptHtml($transaction);
+        });
+    }
+
+    /**
+     * @return array{html: string, filename: string}
+     */
+    private function buildReceiptHtml(Transaction $transaction): array
     {
         $receipt = $this->receiptService->buildReceiptPayload($transaction);
 

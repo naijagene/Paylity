@@ -20,6 +20,7 @@ import { resolveProduct } from "@/lib/checkout/checkoutSchemas";
 import { validateCheckoutForm } from "@/lib/checkout/checkoutValidation";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { useCheckoutState } from "@/hooks/useCheckoutState";
+import { usePlatformStatus } from "@/hooks/usePlatformStatus";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
 import type { ProductType } from "@/lib/checkout/types";
 
@@ -29,6 +30,7 @@ const INVALID_VARIATION_MESSAGE =
 function CheckoutEngine({ product }: { product: ProductType }) {
   const { catalog, loading: catalogLoading, error: catalogError } =
     useProductCatalog();
+  const { status: platformStatus, loading: platformLoading } = usePlatformStatus();
 
   const {
     state,
@@ -60,10 +62,23 @@ function CheckoutEngine({ product }: { product: ProductType }) {
   const [apiError, setApiError] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
-  const checkoutAvailability = useMemo(
-    () => canInitializeCheckout(product, catalog, catalogLoading),
-    [product, catalog, catalogLoading],
-  );
+  const checkoutAvailability = useMemo(() => {
+    if (platformLoading) {
+      return {
+        allowed: false,
+        message: "Checking platform availability…",
+      };
+    }
+
+    if (!platformStatus.checkout_enabled && platformStatus.message) {
+      return {
+        allowed: false,
+        message: platformStatus.message,
+      };
+    }
+
+    return canInitializeCheckout(product, catalog, catalogLoading);
+  }, [platformLoading, platformStatus, product, catalog, catalogLoading]);
 
   const catalogNetworks = useMemo(
     () => getCatalogNetworks(catalog, process.env.NODE_ENV === "development"),

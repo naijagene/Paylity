@@ -3,49 +3,37 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Services\BuildInfoService;
+use App\Services\Platform\HealthCheckService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 
 class HealthController extends Controller
 {
     public function __construct(
-        private readonly BuildInfoService $buildInfoService,
+        private readonly HealthCheckService $healthCheckService,
     ) {
     }
 
     public function __invoke(): JsonResponse
     {
-        $buildInfo = $this->buildInfoService->all();
-        $databaseHealthy = $this->checkDatabase();
+        $report = $this->healthCheckService->report();
+        $status = $report['status'];
+
+        $httpStatus = match ($status) {
+            'ok' => 200,
+            default => 503,
+        };
+
+        $message = match ($status) {
+            'ok' => 'PAYLITY API is healthy.',
+            'degraded' => 'PAYLITY API is running with degraded health.',
+            default => 'PAYLITY API is unhealthy.',
+        };
 
         return ApiResponse::success(
-            data: [
-                'status' => $databaseHealthy ? 'ok' : 'degraded',
-                'application' => $buildInfo['application'],
-                'version' => $buildInfo['version'],
-                'environment' => $buildInfo['environment'],
-                'build' => $buildInfo['build'],
-                'current_time' => now()->toIso8601String(),
-                'checks' => [
-                    'database' => $databaseHealthy ? 'ok' : 'failed',
-                ],
-            ],
-            message: $databaseHealthy
-                ? 'PAYLITY API is healthy.'
-                : 'PAYLITY API is running with degraded health.',
+            data: $report,
+            message: $message,
+            status: $httpStatus,
         );
-    }
-
-    private function checkDatabase(): bool
-    {
-        try {
-            DB::connection()->getPdo();
-
-            return true;
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

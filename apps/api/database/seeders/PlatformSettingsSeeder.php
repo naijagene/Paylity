@@ -50,6 +50,12 @@ class PlatformSettingsSeeder extends Seeder
                 'description' => 'Temporarily disable checkout while maintenance is in progress.',
             ],
             [
+                'key' => SystemSettingKeys::INCIDENT_MODE,
+                'value' => '0',
+                'type' => 'boolean',
+                'description' => 'Pause checkout and show an incident banner during platform incidents.',
+            ],
+            [
                 'key' => SystemSettingKeys::ADS_ENABLED,
                 'value' => '1',
                 'type' => 'boolean',

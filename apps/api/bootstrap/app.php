@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'operator' => \App\Http\Middleware\VerifyOperatorKey::class,
             'feature' => \App\Http\Middleware\EnsureFeatureEnabled::class,
         ]);
+
+        $middleware->append([
+            \App\Http\Middleware\SecurityHeadersMiddleware::class,
+            \App\Http\Middleware\CompressApiResponseMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (ValidationException $exception, Request $request) {

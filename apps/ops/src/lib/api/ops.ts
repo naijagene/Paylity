@@ -210,12 +210,77 @@ export type OpsMonitoringSummary = {
   average_fulfillment_seconds: number | null;
   date_from: string;
   date_to: string;
+  queue?: {
+    connection: string;
+    pending_jobs: number;
+    failed_jobs: number;
+    status: string;
+  };
   otp?: {
     enabled: boolean;
     pending: number;
     verified_today: number;
     failed_today: number;
   };
+};
+
+export type OpsDailyReconciliation = {
+  date: string;
+  total_transactions: number;
+  successful_payments: number;
+  payment_failed: number;
+  fulfillment_failed: number;
+  fulfilled: number;
+  pending_fulfillment: number;
+  gross_revenue: number;
+  product_value: number;
+  convenience_fees: number;
+  gateway_fees: number;
+  success_rate: number;
+};
+
+export type OpsFailedTransaction = {
+  reference: string;
+  product_type: string;
+  customer_phone: string;
+  product_amount: number;
+  payable_amount: number;
+  status: string;
+  failure_reason?: string | null;
+  payment_reference?: string | null;
+  created_at?: string | null;
+};
+
+export type OpsSettlementSummary = {
+  date_from: string;
+  date_to: string;
+  transactions: number;
+  collected_amount: number;
+  product_value: number;
+  convenience_fees: number;
+  gateway_fees: number;
+  estimated_net: number;
+};
+
+export type OpsRetrySummary = {
+  date_from: string;
+  date_to: string;
+  total_retries: number;
+  successful_retries: number;
+  failed_retries: number;
+  items: Array<{
+    transaction_reference?: string | null;
+    product_type?: string | null;
+    customer_phone?: string | null;
+    transaction_status?: string | null;
+    attempt_number: number;
+    provider: string;
+    outcome: string;
+    duration_ms?: number | null;
+    failure_reason?: string | null;
+    actor: string;
+    attempted_at?: string | null;
+  }>;
 };
 
 export type OpsNote = {
@@ -329,4 +394,79 @@ export async function createOpsNote(reference: string, body: string) {
   );
 
   return { data, message };
+}
+
+export async function fetchDailyReconciliation(date?: string) {
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  const { data } = await opsRequest<OpsDailyReconciliation>(
+    `/ops/reports/daily-reconciliation${query}`,
+  );
+
+  return data;
+}
+
+export async function fetchFailedTransactionsReport(params?: {
+  date_from?: string;
+  date_to?: string;
+}) {
+  const query = new URLSearchParams();
+
+  if (params?.date_from) {
+    query.set("date_from", params.date_from);
+  }
+
+  if (params?.date_to) {
+    query.set("date_to", params.date_to);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const { data } = await opsRequest<OpsFailedTransaction[]>(
+    `/ops/reports/failed-transactions${suffix}`,
+  );
+
+  return data;
+}
+
+export async function fetchSettlementSummary(params?: {
+  date_from?: string;
+  date_to?: string;
+}) {
+  const query = new URLSearchParams();
+
+  if (params?.date_from) {
+    query.set("date_from", params.date_from);
+  }
+
+  if (params?.date_to) {
+    query.set("date_to", params.date_to);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const { data } = await opsRequest<OpsSettlementSummary>(
+    `/ops/reports/settlement-summary${suffix}`,
+  );
+
+  return data;
+}
+
+export async function fetchRetrySummary(params?: {
+  date_from?: string;
+  date_to?: string;
+}) {
+  const query = new URLSearchParams();
+
+  if (params?.date_from) {
+    query.set("date_from", params.date_from);
+  }
+
+  if (params?.date_to) {
+    query.set("date_to", params.date_to);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const { data } = await opsRequest<OpsRetrySummary>(
+    `/ops/reports/retry-summary${suffix}`,
+  );
+
+  return data;
 }

@@ -6,6 +6,7 @@ use App\Exceptions\ProductCatalogValidationException;
 use App\Models\ProductCategory;
 use App\Models\ProviderService;
 use App\Models\ProviderVariation;
+use Illuminate\Support\Facades\Cache;
 
 class ProductCatalogService
 {
@@ -60,6 +61,32 @@ class ProductCatalogService
      * @return array<string, mixed>
      */
     public function catalogResponse(
+        ?string $category = null,
+        bool $includeHidden = false,
+    ): array {
+        $cacheKey = sprintf(
+            'catalog.response.%s.%s',
+            $category ?? 'all',
+            $includeHidden ? 'hidden' : 'public',
+        );
+
+        return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($category, $includeHidden): array {
+            return $this->buildCatalogResponse($category, $includeHidden);
+        });
+    }
+
+    public function forgetCatalogCache(): void
+    {
+        foreach (['all', 'airtime', 'data', 'electricity'] as $category) {
+            Cache::forget(sprintf('catalog.response.%s.public', $category));
+            Cache::forget(sprintf('catalog.response.%s.hidden', $category));
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildCatalogResponse(
         ?string $category = null,
         bool $includeHidden = false,
     ): array {

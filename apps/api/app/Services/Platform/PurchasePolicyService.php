@@ -46,6 +46,13 @@ class PurchasePolicyService
      */
     public function assertCanInitialize(PurchasePolicyContext $context): PurchasePolicyEvaluation
     {
+        if ($this->settings->getBool(SystemSettingKeys::INCIDENT_MODE)) {
+            throw new FraudCheckException(
+                'PAYLITY is experiencing an incident. Checkout is temporarily paused.',
+                'INCIDENT_MODE',
+            );
+        }
+
         if ($this->settings->getBool(SystemSettingKeys::MAINTENANCE_MODE)) {
             throw new FraudCheckException(
                 'PAYLITY is temporarily unavailable for checkout.',

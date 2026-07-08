@@ -75,6 +75,12 @@ Check `[x]` only when verified in the target environment.
 - [ ] OTP request/verify/resend rate limits tested
 - [ ] See [OTP Identity Module](../security/OTP-IDENTITY.md)
 - [ ] `php artisan paylity:preflight` passes with no FAIL items
+- [ ] `GET /api/v1/health` returns HTTP 200 with full dependency checks
+- [ ] Security headers present on API responses (CSP, HSTS, X-Frame-Options)
+- [ ] `incident_mode` and `maintenance_mode` disabled before launch
+- [ ] Incident mode banner and checkout block tested from ops console
+- [ ] Ops reports (reconciliation, settlement, failed, retry) export successfully
+- [ ] Review [GO Live Report](../release/GO_LIVE_REPORT.md) and [Production Deployment Checklist](../deployment/PRODUCTION-DEPLOYMENT-CHECKLIST.md)
 - [ ] Privacy and Terms pages reviewed (`/privacy`, `/terms`)
 - [ ] `APP_VERSION` / `APP_BUILD` match release tag
 

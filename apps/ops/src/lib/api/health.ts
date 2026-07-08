@@ -3,8 +3,20 @@ import { getOpsApiBaseUrl } from "@/lib/api/ops";
 export type HealthResponse = {
   status: string;
   environment?: string;
+  version?: string;
   checks?: {
+    api?: string;
     database?: string;
+    cache?: string;
+    queue?: {
+      status?: string;
+      connection?: string;
+      pending_jobs?: number;
+      failed_jobs?: number;
+    };
+    mail?: string;
+    paystack?: string;
+    vtpass?: string;
   };
 };
 

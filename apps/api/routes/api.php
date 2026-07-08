@@ -9,17 +9,24 @@ use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\OtpController;
 use App\Http\Controllers\Api\V1\Ops\OpsMonitoringController;
 use App\Http\Controllers\Api\V1\Ops\OpsNoteController;
+use App\Http\Controllers\Api\V1\Ops\OpsReportsController;
 use App\Http\Controllers\Api\V1\Ops\OpsSummaryController;
 use App\Http\Controllers\Api\V1\Ops\OpsTransactionController;
 use App\Http\Controllers\Api\V1\PaystackController;
+use App\Http\Controllers\Api\V1\PlatformStatusController;
 use App\Http\Controllers\Api\V1\ReceiptController;
 use App\Http\Controllers\Api\V1\ReceiptVerificationController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\TransactionHistoryController;
 
-Route::get('/health', HealthController::class);
+Route::middleware('throttle:health')->group(function () {
+    Route::get('/health', HealthController::class);
+    Route::get('/platform/status', PlatformStatusController::class);
+});
 
-Route::get('/catalog/products', [CatalogController::class, 'products']);
+Route::middleware('throttle:catalog')->group(function () {
+    Route::get('/catalog/products', [CatalogController::class, 'products']);
+});
 
 Route::middleware('throttle:checkout')->group(function () {
     Route::post('/checkout/initialize', [CheckoutController::class, 'initialize']);
@@ -65,6 +72,10 @@ Route::middleware(['operator', 'throttle:ops'])->group(function () {
 Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function () {
     Route::get('/summary', OpsSummaryController::class);
     Route::get('/monitoring', OpsMonitoringController::class);
+    Route::get('/reports/daily-reconciliation', [OpsReportsController::class, 'dailyReconciliation']);
+    Route::get('/reports/failed-transactions', [OpsReportsController::class, 'failedTransactions']);
+    Route::get('/reports/settlement-summary', [OpsReportsController::class, 'settlementSummary']);
+    Route::get('/reports/retry-summary', [OpsReportsController::class, 'retrySummary']);
     Route::get('/transactions', [OpsTransactionController::class, 'index']);
     Route::get('/transactions/{reference}', [OpsTransactionController::class, 'show']);
     Route::post('/transactions/{reference}/fulfill', [OpsTransactionController::class, 'fulfill']);

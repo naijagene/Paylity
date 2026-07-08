@@ -67,6 +67,14 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        RateLimiter::for('health', function (Request $request) {
+            return Limit::perMinute(120)->by($request->ip());
+        });
+
+        RateLimiter::for('catalog', function (Request $request) {
+            return Limit::perMinute(60)->by($request->ip());
+        });
+
         config(['cors.allowed_origins' => CorsOriginResolver::allowedOrigins()]);
     }
 }

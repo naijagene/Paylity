@@ -10,6 +10,7 @@ final class SystemSettingKeys
     public const OTP_THRESHOLD = 'otp_threshold';
     public const REGISTRATION_THRESHOLD = 'registration_threshold';
     public const MAINTENANCE_MODE = 'maintenance_mode';
+    public const INCIDENT_MODE = 'incident_mode';
     public const ADS_ENABLED = 'ads_enabled';
     public const RECEIPT_VERIFICATION_ENABLED = 'receipt_verification_enabled';
     public const DAILY_PHONE_PRODUCT_LIMIT = 'daily_phone_product_limit';

@@ -121,6 +121,7 @@ export function PlatformClient() {
   };
 
   const maintenanceMode = settings.find((setting) => setting.key === "maintenance_mode");
+  const incidentMode = settings.find((setting) => setting.key === "incident_mode");
 
   const toggleMaintenanceMode = async () => {
     if (!maintenanceMode) {
@@ -139,6 +140,28 @@ export function PlatformClient() {
       setSettings(await fetchSystemSettings());
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Unable to update maintenance mode.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleIncidentMode = async () => {
+    if (!incidentMode) {
+      return;
+    }
+
+    const nextValue = !Boolean(incidentMode.value);
+    setSaving(true);
+
+    try {
+      await updateSystemSettings({ incident_mode: nextValue });
+      showToast({
+        title: nextValue ? "Incident mode enabled" : "Incident mode disabled",
+        variant: "success",
+      });
+      setSettings(await fetchSystemSettings());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Unable to update incident mode.");
     } finally {
       setSaving(false);
     }
@@ -187,6 +210,27 @@ export function PlatformClient() {
                 disabled={saving}
               >
                 {Boolean(maintenanceMode.value) ? "Disable Maintenance" : "Enable Maintenance"}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {incidentMode ? (
+          <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-display text-lg font-extrabold text-dark">Incident Mode</h2>
+                <p className="mt-1 text-sm text-muted">
+                  Pause checkout and show the customer-facing incident banner during platform incidents.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant={Boolean(incidentMode.value) ? "secondary" : "outline"}
+                onClick={() => void toggleIncidentMode()}
+                disabled={saving}
+              >
+                {Boolean(incidentMode.value) ? "Disable Incident Mode" : "Enable Incident Mode"}
               </Button>
             </div>
           </section>
