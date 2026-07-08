@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "generate:favicons": "node scripts/generate-favicons.mjs"
+    "generate:favicons": "node scripts/generate-favicons.mjs",
+    "generate:favicon-core": "node scripts/generate-favicon-core.mjs"
   },
   "dependencies": {
     "@paylity/shared": "file:../../packages/shared",
