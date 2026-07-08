@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         apiPrefix: 'api/v1',
     )
+    ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('paylity:reconcile-payments')->everyTenMinutes();
+        $schedule->command('paylity:process-fulfillment-retries')->everyFiveMinutes();
+        $schedule->command('paylity:cleanup-otp')->dailyAt('02:30');
+        $schedule->command('paylity:cleanup-webhooks')->weeklyOn(0, '03:00');
+    })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'operator' => \App\Http\Middleware\VerifyOperatorKey::class,

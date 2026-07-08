@@ -31,6 +31,7 @@ class OpsDashboardService
         private readonly VTPassService $vtpassService,
         private readonly VtpassFulfillmentGuard $vtpassFulfillmentGuard,
         private readonly VtpassProductReadinessService $vtpassProductReadiness,
+        private readonly OpsReliabilityService $opsReliabilityService,
     ) {
     }
 
@@ -83,6 +84,7 @@ class OpsDashboardService
             'transactions' => $this->transactionAnalytics(),
             'providers' => $this->providerHealth($health),
             'vtpass' => $this->vtpassOperations($health),
+            'reliability' => $this->opsReliabilityService->snapshot(),
             'fraud' => $this->fraudMonitoring(),
             'alerts' => $this->buildAlerts($health, $todayMonitoring, $platformStatus),
             'platform' => $platformStatus,

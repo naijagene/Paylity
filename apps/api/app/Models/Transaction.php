@@ -30,6 +30,11 @@ class Transaction extends Model
         'request_payload',
         'response_payload',
         'failure_reason',
+        'needs_manual_review',
+        'manual_review_reason',
+        'manual_review_at',
+        'fulfillment_retry_count',
+        'next_fulfillment_retry_at',
         'ip_address',
         'user_agent',
         'verified_phone',
@@ -47,6 +52,10 @@ class Transaction extends Model
             'request_payload' => 'array',
             'response_payload' => 'array',
             'verified_phone' => 'boolean',
+            'needs_manual_review' => 'boolean',
+            'fulfillment_retry_count' => 'integer',
+            'manual_review_at' => 'datetime',
+            'next_fulfillment_retry_at' => 'datetime',
             'fulfilled_at' => 'datetime',
         ];
     }

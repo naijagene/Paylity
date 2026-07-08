@@ -139,6 +139,30 @@ class PlatformSettingsSeeder extends Seeder
                 'type' => 'integer',
                 'description' => 'Maximum product amount (NGN) allowed per transaction when live safety mode is enabled.',
             ],
+            [
+                'key' => SystemSettingKeys::FULFILLMENT_RETRY_MAX_ATTEMPTS,
+                'value' => '3',
+                'type' => 'integer',
+                'description' => 'Maximum automated fulfillment retries before manual review escalation.',
+            ],
+            [
+                'key' => SystemSettingKeys::FULFILLMENT_RETRY_INTERVALS_MINUTES,
+                'value' => '5,15,60',
+                'type' => 'string',
+                'description' => 'Comma-separated retry intervals in minutes for fulfillment retries.',
+            ],
+            [
+                'key' => SystemSettingKeys::PAYMENT_RECONCILE_STALE_MINUTES,
+                'value' => '15',
+                'type' => 'integer',
+                'description' => 'Age in minutes before payment_pending transactions are reconciled with Paystack.',
+            ],
+            [
+                'key' => SystemSettingKeys::FULFILLMENT_STALE_MINUTES,
+                'value' => '30',
+                'type' => 'integer',
+                'description' => 'Age in minutes before fulfillment_pending transactions are repaired.',
+            ],
         ];
 
         foreach ($settings as $setting) {

@@ -7,6 +7,7 @@ use App\Exceptions\PaymentVerificationException;
 use App\Models\Transaction;
 use App\Exceptions\PaystackException;
 use App\Services\Fulfillment\AutoFulfillmentRecorder;
+use App\Services\Fulfillment\FulfillmentRetryService;
 use App\Services\Fulfillment\FulfillmentService;
 use App\Services\Fulfillment\VTPassService;
 use App\Services\Notifications\TransactionNotificationService;
@@ -28,6 +29,7 @@ class PaymentVerificationService
         private readonly VTPassService $vtpassService,
         private readonly FulfillmentService $fulfillmentService,
         private readonly AutoFulfillmentRecorder $autoFulfillmentRecorder,
+        private readonly FulfillmentRetryService $fulfillmentRetryService,
         private readonly TransactionEventService $transactionEventService,
         private readonly TransactionNotificationService $transactionNotificationService,
         private readonly ReceiptService $receiptService,
@@ -286,7 +288,10 @@ class PaymentVerificationService
                 $fresh = $fresh->fresh();
             }
 
-            return $this->autoFulfillmentRecorder->recordFailure($fresh, $reason);
+            $recorded = $this->autoFulfillmentRecorder->recordFailure($fresh, $reason);
+            $this->fulfillmentRetryService->scheduleAfterFailure($recorded, $reason);
+
+            return $recorded;
         }
     }
 

@@ -308,6 +308,73 @@ export function ExecutiveDashboardClient() {
           </SectionCard>
         </div>
 
+        <SectionCard title="Payment Reliability">
+          {snapshot?.reliability ? (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div>
+                <p className="mb-3 text-sm font-semibold text-dark">Webhook Health (24h)</p>
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-sm text-muted">Processed</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.reliability.webhooks.processed_24h}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Failed</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.reliability.webhooks.failed_24h}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Duplicates</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.reliability.webhooks.duplicate_24h}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Pending</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.reliability.webhooks.pending}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+              <div>
+                <p className="mb-3 text-sm font-semibold text-dark">Queues</p>
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-sm text-muted">Retry Due</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.reliability.retry_queue.due_now}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Retry Scheduled</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.reliability.retry_queue.scheduled}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Manual Review</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.reliability.manual_review.count}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Stale Payments</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.reliability.reconciliation.stale_payment_pending}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          ) : (
+            "…"
+          )}
+        </SectionCard>
+
         <div className="grid gap-6 xl:grid-cols-2">
           <SectionCard title="Fraud Monitoring">
             <dl className="grid gap-4 sm:grid-cols-2">

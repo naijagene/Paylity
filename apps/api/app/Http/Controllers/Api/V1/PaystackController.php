@@ -95,52 +95,77 @@ class PaystackController extends Controller
             );
         }
 
-        if (data_get($event, 'event') === 'charge.success') {
-            $reference = (string) data_get($event, 'data.reference');
-            $eventId = (string) (data_get($event, 'id') ?: hash('sha256', $payload));
+        if (data_get($event, 'event') !== 'charge.success') {
+            return ApiResponse::success(
+                data: ['status' => 'ignored'],
+                message: 'Paystack webhook ignored.',
+            );
+        }
 
-            if ($this->webhookEventService->hasBeenProcessed('paystack', $eventId)) {
-                return ApiResponse::success(
-                    data: ['status' => 'duplicate'],
-                    message: 'Paystack webhook already processed.',
+        $reference = (string) data_get($event, 'data.reference');
+        $eventId = (string) (data_get($event, 'id') ?: hash('sha256', $payload));
+
+        if ($this->webhookEventService->hasBeenSuccessfullyProcessed('paystack', $eventId)) {
+            $this->webhookEventService->recordDuplicate('paystack');
+
+            return ApiResponse::success(
+                data: ['status' => 'duplicate'],
+                message: 'Paystack webhook already processed.',
+            );
+        }
+
+        $webhookEvent = $this->webhookEventService->recordPending(
+            provider: 'paystack',
+            eventId: $eventId,
+            eventType: (string) data_get($event, 'event', 'unknown'),
+            reference: $reference !== '' ? $reference : null,
+            payload: $event,
+        );
+
+        if ($reference !== '') {
+            $transaction = \App\Models\Transaction::query()
+                ->where('reference', $reference)
+                ->first();
+
+            if ($transaction) {
+                $this->transactionEventService->record(
+                    $transaction,
+                    TransactionEventService::TYPE_WEBHOOK_RECEIVED,
+                    'Paystack webhook received.',
+                    'webhook',
+                    ['event' => data_get($event, 'event'), 'event_id' => $eventId],
                 );
             }
 
-            $this->webhookEventService->record(
-                provider: 'paystack',
-                eventId: $eventId,
-                eventType: (string) data_get($event, 'event', 'unknown'),
-                reference: $reference !== '' ? $reference : null,
-                payload: $event,
-            );
+            try {
+                $this->paymentVerificationService->verify($reference);
+                $this->webhookEventService->markProcessedEvent($webhookEvent);
+            } catch (PaymentVerificationException|PaystackException $exception) {
+                $errorCode = $exception instanceof PaymentVerificationException
+                    ? $exception->errorCode
+                    : $exception->errorCode;
 
-            if ($reference !== '') {
-                $transaction = \App\Models\Transaction::query()
-                    ->where('reference', $reference)
-                    ->first();
+                $this->webhookEventService->markFailedEvent($webhookEvent, $exception->getMessage());
 
                 if ($transaction) {
                     $this->transactionEventService->record(
                         $transaction,
-                        TransactionEventService::TYPE_WEBHOOK_RECEIVED,
-                        'Paystack webhook received.',
+                        TransactionEventService::TYPE_WEBHOOK_FAILED,
+                        'Paystack webhook verification failed.',
                         'webhook',
-                        ['event' => data_get($event, 'event')],
+                        ['code' => $errorCode, 'message' => $exception->getMessage()],
                     );
                 }
 
-                try {
-                    $this->paymentVerificationService->verify($reference);
-                } catch (PaymentVerificationException|PaystackException $exception) {
-                    Log::warning('Paystack webhook verification failed.', [
-                        'reference' => $reference,
-                        'message' => $exception->getMessage(),
-                        'code' => $exception instanceof PaymentVerificationException
-                            ? $exception->errorCode
-                            : $exception->errorCode,
-                    ]);
-                }
+                Log::warning('Paystack webhook verification failed.', [
+                    'reference' => $reference,
+                    'event_id' => $eventId,
+                    'message' => $exception->getMessage(),
+                    'code' => $errorCode,
+                ]);
             }
+        } else {
+            $this->webhookEventService->markFailedEvent($webhookEvent, 'Webhook missing transaction reference.');
         }
 
         return ApiResponse::success(

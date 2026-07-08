@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\OtpController;
 use App\Http\Controllers\Api\V1\Ops\OpsDashboardController;
 use App\Http\Controllers\Api\V1\Ops\OpsMonitoringController;
 use App\Http\Controllers\Api\V1\Ops\OpsNoteController;
+use App\Http\Controllers\Api\V1\Ops\OpsReliabilityController;
 use App\Http\Controllers\Api\V1\Ops\OpsReportsController;
 use App\Http\Controllers\Api\V1\Ops\OpsSummaryController;
 use App\Http\Controllers\Api\V1\Ops\OpsTransactionController;
@@ -53,7 +54,7 @@ Route::middleware('throttle:receipt-verify')->group(function () {
     Route::get('/receipts/verify/{token}', [ReceiptVerificationController::class, 'show']);
 });
 
-Route::post('/payments/paystack/callback', [PaystackController::class, 'callback']);
+Route::match(['get', 'post'], '/payments/paystack/callback', [PaystackController::class, 'callback']);
 
 Route::middleware('throttle:payment-verify')->group(function () {
     Route::get('/payments/paystack/verify/{reference}', [PaystackController::class, 'verify']);
@@ -72,6 +73,7 @@ Route::middleware(['operator', 'throttle:ops'])->group(function () {
 
 Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function () {
     Route::get('/dashboard', OpsDashboardController::class);
+    Route::get('/reliability', OpsReliabilityController::class);
     Route::get('/summary', OpsSummaryController::class);
     Route::get('/monitoring', OpsMonitoringController::class);
     Route::get('/reports/daily-reconciliation', [OpsReportsController::class, 'dailyReconciliation']);

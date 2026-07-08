@@ -71,6 +71,37 @@ export type OpsDashboardSnapshot = {
     message: string | null;
   };
   vtpass?: OpsVtpassOperations;
+  reliability?: OpsReliabilitySnapshot;
+};
+
+export type OpsReliabilitySnapshot = {
+  webhooks: {
+    processed_24h: number;
+    failed_24h: number;
+    pending: number;
+    duplicate_24h: number;
+  };
+  reconciliation: {
+    stale_payment_pending: number;
+    stale_payment_success: number;
+    stale_fulfillment_pending: number;
+  };
+  retry_queue: {
+    due_now: number;
+    scheduled: number;
+    manual_review: number;
+  };
+  manual_review: {
+    count: number;
+    items: Array<Record<string, unknown>>;
+  };
+  retry_items: Array<Record<string, unknown>>;
+  config: {
+    payment_reconcile_stale_minutes: number;
+    fulfillment_stale_minutes: number;
+    fulfillment_retry_max_attempts: number;
+    fulfillment_retry_intervals_minutes: number[];
+  };
 };
 
 export type OpsVtpassProductReadiness = {

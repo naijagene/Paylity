@@ -26,6 +26,16 @@ class TransactionEventService
 
     public const TYPE_WEBHOOK_RECEIVED = 'webhook.received';
 
+    public const TYPE_WEBHOOK_FAILED = 'webhook.failed';
+
+    public const TYPE_RECONCILIATION_REPAIRED = 'reconciliation.repaired';
+
+    public const TYPE_FULFILLMENT_RETRY_SCHEDULED = 'fulfillment.retry_scheduled';
+
+    public const TYPE_FULFILLMENT_ESCALATED = 'fulfillment.escalated';
+
+    public const TYPE_MANUAL_REVIEW_REQUIRED = 'manual_review.required';
+
     public const TYPE_OPS_FULFILL = 'ops.fulfill';
 
     public const TYPE_OPS_NOTE = 'ops.note';

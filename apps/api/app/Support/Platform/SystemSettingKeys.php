@@ -25,4 +25,8 @@ final class SystemSettingKeys
     public const OTP_MESSAGE_TEMPLATE = 'otp_message_template';
     public const VTPASS_LIVE_SAFETY_MODE = 'vtpass_live_safety_mode';
     public const VTPASS_LIVE_TEST_MAX_AMOUNT = 'vtpass_live_test_max_amount';
+    public const FULFILLMENT_RETRY_MAX_ATTEMPTS = 'fulfillment_retry_max_attempts';
+    public const FULFILLMENT_RETRY_INTERVALS_MINUTES = 'fulfillment_retry_intervals_minutes';
+    public const PAYMENT_RECONCILE_STALE_MINUTES = 'payment_reconcile_stale_minutes';
+    public const FULFILLMENT_STALE_MINUTES = 'fulfillment_stale_minutes';
 }
