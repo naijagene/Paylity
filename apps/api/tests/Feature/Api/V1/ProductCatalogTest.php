@@ -114,6 +114,8 @@ class ProductCatalogTest extends TestCase
 
     public function test_catalog_sync_command_upserts_variations(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
+
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.base_url' => 'https://sandbox.vtpass.com',

@@ -1,166 +1,110 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { AlertCenter } from "@/components/dashboard/AlertCenter";
+import { LiveTransactionFeed } from "@/components/dashboard/LiveTransactionFeed";
+import { SimpleBarChart } from "@/components/dashboard/SimpleBarChart";
 import { KpiCard, SectionCard } from "@/components/ui/OpsCards";
-import { fetchFeatureFlags, fetchSystemSettings } from "@/lib/api/admin";
-import { fetchPublicHealth } from "@/lib/api/health";
-import { fetchOpsMonitoring, fetchOpsSummary, searchOpsTransactions } from "@/lib/api/ops";
-import { ApiError, ApiOfflineError } from "@/lib/api/client";
+import { fetchOpsDashboard, searchOpsTransactions } from "@/lib/api/ops";
 import { formatNaira } from "@/lib/checkout/formatNaira";
+import { usePolling } from "@/lib/hooks/usePolling";
 import {
-  calculateSuccessRate,
+  buildProductChartData,
+  buildRevenueChartData,
+  type LiveFeedItem,
+  type OpsDashboardSnapshot,
+} from "@/lib/utils/dashboard";
+import {
   healthClasses,
   healthLabel,
   mapApiHealth,
   mapDatabaseHealth,
-  mapFeatureHealth,
-  type HealthIndicator,
 } from "@/lib/utils/health";
 import { exportCsv } from "@/lib/utils/csv";
 
-type PlatformHealth = {
-  label: string;
-  indicator: HealthIndicator;
-  detail: string;
-};
+const POLL_INTERVAL_MS = 5000;
+
+function mapProviderIndicator(status: string): "healthy" | "warning" | "offline" {
+  if (status === "ok" || status === "skipped") {
+    return "healthy";
+  }
+
+  if (status === "degraded" || status === "warning") {
+    return "warning";
+  }
+
+  return "offline";
+}
+
+const ProviderHealthGrid = memo(function ProviderHealthGrid({
+  providers,
+}: {
+  providers: OpsDashboardSnapshot["providers"];
+}) {
+  const cards = [
+    { label: "Paystack", status: providers.paystack?.status ?? "unknown" },
+    { label: "VTPass", status: providers.vtpass?.status ?? "unknown" },
+    { label: "Database", status: providers.database?.status ?? "unknown" },
+    { label: "Cache", status: providers.cache?.status ?? "unknown" },
+    {
+      label: "Queue",
+      status: providers.queue?.status ?? "unknown",
+      detail: `pending ${providers.queue?.pending_jobs ?? 0} · failed ${providers.queue?.failed_jobs ?? 0}`,
+    },
+    { label: "Mail", status: providers.mail?.status ?? "unknown" },
+  ];
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {cards.map((card) => {
+        const indicator =
+          card.label === "Database" || card.label === "Cache"
+            ? mapDatabaseHealth(card.status)
+            : mapProviderIndicator(card.status);
+
+        return (
+          <div
+            key={card.label}
+            className={`rounded-2xl border p-4 ${healthClasses(indicator)}`}
+          >
+            <p className="text-sm font-semibold">{card.label}</p>
+            <p className="mt-2 text-lg font-extrabold">{healthLabel(indicator)}</p>
+            <p className="mt-1 text-xs opacity-80">{card.detail ?? card.status}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+});
 
 export function ExecutiveDashboardClient() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [kpis, setKpis] = useState({
-    revenue: "—",
-    transactions: "—",
-    pending: "—",
-    failed: "—",
-    successRate: "—",
-    avgFulfillment: "—",
-  });
-  const [healthCards, setHealthCards] = useState<PlatformHealth[]>([]);
-  const [incidentWarning, setIncidentWarning] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const [summary, monitoring, health, flags, failedItems, settings] = await Promise.all([
-          fetchOpsSummary(),
-          fetchOpsMonitoring(),
-          fetchPublicHealth(),
-          fetchFeatureFlags(),
-          searchOpsTransactions({ status: "failed", per_page: 1 }),
-          fetchSystemSettings(),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        const paystack = flags.find((flag) => flag.key === "paystack");
-        const vtpass = flags.find((flag) => flag.key === "vtpass");
-        const incidentMode = settings.find((setting) => setting.key === "incident_mode");
-        const maintenanceMode = settings.find((setting) => setting.key === "maintenance_mode");
-
-        if (Boolean(incidentMode?.value)) {
-          setIncidentWarning(
-            "Incident mode is enabled. Customer checkout is paused and the homepage incident banner is visible.",
-          );
-        } else if (Boolean(maintenanceMode?.value)) {
-          setIncidentWarning(
-            "Maintenance mode is enabled. Customer checkout is temporarily disabled.",
-          );
-        } else {
-          setIncidentWarning(null);
-        }
-
-        setKpis({
-          revenue: formatNaira(monitoring.revenue ?? summary.revenue_today ?? 0),
-          transactions: String(monitoring.transactions ?? summary.total_transactions_today),
-          pending: String(monitoring.pending ?? summary.pending_fulfillment),
-          failed: String(monitoring.failures ?? summary.failed_today),
-          successRate: calculateSuccessRate(
-            summary.successful_payments_today,
-            summary.total_transactions_today,
-          ),
-          avgFulfillment:
-            monitoring.average_fulfillment_seconds != null
-              ? `${monitoring.average_fulfillment_seconds}s`
-              : "—",
-        });
-
-        setHealthCards([
-          {
-            label: "API",
-            indicator: mapApiHealth(health.status),
-            detail: health.environment ?? "PAYLITY API",
-          },
-          {
-            label: "Database",
-            indicator: mapDatabaseHealth(
-              typeof health.checks?.database === "string" ? health.checks.database : undefined,
-            ),
-            detail: health.checks?.database === "ok" ? "Connected" : "Check connection",
-          },
-          {
-            label: "Cache",
-            indicator: mapDatabaseHealth(
-              typeof health.checks?.cache === "string" ? health.checks.cache : undefined,
-            ),
-            detail: health.checks?.cache === "ok" ? "Operational" : "Check cache store",
-          },
-          {
-            label: "Paystack",
-            indicator: mapFeatureHealth(Boolean(paystack?.enabled)),
-            detail: paystack?.enabled ? "Integration enabled" : "Integration disabled",
-          },
-          {
-            label: "VTPass",
-            indicator: mapFeatureHealth(Boolean(vtpass?.enabled)),
-            detail: vtpass?.enabled ? "Integration enabled" : "Integration disabled",
-          },
-          {
-            label: "Queue",
-            indicator:
-              monitoring.queue?.status === "ok"
-                ? "healthy"
-                : monitoring.queue?.status === "degraded"
-                  ? "offline"
-                  : "warning",
-            detail: monitoring.queue
-              ? `${monitoring.queue.connection} · pending ${monitoring.queue.pending_jobs} · failed ${monitoring.queue.failed_jobs}`
-              : "Queue metrics unavailable",
-          },
-        ]);
-
-        void failedItems;
-      } catch (err) {
-        if (!cancelled) {
-          if (err instanceof ApiOfflineError) {
-            setError("Network unavailable. Check the API server and try again.");
-          } else if (err instanceof ApiError) {
-            setError(err.message);
-          } else {
-            setError("Unable to load executive dashboard.");
-          }
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
+  const loadDashboard = useCallback(async () => fetchOpsDashboard(), []);
+  const loadFeed = useCallback(async () => {
+    const result = await searchOpsTransactions({ per_page: 15 });
+    return result.items as LiveFeedItem[];
   }, []);
+
+  const dashboard = usePolling({
+    fetcher: loadDashboard,
+    intervalMs: POLL_INTERVAL_MS,
+  });
+
+  const feed = usePolling({
+    fetcher: loadFeed,
+    intervalMs: POLL_INTERVAL_MS,
+  });
+
+  const snapshot = dashboard.data;
+  const revenueChart = useMemo(
+    () => (snapshot ? buildRevenueChartData(snapshot.revenue) : []),
+    [snapshot],
+  );
+  const productChart = useMemo(
+    () => (snapshot ? buildProductChartData(snapshot.transactions) : []),
+    [snapshot],
+  );
 
   const handleDailyReport = async () => {
     const result = await searchOpsTransactions({ per_page: 100 });
@@ -177,55 +121,160 @@ export function ExecutiveDashboardClient() {
     ]);
   };
 
+  const loading = dashboard.loading && !snapshot;
+  const apiIndicator = mapApiHealth(snapshot?.executive.api_health);
+
   return (
     <PageContainer className="py-8" narrow={false}>
       <div className="mx-auto w-full max-w-7xl space-y-8">
-        <header>
-          <p className="text-sm font-semibold uppercase tracking-wide text-success">
-            Executive Dashboard
-          </p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-dark">
-            Soft Launch Operations
-          </h1>
-          <p className="mt-2 text-sm text-muted">
-            Monitor today&apos;s performance, platform health, and jump into common operator actions.
-          </p>
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-success">
+              Operations Command Center
+            </p>
+            <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-dark">
+              Live Revenue &amp; Monitoring
+            </h1>
+            <p className="mt-2 text-sm text-muted">
+              Real-time PAYLITY operations dashboard with 5-second auto-refresh.
+            </p>
+          </div>
+          <div className="text-sm text-muted">
+            <p>
+              {dashboard.paused ? "Polling paused (tab inactive)" : "Live polling active"}
+            </p>
+            <p>
+              Updated{" "}
+              {dashboard.lastUpdated
+                ? new Date(dashboard.lastUpdated).toLocaleTimeString("en-NG")
+                : "—"}
+            </p>
+          </div>
         </header>
 
-        {incidentWarning ? (
-          <p className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-            {incidentWarning}
-          </p>
-        ) : null}
-
-        {error ? (
+        {dashboard.error ? (
           <p className="rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
-            {error}
+            {dashboard.error}
           </p>
         ) : null}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <KpiCard label="Today's Revenue" value={loading ? "…" : kpis.revenue} />
-          <KpiCard label="Today's Transactions" value={loading ? "…" : kpis.transactions} />
-          <KpiCard label="Pending Transactions" value={loading ? "…" : kpis.pending} />
-          <KpiCard label="Failed Transactions" value={loading ? "…" : kpis.failed} />
-          <KpiCard label="Success Rate" value={loading ? "…" : kpis.successRate} />
-          <KpiCard label="Average Fulfillment Time" value={loading ? "…" : kpis.avgFulfillment} />
+        <SectionCard title="Alert Center">
+          <AlertCenter alerts={snapshot?.alerts ?? []} />
+        </SectionCard>
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <KpiCard
+            label="Today's Revenue"
+            value={loading ? "…" : formatNaira(snapshot?.executive.revenue_today ?? 0)}
+          />
+          <KpiCard
+            label="Today's Transactions"
+            value={loading ? "…" : String(snapshot?.executive.transactions_today ?? 0)}
+          />
+          <KpiCard
+            label="Success Rate"
+            value={loading ? "…" : `${snapshot?.executive.success_rate ?? 0}%`}
+          />
+          <KpiCard
+            label="Pending"
+            value={loading ? "…" : String(snapshot?.executive.pending ?? 0)}
+          />
+          <KpiCard
+            label="Failed"
+            value={loading ? "…" : String(snapshot?.executive.failed ?? 0)}
+          />
+          <KpiCard
+            label="Average Transaction"
+            value={
+              loading ? "…" : formatNaira(snapshot?.executive.average_transaction ?? 0)
+            }
+          />
+          <KpiCard
+            label="Queue Size"
+            value={loading ? "…" : String(snapshot?.executive.queue_size ?? 0)}
+          />
+          <KpiCard
+            label="API Health"
+            value={loading ? "…" : healthLabel(apiIndicator)}
+            hint={snapshot?.executive.api_health}
+          />
         </section>
 
-        <SectionCard title="Platform Health">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {healthCards.map((card) => (
-              <div
-                key={card.label}
-                className={`rounded-2xl border p-4 ${healthClasses(card.indicator)}`}
-              >
-                <p className="text-sm font-semibold">{card.label}</p>
-                <p className="mt-2 text-lg font-extrabold">{healthLabel(card.indicator)}</p>
-                <p className="mt-1 text-xs opacity-80">{card.detail}</p>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <SectionCard title="Revenue Analytics">
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <KpiCard
+                label="Total Revenue"
+                value={loading ? "…" : formatNaira(snapshot?.revenue.today.total_revenue ?? 0)}
+              />
+              <KpiCard
+                label="Net Revenue"
+                value={loading ? "…" : formatNaira(snapshot?.revenue.today.net_revenue ?? 0)}
+              />
+              <KpiCard
+                label="Platform Fees"
+                value={loading ? "…" : formatNaira(snapshot?.revenue.today.platform_fees ?? 0)}
+              />
+              <KpiCard
+                label="Gateway Charges"
+                value={loading ? "…" : formatNaira(snapshot?.revenue.today.gateway_charges ?? 0)}
+              />
+            </div>
+            <SimpleBarChart
+              items={revenueChart}
+              formatValue={(value) => formatNaira(value)}
+            />
+          </SectionCard>
+
+          <SectionCard title="Transaction Analytics">
+            <SimpleBarChart items={productChart} />
+          </SectionCard>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <SectionCard title="Provider Health">
+            {snapshot ? <ProviderHealthGrid providers={snapshot.providers} /> : "…"}
+          </SectionCard>
+
+          <SectionCard title="Fraud Monitoring">
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-sm text-muted">OTP Failures Today</dt>
+                <dd className="text-xl font-extrabold text-dark">
+                  {loading ? "…" : snapshot?.fraud.otp_failures_today ?? 0}
+                </dd>
               </div>
-            ))}
-          </div>
+              <div>
+                <dt className="text-sm text-muted">Failed Verifications</dt>
+                <dd className="text-xl font-extrabold text-dark">
+                  {loading ? "…" : snapshot?.fraud.failed_verifications ?? 0}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted">Blocked Transactions</dt>
+                <dd className="text-xl font-extrabold text-dark">
+                  {loading ? "…" : snapshot?.fraud.blocked_transactions ?? 0}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted">Daily Limit Hits</dt>
+                <dd className="text-xl font-extrabold text-dark">
+                  {loading ? "…" : snapshot?.fraud.daily_limit_hits ?? 0}
+                </dd>
+              </div>
+            </dl>
+          </SectionCard>
+        </div>
+
+        <SectionCard
+          title="Live Transaction Feed"
+          action={
+            <span className="text-xs font-semibold uppercase tracking-wide text-success">
+              Auto-refresh 5s
+            </span>
+          }
+        >
+          <LiveTransactionFeed items={feed.data ?? []} loading={feed.loading} />
         </SectionCard>
 
         <SectionCard title="Quick Actions">
@@ -237,8 +286,8 @@ export function ExecutiveDashboardClient() {
             <Button href="/platform" variant="outline">
               Platform Settings
             </Button>
-            <Button href="/platform?tab=flags" variant="outline">
-              Feature Flags
+            <Button href="/monitoring" variant="outline">
+              Monitoring
             </Button>
             <Button type="button" variant="secondary" onClick={() => void handleDailyReport()}>
               Download Daily Report

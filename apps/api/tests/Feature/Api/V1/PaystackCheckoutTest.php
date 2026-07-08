@@ -50,6 +50,7 @@ class PaystackCheckoutTest extends TestCase
 
     public function test_paystack_enabled_without_secret_returns_clear_error(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);
         config(['services.paystack.enabled' => true]);
 
         $response = $this->postJson('/api/v1/checkout/initialize', [
@@ -75,6 +76,7 @@ class PaystackCheckoutTest extends TestCase
 
     public function test_paystack_initialization_stores_authorization_url_when_mocked(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);
         config(['services.paystack.enabled' => true, 'services.paystack.secret_key' => 'sk_test_secret']);
 
         Http::fake(function ($request) {
@@ -129,6 +131,7 @@ class PaystackCheckoutTest extends TestCase
 
     public function test_paystack_amount_uses_payable_amount_in_kobo(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);
         config(['services.paystack.enabled' => true, 'services.paystack.secret_key' => 'sk_test_secret']);
 
         Http::fake([

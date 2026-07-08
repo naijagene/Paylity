@@ -179,6 +179,8 @@ class ProductCatalogFilteringTest extends TestCase
 
     public function test_catalog_sync_applies_classification(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
+
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.base_url' => 'https://sandbox.vtpass.com',

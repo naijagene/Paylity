@@ -18,6 +18,8 @@ class PaystackVerificationTest extends TestCase
     {
         parent::setUp();
 
+        $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);
+
         config([
             'services.paystack.enabled' => true,
             'services.paystack.secret_key' => self::SECRET,

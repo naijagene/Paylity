@@ -23,6 +23,12 @@ class VTPassFulfillmentTest extends TestCase
 
         $this->seedProductCatalog();
 
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_PAYSTACK' => true,
+            'FEATURE_VTPASS' => false,
+            'FEATURE_VTPASS_AUTO_FULFILL' => false,
+        ]);
+
         config([
             'services.vtpass.enabled' => false,
             'services.vtpass.auto_fulfill' => false,
@@ -57,6 +63,10 @@ class VTPassFulfillmentTest extends TestCase
     public function test_ops_fulfillment_rejects_unpaid_transaction(): void
     {
         config(['services.vtpass.enabled' => true]);
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_VTPASS' => true,
+            'FEATURE_VTPASS_AUTO_FULFILL' => false,
+        ]);
 
         $transaction = Transaction::query()->create([
             'reference' => 'PYL-20260702-PENDING',
@@ -89,6 +99,10 @@ class VTPassFulfillmentTest extends TestCase
     public function test_paid_airtime_transaction_maps_to_correct_vtpass_payload(): void
     {
         config(['services.vtpass.enabled' => true]);
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_VTPASS' => true,
+            'FEATURE_VTPASS_AUTO_FULFILL' => false,
+        ]);
 
         $transaction = $this->createPaidTransaction([
             'request_payload' => [
@@ -129,6 +143,10 @@ class VTPassFulfillmentTest extends TestCase
     public function test_paid_transaction_moves_to_fulfilled_when_mocked_vtpass_success(): void
     {
         config(['services.vtpass.enabled' => true]);
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_VTPASS' => true,
+            'FEATURE_VTPASS_AUTO_FULFILL' => false,
+        ]);
 
         $transaction = $this->createPaidTransaction();
 
@@ -163,6 +181,10 @@ class VTPassFulfillmentTest extends TestCase
     public function test_failed_vtpass_response_marks_transaction_failed(): void
     {
         config(['services.vtpass.enabled' => true]);
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_VTPASS' => true,
+            'FEATURE_VTPASS_AUTO_FULFILL' => false,
+        ]);
 
         $transaction = $this->createPaidTransaction();
 
@@ -193,6 +215,10 @@ class VTPassFulfillmentTest extends TestCase
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.auto_fulfill' => false,
+        ]);
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_VTPASS' => true,
+            'FEATURE_VTPASS_AUTO_FULFILL' => false,
         ]);
 
         $transaction = $this->createPaidTransaction();
@@ -233,6 +259,10 @@ class VTPassFulfillmentTest extends TestCase
             'services.vtpass.enabled' => true,
             'services.vtpass.auto_fulfill' => true,
         ]);
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_VTPASS' => true,
+            'FEATURE_VTPASS_AUTO_FULFILL' => true,
+        ]);
 
         $transaction = $this->createPaidTransaction([
             'status' => TransactionStatus::PAYMENT_PENDING,
@@ -269,6 +299,10 @@ class VTPassFulfillmentTest extends TestCase
     public function test_successful_electricity_fulfillment_stores_response_payload(): void
     {
         config(['services.vtpass.enabled' => true]);
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_VTPASS' => true,
+            'FEATURE_VTPASS_AUTO_FULFILL' => false,
+        ]);
 
         $transaction = Transaction::query()->create([
             'reference' => 'PYL-20260702-ELEC-FUL',
@@ -326,6 +360,10 @@ class VTPassFulfillmentTest extends TestCase
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.auto_fulfill' => true,
+        ]);
+        $this->withIntegratedFeatureFlags([
+            'FEATURE_VTPASS' => true,
+            'FEATURE_VTPASS_AUTO_FULFILL' => true,
         ]);
 
         $transaction = $this->createPaidTransaction([

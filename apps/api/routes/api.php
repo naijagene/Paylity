@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\OtpController;
+use App\Http\Controllers\Api\V1\Ops\OpsDashboardController;
 use App\Http\Controllers\Api\V1\Ops\OpsMonitoringController;
 use App\Http\Controllers\Api\V1\Ops\OpsNoteController;
 use App\Http\Controllers\Api\V1\Ops\OpsReportsController;
@@ -70,6 +71,7 @@ Route::middleware(['operator', 'throttle:ops'])->group(function () {
 });
 
 Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function () {
+    Route::get('/dashboard', OpsDashboardController::class);
     Route::get('/summary', OpsSummaryController::class);
     Route::get('/monitoring', OpsMonitoringController::class);
     Route::get('/reports/daily-reconciliation', [OpsReportsController::class, 'dailyReconciliation']);

@@ -49,20 +49,17 @@ class FeatureFlagServiceTest extends TestCase
             'enabled' => false,
         ]);
 
-        putenv('FEATURE_PAYSTACK=true');
-        $_ENV['FEATURE_PAYSTACK'] = 'true';
+        $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);
 
         $this->service->forgetCache();
 
         $this->assertTrue($this->service->isEnabled(FeatureFlagKeys::PAYSTACK));
-
-        putenv('FEATURE_PAYSTACK');
-        unset($_ENV['FEATURE_PAYSTACK']);
     }
 
     public function test_it_falls_back_to_default_when_flag_is_not_seeded(): void
     {
         $this->assertFalse($this->service->isEnabled(FeatureFlagKeys::LOYALTY));
-        $this->assertTrue($this->service->isEnabled(FeatureFlagKeys::PAYSTACK, true));
+        $this->assertFalse($this->service->isEnabled(FeatureFlagKeys::PAYSTACK));
+        $this->assertFalse($this->service->isEnabled(FeatureFlagKeys::PAYSTACK, true));
     }
 }

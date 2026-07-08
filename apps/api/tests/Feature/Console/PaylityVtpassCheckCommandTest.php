@@ -243,5 +243,7 @@ class PaylityVtpassCheckCommandTest extends TestCase
         }
 
         config(array_merge($defaults, $mappedOverrides));
+
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
     }
 }

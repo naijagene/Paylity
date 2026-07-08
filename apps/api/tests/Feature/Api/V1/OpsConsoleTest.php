@@ -160,6 +160,7 @@ class OpsConsoleTest extends TestCase
 
     public function test_ops_fulfill_rejects_unpaid_transactions(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
         config(['services.vtpass.enabled' => true, 'services.vtpass.secret_key' => 'unused']);
 
         $transaction = Transaction::query()->create([

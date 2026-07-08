@@ -80,5 +80,6 @@ class GoLiveSmokeTest extends TestCase
         $this->withHeaders($headers)->getJson('/api/v1/ops/reports/failed-transactions')->assertOk();
         $this->withHeaders($headers)->getJson('/api/v1/ops/reports/settlement-summary')->assertOk();
         $this->withHeaders($headers)->getJson('/api/v1/ops/reports/retry-summary')->assertOk();
+        $this->withHeaders($headers)->getJson('/api/v1/ops/dashboard')->assertOk();
     }
 }

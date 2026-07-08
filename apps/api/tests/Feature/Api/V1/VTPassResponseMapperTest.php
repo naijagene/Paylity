@@ -6,12 +6,14 @@ use App\Services\Fulfillment\Adapters\ElectricityAdapter;
 use App\Services\Fulfillment\ElectricityMeterVerificationService;
 use App\Services\Fulfillment\VTPassResponseMapper;
 use App\Services\Fulfillment\VTPassService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class VTPassResponseMapperTest extends TestCase
 {
+    use RefreshDatabase;
     public function test_maps_success_code_000(): void
     {
         $mapper = app(VTPassResponseMapper::class);
@@ -97,6 +99,7 @@ class VTPassResponseMapperTest extends TestCase
 
     public function test_meter_verification_unavailable_when_feature_disabled(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => false]);
         config(['services.vtpass.enabled' => false]);
 
         $result = app(ElectricityMeterVerificationService::class)->verify(
@@ -112,6 +115,8 @@ class VTPassResponseMapperTest extends TestCase
 
     public function test_meter_verification_unavailable_without_credentials(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
+
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.username' => null,
@@ -131,6 +136,8 @@ class VTPassResponseMapperTest extends TestCase
 
     public function test_authentication_failure_for_json_401_includes_safe_context(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
+
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.username' => 'sandbox-user',
@@ -163,6 +170,8 @@ class VTPassResponseMapperTest extends TestCase
 
     public function test_non_json_response_includes_safe_context(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
+
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.username' => 'sandbox-user',
@@ -198,6 +207,8 @@ class VTPassResponseMapperTest extends TestCase
 
     public function test_empty_meter_is_rejected_before_vtpass_api_call(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
+
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.username' => 'sandbox-user',
@@ -222,6 +233,8 @@ class VTPassResponseMapperTest extends TestCase
 
     public function test_timeout_handling_returns_vtpass_timeout(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_VTPASS' => true]);
+
         config([
             'services.vtpass.enabled' => true,
             'services.vtpass.username' => 'sandbox-user',

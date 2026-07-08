@@ -146,6 +146,8 @@ class PreLaunchHardeningTest extends TestCase
 
     public function test_production_paystack_errors_are_sanitized(): void
     {
+        $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);
+
         config([
             'app.debug' => false,
             'services.paystack.enabled' => true,

@@ -1,4 +1,5 @@
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
+import type { OpsDashboardSnapshot } from "@/lib/utils/dashboard";
 import { getOperatorKey } from "@/lib/ops/operatorKey";
 
 export type ApiSuccessResponse<T> = {
@@ -302,6 +303,12 @@ export type OpsSearchParams = {
 
 export function getReceiptDownloadUrl(reference: string): string {
   return `${getOpsApiBaseUrl()}/transactions/${encodeURIComponent(reference)}/receipt/download`;
+}
+
+export async function fetchOpsDashboard(): Promise<OpsDashboardSnapshot> {
+  const { data } = await opsRequest<OpsDashboardSnapshot>("/ops/dashboard");
+
+  return data;
 }
 
 export async function fetchOpsSummary(): Promise<OpsSummary> {
