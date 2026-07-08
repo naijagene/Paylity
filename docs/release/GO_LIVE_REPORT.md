@@ -93,3 +93,39 @@ Automated smoke suite: `GoLiveSmokeTest`, `ProductionHardeningTest`, `PreLaunchH
 ```
 chore(release): harden platform for RC1 soft launch
 ```
+
+---
+
+## PAY-026 — VTPass Live Production Readiness (2026-07-08)
+
+### Summary
+
+Prepared PAYLITY to switch from VTPass sandbox to live production without removing sandbox support or changing Paystack/customer UI flows.
+
+### Deliverables
+
+- `VTPASS_ENV=sandbox|production` with environment-aware base URL resolution
+- Extended `PaylityEnvironmentValidator` and `paylity:vtpass-check` for live credential and URL validation
+- `VTPassService::checkBalance()` via `GET /api/balance`
+- Live safety mode settings: `vtpass_live_safety_mode`, `vtpass_live_test_max_amount`
+- Product certification flags for service and provider-level enablement
+- `VtpassFulfillmentGuard` — safety mode and product readiness gates before fulfillment
+- Ops dashboard VTPass panel: environment, balance, safety mode, product readiness
+- Sanitized live request logging (masked billersCode, no credentials)
+- `docs/integrations/VTPASS-LIVE-GO-LIVE.md`
+
+### Live launch checklist
+
+- [ ] `VTPASS_ENV=production` with live credentials in deployment env only
+- [ ] `php artisan paylity:preflight` and `paylity:vtpass-check` pass
+- [ ] Wallet funded; balance visible in ops dashboard or confirmed manually
+- [ ] `vtpass_live_safety_mode=true` for initial live tests
+- [ ] Product provider flags enabled only for certified lines
+- [ ] Manual live smoke checklist completed (not CI)
+- [ ] Rollback path documented and tested (`FEATURE_VTPASS=false` or sandbox revert)
+
+### Suggested commit
+
+```
+feat(integrations): prepare VTPass live production readiness
+```

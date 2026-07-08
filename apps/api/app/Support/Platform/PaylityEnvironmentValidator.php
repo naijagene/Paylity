@@ -3,6 +3,7 @@
 namespace App\Support\Platform;
 
 use App\Support\CorsOriginResolver;
+use App\Support\Fulfillment\VTPassEnvironment;
 use Illuminate\Support\Facades\DB;
 
 class PaylityEnvironmentValidator
@@ -258,17 +259,20 @@ class PaylityEnvironmentValidator
         }
 
         $missing = [];
+        $mode = VTPassEnvironment::mode();
 
-        if (empty(config('services.vtpass.username'))) {
-            $missing[] = 'VTPASS_USERNAME';
+        foreach (['username', 'password', 'api_key'] as $credential) {
+            if (empty(config("services.vtpass.{$credential}"))) {
+                $missing[] = 'VTPASS_'.strtoupper($credential === 'api_key' ? 'API_KEY' : $credential);
+            }
         }
 
-        if (empty(config('services.vtpass.password'))) {
-            $missing[] = 'VTPASS_PASSWORD';
-        }
-
-        if (empty(config('services.vtpass.api_key'))) {
-            $missing[] = 'VTPASS_API_KEY';
+        if ($mode === VTPassEnvironment::PRODUCTION) {
+            foreach (['public_key', 'secret_key'] as $credential) {
+                if (empty(config("services.vtpass.{$credential}"))) {
+                    $missing[] = 'VTPASS_'.strtoupper($credential);
+                }
+            }
         }
 
         if ($missing !== []) {
@@ -279,6 +283,60 @@ class PaylityEnvironmentValidator
             );
 
             return;
+        }
+
+        if ($mode === VTPassEnvironment::PRODUCTION && ! VTPassEnvironment::baseUrlMatchesMode()) {
+            $this->record(
+                'FAIL',
+                'VTPass environment',
+                'VTPASS_ENV=production but VTPASS_BASE_URL does not point to the live VTPass host.',
+            );
+
+            return;
+        }
+
+        if ($mode === VTPassEnvironment::SANDBOX && ! VTPassEnvironment::baseUrlMatchesMode()) {
+            $this->record(
+                'WARN',
+                'VTPass environment',
+                'VTPASS_ENV=sandbox but VTPASS_BASE_URL does not point to sandbox.vtpass.com.',
+            );
+        } else {
+            $this->record(
+                'PASS',
+                'VTPass environment',
+                'VTPASS_ENV='.$mode.', host='.VTPassEnvironment::baseUrlHost(),
+            );
+        }
+
+        if ($mode === VTPassEnvironment::SANDBOX) {
+            $optionalMissing = [];
+
+            if (empty(config('services.vtpass.public_key'))) {
+                $optionalMissing[] = 'VTPASS_PUBLIC_KEY';
+            }
+
+            if (empty(config('services.vtpass.secret_key'))) {
+                $optionalMissing[] = 'VTPASS_SECRET_KEY';
+            }
+
+            if ($optionalMissing !== []) {
+                $this->record(
+                    'WARN',
+                    'VTPass keys',
+                    'Sandbox missing optional keys: '.implode(', ', $optionalMissing),
+                );
+            }
+        }
+
+        if ($mode === VTPassEnvironment::PRODUCTION && empty(config('services.vtpass.public_key'))) {
+            $this->record(
+                'WARN',
+                'VTPass balance',
+                'VTPASS_PUBLIC_KEY is required for automated wallet balance checks in production.',
+            );
+        } else {
+            $this->record('PASS', 'VTPass balance', 'Wallet balance checks can use GET /api/balance when VTPass is reachable.');
         }
 
         $this->record('PASS', 'VTPass', 'VTPass credentials are configured.');

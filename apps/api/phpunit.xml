@@ -38,6 +38,7 @@
         <env name="FEATURE_PAYSTACK" value="false"/>
         <env name="FEATURE_VTPASS" value="false"/>
         <env name="FEATURE_VTPASS_AUTO_FULFILL" value="false"/>
+        <env name="VTPASS_ENV" value="sandbox"/>
         <env name="VTPASS_SANDBOX_TESTS" value="false"/>
         <env name="OPERATOR_ACCESS_KEY" value="test-operator-key"/>
         <env name="APP_VERSION" value="1.0.0-rc1"/>

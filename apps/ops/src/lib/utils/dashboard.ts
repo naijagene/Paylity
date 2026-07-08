@@ -70,6 +70,31 @@ export type OpsDashboardSnapshot = {
     incident_mode: boolean;
     message: string | null;
   };
+  vtpass?: OpsVtpassOperations;
+};
+
+export type OpsVtpassProductReadiness = {
+  service_enabled: boolean;
+  provider_enabled: boolean;
+  ready: boolean;
+};
+
+export type OpsVtpassOperations = {
+  environment: string;
+  base_url_host: string;
+  status: string;
+  enabled: boolean;
+  auto_fulfill: boolean;
+  live_safety_mode: boolean;
+  live_test_max_amount: number;
+  balance: {
+    available: boolean;
+    balance: number | null;
+    currency: string;
+    environment: string;
+    message: string | null;
+  };
+  product_readiness: Record<string, OpsVtpassProductReadiness>;
 };
 
 export type LiveFeedItem = {
@@ -152,6 +177,23 @@ export function buildRevenueChartData(
     { label: "Week", value: revenue.week.total_revenue },
     { label: "Month", value: revenue.month.total_revenue },
   ];
+}
+
+export function formatVtpassEnvironment(environment: string): string {
+  return environment === "production" ? "Production" : "Sandbox";
+}
+
+export function formatVtpassBalance(
+  balance: OpsVtpassOperations["balance"] | undefined,
+): string {
+  if (!balance?.available || balance.balance === null) {
+    return balance?.message ?? "Unavailable";
+  }
+
+  return `₦${balance.balance.toLocaleString("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 export function productIcon(productType: string): string {

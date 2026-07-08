@@ -46,7 +46,10 @@ return [
     'vtpass' => [
         'enabled' => env('FEATURE_VTPASS', false),
         'auto_fulfill' => env('FEATURE_VTPASS_AUTO_FULFILL', false),
-        'base_url' => env('VTPASS_BASE_URL', 'https://sandbox.vtpass.com'),
+        'environment' => env('VTPASS_ENV', 'sandbox'),
+        'base_url' => env('VTPASS_BASE_URL', env('VTPASS_ENV', 'sandbox') === 'production'
+            ? 'https://vtpass.com'
+            : 'https://sandbox.vtpass.com'),
         'username' => env('VTPASS_USERNAME'),
         'password' => env('VTPASS_PASSWORD'),
         'api_key' => env('VTPASS_API_KEY'),

@@ -6,6 +6,7 @@ use App\Services\Fulfillment\ElectricityMeterVerificationService;
 use App\Services\Fulfillment\VTPassElectricityTestConfig;
 use App\Services\Fulfillment\VTPassResponseMapper;
 use App\Services\Fulfillment\VTPassService;
+use App\Support\Fulfillment\VTPassEnvironment;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -31,9 +32,11 @@ class PaylityVtpassCheckCommand extends Command
         $this->newLine();
 
         $this->checkFeatureFlag();
+        $this->checkEnvironment();
         $this->checkCredentials();
         $this->checkBaseUrl();
         $this->checkReachability();
+        $this->checkWalletBalance();
         $this->checkMerchantVerify();
         $this->checkServiceMappings();
 
@@ -53,6 +56,54 @@ class PaylityVtpassCheckCommand extends Command
         }
 
         $this->record('PASS', 'FEATURE_VTPASS', 'FEATURE_VTPASS=true');
+    }
+
+    private function checkEnvironment(): void
+    {
+        $mode = VTPassEnvironment::mode();
+
+        if ($mode === VTPassEnvironment::PRODUCTION && ! VTPassEnvironment::baseUrlMatchesMode()) {
+            $this->record(
+                'FAIL',
+                'VTPASS_ENV',
+                'VTPASS_ENV=production but VTPASS_BASE_URL does not target the live VTPass host.',
+            );
+
+            return;
+        }
+
+        $this->record(
+            'PASS',
+            'VTPASS_ENV',
+            'VTPASS_ENV='.$mode.' (host='.VTPassEnvironment::baseUrlHost().')',
+        );
+    }
+
+    private function checkWalletBalance(): void
+    {
+        if (! $this->vtpassService->isEnabled()) {
+            $this->record('WARN', 'Wallet balance', 'Skipped because FEATURE_VTPASS=false.');
+
+            return;
+        }
+
+        $balance = $this->vtpassService->checkBalance();
+
+        if (($balance['available'] ?? false) === true) {
+            $this->record(
+                'PASS',
+                'Wallet balance',
+                'Balance: ₦'.number_format((float) ($balance['balance'] ?? 0), 2),
+            );
+
+            return;
+        }
+
+        $this->record(
+            'WARN',
+            'Wallet balance',
+            (string) ($balance['message'] ?? 'Balance check unavailable.'),
+        );
     }
 
     private function checkCredentials(): void
@@ -82,7 +133,7 @@ class PaylityVtpassCheckCommand extends Command
 
     private function checkBaseUrl(): void
     {
-        $baseUrl = (string) config('services.vtpass.base_url');
+        $baseUrl = VTPassEnvironment::configuredBaseUrl();
 
         if ($baseUrl === '') {
             $this->record('FAIL', 'Base URL', 'VTPASS_BASE_URL is not set.');

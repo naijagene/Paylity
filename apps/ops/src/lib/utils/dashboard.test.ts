@@ -4,6 +4,8 @@ import {
   buildProductChartData,
   buildRevenueChartData,
   calculateAverageTransaction,
+  formatVtpassBalance,
+  formatVtpassEnvironment,
   sortLiveFeedNewestFirst,
 } from "@/lib/utils/dashboard";
 
@@ -120,5 +122,34 @@ describe("chart data builders", () => {
       "Week",
       "Month",
     ]);
+  });
+});
+
+describe("vtpass dashboard helpers", () => {
+  it("formats vtpass environment labels", () => {
+    expect(formatVtpassEnvironment("sandbox")).toBe("Sandbox");
+    expect(formatVtpassEnvironment("production")).toBe("Production");
+  });
+
+  it("formats vtpass balance and unavailable states", () => {
+    expect(
+      formatVtpassBalance({
+        available: true,
+        balance: 1500.5,
+        currency: "NGN",
+        environment: "production",
+        message: null,
+      }),
+    ).toContain("1,500.50");
+
+    expect(
+      formatVtpassBalance({
+        available: false,
+        balance: null,
+        currency: "NGN",
+        environment: "production",
+        message: "Balance check unavailable",
+      }),
+    ).toBe("Balance check unavailable");
   });
 });

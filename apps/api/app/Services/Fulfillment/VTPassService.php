@@ -6,6 +6,7 @@ use App\Exceptions\VTPassConfigurationException;
 use App\Exceptions\VTPassException;
 use App\Services\Platform\FeatureFlagService;
 use App\Support\Platform\FeatureFlagKeys;
+use App\Support\Fulfillment\VTPassEnvironment;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -64,12 +65,96 @@ class VTPassService
     {
         try {
             $response = Http::timeout($this->timeoutSeconds())
-                ->get(rtrim((string) config('services.vtpass.base_url'), '/'));
+                ->get(VTPassEnvironment::configuredBaseUrl());
 
             return $response->successful() || in_array($response->status(), [401, 403, 404, 405], true);
         } catch (ConnectionException) {
             return false;
         }
+    }
+
+    /**
+     * @return array{
+     *     available: bool,
+     *     balance: float|null,
+     *     currency: string,
+     *     environment: string,
+     *     message: string|null
+     * }
+     */
+    public function checkBalance(): array
+    {
+        $environment = VTPassEnvironment::mode();
+
+        if (! $this->isEnabled()) {
+            return [
+                'available' => false,
+                'balance' => null,
+                'currency' => 'NGN',
+                'environment' => $environment,
+                'message' => 'VTPass is disabled (FEATURE_VTPASS=false).',
+            ];
+        }
+
+        if (! $this->hasCredentials()) {
+            return [
+                'available' => false,
+                'balance' => null,
+                'currency' => 'NGN',
+                'environment' => $environment,
+                'message' => 'VTPass credentials are not configured.',
+            ];
+        }
+
+        if (empty(config('services.vtpass.public_key'))) {
+            return [
+                'available' => false,
+                'balance' => null,
+                'currency' => 'NGN',
+                'environment' => $environment,
+                'message' => 'VTPASS_PUBLIC_KEY is required for wallet balance checks. Fund the wallet manually via the VTPass dashboard if the API is unavailable.',
+            ];
+        }
+
+        try {
+            $response = $this->client()->get($this->endpoint('/api/balance'));
+            $json = $response->json();
+
+            if ($response->successful() && is_array($json)) {
+                $balance = data_get($json, 'contents.balance');
+
+                return [
+                    'available' => $balance !== null,
+                    'balance' => $balance !== null ? (float) $balance : null,
+                    'currency' => 'NGN',
+                    'environment' => $environment,
+                    'message' => $balance !== null ? null : 'VTPass balance response did not include wallet balance.',
+                ];
+            }
+
+            return [
+                'available' => false,
+                'balance' => null,
+                'currency' => 'NGN',
+                'environment' => $environment,
+                'message' => is_array($json)
+                    ? (string) (data_get($json, 'response_description') ?? data_get($json, 'message') ?? 'Balance check failed.')
+                    : 'Balance check failed.',
+            ];
+        } catch (ConnectionException) {
+            return [
+                'available' => false,
+                'balance' => null,
+                'currency' => 'NGN',
+                'environment' => $environment,
+                'message' => 'Unable to reach VTPass balance endpoint. Check wallet funding manually in the VTPass dashboard.',
+            ];
+        }
+    }
+
+    public function environmentMode(): string
+    {
+        return VTPassEnvironment::mode();
     }
 
     /**
@@ -357,7 +442,7 @@ class VTPassService
 
     private function endpoint(string $path): string
     {
-        return rtrim((string) config('services.vtpass.base_url'), '/').$path;
+        return rtrim(VTPassEnvironment::configuredBaseUrl(), '/').$path;
     }
 
     private function timeoutSeconds(): int

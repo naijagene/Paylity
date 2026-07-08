@@ -13,6 +13,8 @@ import { usePolling } from "@/lib/hooks/usePolling";
 import {
   buildProductChartData,
   buildRevenueChartData,
+  formatVtpassBalance,
+  formatVtpassEnvironment,
   type LiveFeedItem,
   type OpsDashboardSnapshot,
 } from "@/lib/utils/dashboard";
@@ -236,6 +238,77 @@ export function ExecutiveDashboardClient() {
             {snapshot ? <ProviderHealthGrid providers={snapshot.providers} /> : "…"}
           </SectionCard>
 
+          <SectionCard title="VTPass Live Readiness">
+            {snapshot?.vtpass ? (
+              <div className="space-y-4">
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-sm text-muted">Environment</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {formatVtpassEnvironment(snapshot.vtpass.environment)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Status</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.vtpass.status}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Wallet Balance</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {formatVtpassBalance(snapshot.vtpass.balance)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Auto-fulfill</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.vtpass.auto_fulfill ? "Enabled" : "Disabled"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Live Safety Mode</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.vtpass.live_safety_mode
+                        ? `Active (max ₦${snapshot.vtpass.live_test_max_amount})`
+                        : "Off"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Host</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {snapshot.vtpass.base_url_host}
+                    </dd>
+                  </div>
+                </dl>
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-dark">Product Readiness</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {Object.entries(snapshot.vtpass.product_readiness).map(
+                      ([product, readiness]) => (
+                        <div
+                          key={product}
+                          className={`rounded-xl border px-3 py-2 text-sm ${
+                            readiness.ready
+                              ? "border-success/30 bg-success/5 text-success"
+                              : "border-warning/30 bg-warning/5 text-warning"
+                          }`}
+                        >
+                          <p className="font-semibold capitalize">{product}</p>
+                          <p>{readiness.ready ? "Ready" : "Not ready"}</p>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              "…"
+            )}
+          </SectionCard>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
           <SectionCard title="Fraud Monitoring">
             <dl className="grid gap-4 sm:grid-cols-2">
               <div>

@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { PageContainer } from "@/components/PageContainer";
 import { fetchFeatureFlags } from "@/lib/api/admin";
+import { fetchOpsDashboard } from "@/lib/api/ops";
 import { fetchPublicHealth } from "@/lib/api/health";
-import { fetchOpsMonitoring } from "@/lib/api/ops";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import {
   healthClasses,
@@ -14,6 +14,18 @@ import {
   mapFeatureHealth,
   type HealthIndicator,
 } from "@/lib/utils/health";
+
+function mapProviderIndicator(status: string): HealthIndicator {
+  if (status === "ok" || status === "skipped") {
+    return "healthy";
+  }
+
+  if (status === "degraded" || status === "warning") {
+    return "warning";
+  }
+
+  return "offline";
+}
 
 type MonitorItem = {
   label: string;
@@ -29,15 +41,15 @@ export function MonitoringClient() {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([fetchPublicHealth(), fetchFeatureFlags(), fetchOpsMonitoring()])
-      .then(([health, flags, monitoring]) => {
+    Promise.all([fetchPublicHealth(), fetchFeatureFlags(), fetchOpsDashboard()])
+      .then(([health, flags, dashboard]) => {
         if (cancelled) {
           return;
         }
 
         const paystack = flags.find((flag) => flag.key === "paystack");
-        const vtpass = flags.find((flag) => flag.key === "vtpass");
-        const otp = monitoring.otp;
+        const vtpass = dashboard.vtpass;
+        const otp = dashboard.fraud;
 
         setItems([
           {
@@ -57,19 +69,21 @@ export function MonitoringClient() {
           },
           {
             label: "VTPass",
-            indicator: mapFeatureHealth(Boolean(vtpass?.enabled)),
-            detail: vtpass?.enabled ? "Feature flag enabled" : "Feature flag disabled",
+            indicator: mapProviderIndicator(vtpass?.status ?? health.checks?.vtpass ?? "unknown"),
+            detail: vtpass
+              ? `${vtpass.environment} · ${vtpass.enabled ? "enabled" : "disabled"} · balance ${vtpass.balance.available ? `₦${vtpass.balance.balance}` : "unavailable"}`
+              : `Health: ${health.checks?.vtpass ?? "unknown"}`,
           },
           {
             label: "Queue",
-            indicator: "warning",
-            detail: "Queue health checks are not configured in MVOC yet",
+            indicator: mapProviderIndicator(dashboard.providers.queue?.status ?? "unknown"),
+            detail: `pending ${dashboard.providers.queue?.pending_jobs ?? 0} · failed ${dashboard.providers.queue?.failed_jobs ?? 0}`,
           },
           {
             label: "OTP",
-            indicator: otp?.enabled ? "healthy" : "warning",
+            indicator: otp?.otp_enabled ? "healthy" : "warning",
             detail: otp
-              ? `${otp.pending} pending · ${otp.verified_today} verified today · ${otp.failed_today} failed today`
+              ? `${otp.otp_pending} pending · ${otp.otp_failures_today} failed today`
               : "OTP monitoring unavailable",
           },
         ]);

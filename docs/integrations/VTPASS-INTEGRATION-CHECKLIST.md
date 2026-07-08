@@ -6,12 +6,14 @@ Reference checklist for VTPass sandbox and live integration. Use with `php artis
 
 ## Environment URLs
 
-| Environment | Base URL |
-|-------------|----------|
-| Sandbox | `https://sandbox.vtpass.com` |
-| Live | `https://vtpass.com` |
+| Environment | Base URL | `VTPASS_ENV` |
+|-------------|----------|--------------|
+| Sandbox | `https://sandbox.vtpass.com` | `sandbox` |
+| Live | `https://vtpass.com` | `production` |
 
-Configure via `VTPASS_BASE_URL` in `apps/api/.env`.
+API paths append `/api/...` (for example `/api/balance`, `/api/pay`).
+
+Configure via `VTPASS_ENV` and `VTPASS_BASE_URL` in `apps/api/.env`. See `docs/integrations/VTPASS-LIVE-GO-LIVE.md` for live cutover.
 
 ---
 
@@ -33,6 +35,7 @@ Never log or expose `VTPASS_PASSWORD`, `VTPASS_API_KEY`, or `VTPASS_SECRET_KEY`.
 | Variable | Purpose |
 |----------|---------|
 | `FEATURE_VTPASS` | Enable/disable fulfillment |
+| `VTPASS_ENV` | `sandbox` or `production` |
 | `FEATURE_VTPASS_AUTO_FULFILL` | Auto-fulfill after payment (keep `false` for launch) |
 | `VTPASS_BASE_URL` | Sandbox or live API base |
 | `VTPASS_USERNAME` | Basic auth username |

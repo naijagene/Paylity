@@ -6,11 +6,15 @@ use App\Enums\OtpStatus;
 use App\Enums\TransactionStatus;
 use App\Models\OtpVerification;
 use App\Models\Transaction;
+use App\Services\Fulfillment\VTPassService;
+use App\Services\Fulfillment\VtpassFulfillmentGuard;
+use App\Services\Fulfillment\VtpassProductReadinessService;
 use App\Services\Otp\OtpService;
 use App\Services\Platform\FeatureFlagService;
 use App\Services\Platform\HealthCheckService;
 use App\Services\Platform\PlatformStatusService;
 use App\Services\Platform\SystemSettingsService;
+use App\Support\Fulfillment\VTPassEnvironment;
 use App\Support\Platform\FeatureFlagKeys;
 use App\Support\Platform\SystemSettingKeys;
 use Carbon\Carbon;
@@ -24,6 +28,9 @@ class OpsDashboardService
         private readonly SystemSettingsService $systemSettings,
         private readonly FeatureFlagService $featureFlags,
         private readonly OtpService $otpService,
+        private readonly VTPassService $vtpassService,
+        private readonly VtpassFulfillmentGuard $vtpassFulfillmentGuard,
+        private readonly VtpassProductReadinessService $vtpassProductReadiness,
     ) {
     }
 
@@ -75,6 +82,7 @@ class OpsDashboardService
             'revenue' => $this->revenueAnalytics(),
             'transactions' => $this->transactionAnalytics(),
             'providers' => $this->providerHealth($health),
+            'vtpass' => $this->vtpassOperations($health),
             'fraud' => $this->fraudMonitoring(),
             'alerts' => $this->buildAlerts($health, $todayMonitoring, $platformStatus),
             'platform' => $platformStatus,
@@ -186,6 +194,7 @@ class OpsDashboardService
             'vtpass' => [
                 'status' => (string) ($checks['vtpass'] ?? 'unknown'),
                 'enabled' => $this->featureFlags->isEnabled(FeatureFlagKeys::VTPASS),
+                'environment' => VTPassEnvironment::mode(),
             ],
             'database' => [
                 'status' => (string) ($checks['database'] ?? 'unknown'),
@@ -303,6 +312,19 @@ class OpsDashboardService
             ];
         }
 
+        if (
+            VTPassEnvironment::isProduction()
+            && $this->vtpassFulfillmentGuard->isLiveSafetyModeEnabled()
+        ) {
+            $alerts[] = [
+                'severity' => 'warning',
+                'code' => 'VTPASS_LIVE_SAFETY_MODE',
+                'message' => 'VTPass live safety mode is active. Fulfillment is limited to ₦'
+                    .$this->vtpassFulfillmentGuard->liveTestMaxAmount()
+                    .' test amounts.',
+            ];
+        }
+
         $queue = is_array($monitoring['queue'] ?? null) ? $monitoring['queue'] : [];
         $pendingJobs = (int) ($queue['pending_jobs'] ?? 0);
         $failedJobs = (int) ($queue['failed_jobs'] ?? 0);
@@ -342,6 +364,28 @@ class OpsDashboardService
         }
 
         return $alerts;
+    }
+
+    /**
+     * @param  array<string, mixed>  $health
+     * @return array<string, mixed>
+     */
+    private function vtpassOperations(array $health): array
+    {
+        $balance = $this->vtpassService->checkBalance();
+        $checks = is_array($health['checks'] ?? null) ? $health['checks'] : [];
+
+        return [
+            'environment' => VTPassEnvironment::mode(),
+            'base_url_host' => VTPassEnvironment::baseUrlHost(),
+            'status' => (string) ($checks['vtpass'] ?? 'unknown'),
+            'enabled' => $this->featureFlags->isEnabled(FeatureFlagKeys::VTPASS),
+            'auto_fulfill' => $this->featureFlags->isEnabled(FeatureFlagKeys::VTPASS_AUTO_FULFILL),
+            'live_safety_mode' => $this->vtpassFulfillmentGuard->isLiveSafetyModeEnabled(),
+            'live_test_max_amount' => $this->vtpassFulfillmentGuard->liveTestMaxAmount(),
+            'balance' => $balance,
+            'product_readiness' => $this->vtpassProductReadiness->matrix(),
+        ];
     }
 
     private function successRate(int $successful, int $total): float

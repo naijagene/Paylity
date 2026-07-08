@@ -24,6 +24,7 @@ class FulfillmentService
         private readonly FulfillmentAttemptRecorder $fulfillmentAttemptRecorder,
         private readonly TransactionEventService $transactionEventService,
         private readonly TransactionNotificationService $transactionNotificationService,
+        private readonly VtpassFulfillmentGuard $vtpassFulfillmentGuard,
         AirtimeAdapter $airtimeAdapter,
         DataAdapter $dataAdapter,
         ElectricityAdapter $electricityAdapter,
@@ -88,6 +89,7 @@ class FulfillmentService
             );
         }
 
+        $this->vtpassFulfillmentGuard->assertCanFulfill($transaction);
         $this->vtpassService->assertConfigured();
 
         $adapter = $this->resolveAdapter($transaction->product_type);

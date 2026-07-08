@@ -127,6 +127,18 @@ class PlatformSettingsSeeder extends Seeder
                 'type' => 'string',
                 'description' => 'SMS/log message template for OTP delivery.',
             ],
+            [
+                'key' => SystemSettingKeys::VTPASS_LIVE_SAFETY_MODE,
+                'value' => '1',
+                'type' => 'boolean',
+                'description' => 'Limit live VTPass fulfillment to small test amounts during initial production rollout.',
+            ],
+            [
+                'key' => SystemSettingKeys::VTPASS_LIVE_TEST_MAX_AMOUNT,
+                'value' => '500',
+                'type' => 'integer',
+                'description' => 'Maximum product amount (NGN) allowed per transaction when live safety mode is enabled.',
+            ],
         ];
 
         foreach ($settings as $setting) {
@@ -185,6 +197,36 @@ class PlatformSettingsSeeder extends Seeder
                 'key' => FeatureFlagKeys::VTPASS_AUTO_FULFILL,
                 'enabled' => false,
                 'description' => 'Automatically fulfill transactions after successful payment.',
+            ],
+            [
+                'key' => FeatureFlagKeys::SERVICE_AIRTIME_ENABLED,
+                'enabled' => true,
+                'description' => 'Allow customer airtime checkout and fulfillment.',
+            ],
+            [
+                'key' => FeatureFlagKeys::SERVICE_DATA_ENABLED,
+                'enabled' => true,
+                'description' => 'Allow customer data checkout and fulfillment.',
+            ],
+            [
+                'key' => FeatureFlagKeys::SERVICE_ELECTRICITY_ENABLED,
+                'enabled' => true,
+                'description' => 'Allow customer electricity checkout and fulfillment.',
+            ],
+            [
+                'key' => FeatureFlagKeys::PROVIDER_VTPASS_AIRTIME_ENABLED,
+                'enabled' => true,
+                'description' => 'VTPass airtime fulfillment is certified for the active environment.',
+            ],
+            [
+                'key' => FeatureFlagKeys::PROVIDER_VTPASS_DATA_ENABLED,
+                'enabled' => false,
+                'description' => 'VTPass data fulfillment is certified for the active environment.',
+            ],
+            [
+                'key' => FeatureFlagKeys::PROVIDER_VTPASS_ELECTRICITY_ENABLED,
+                'enabled' => true,
+                'description' => 'VTPass electricity fulfillment is certified for the active environment.',
             ],
             [
                 'key' => FeatureFlagKeys::OTP_VERIFICATION,

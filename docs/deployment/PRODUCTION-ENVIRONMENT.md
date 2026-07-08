@@ -26,10 +26,16 @@
 | `PAYSTACK_SECRET_KEY` | Server-side key |
 | `PAYSTACK_CALLBACK_URL` | Payment return URL |
 | `FEATURE_VTPASS` | Enable VTPass fulfillment |
+| `VTPASS_ENV` | `sandbox` or `production` |
+| `VTPASS_BASE_URL` | `https://sandbox.vtpass.com` or `https://vtpass.com` |
 | `VTPASS_USERNAME` | VTPass API username |
 | `VTPASS_PASSWORD` | VTPass API password |
 | `VTPASS_API_KEY` | VTPass API key |
-| `FEATURE_VTPASS_AUTO_FULFILL` | Auto-fulfill after payment |
+| `VTPASS_PUBLIC_KEY` | Required for balance checks and GET requests |
+| `VTPASS_SECRET_KEY` | Required for live POST requests |
+| `FEATURE_VTPASS_AUTO_FULFILL` | Auto-fulfill after payment (keep `false` until certified) |
+
+See `docs/integrations/VTPASS-LIVE-GO-LIVE.md` for live cutover, safety mode, and product readiness flags.
 
 ## Frontend variables
 
@@ -56,6 +62,15 @@ Managed via ops console or `/api/v1/settings`:
 - `maintenance_mode` — disables checkout
 - `incident_mode` — disables checkout and shows customer incident banner
 - `guest_checkout_enabled`, OTP thresholds, daily limits
+- `vtpass_live_safety_mode` — limits live VTPass fulfillment to test amounts
+- `vtpass_live_test_max_amount` — max NGN product amount when safety mode is on
+
+## Feature flags (runtime)
+
+Managed via ops console or `/api/v1/feature-flags`:
+
+- `service_airtime_enabled`, `service_data_enabled`, `service_electricity_enabled`
+- `provider_vtpass_airtime_enabled`, `provider_vtpass_data_enabled`, `provider_vtpass_electricity_enabled`
 
 ## Health endpoints
 

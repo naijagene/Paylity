@@ -4,6 +4,7 @@ namespace App\Services\Platform;
 
 use App\Services\BuildInfoService;
 use App\Support\Platform\PaylityEnvironmentValidator;
+use App\Support\Fulfillment\VTPassEnvironment;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -194,6 +195,14 @@ class HealthCheckService
             && ! empty(config('services.vtpass.password'))
             && ! empty(config('services.vtpass.api_key'));
 
-        return $configured ? 'ok' : 'failed';
+        if (! $configured) {
+            return 'failed';
+        }
+
+        if (VTPassEnvironment::isProduction() && ! VTPassEnvironment::baseUrlMatchesMode()) {
+            return 'failed';
+        }
+
+        return 'ok';
     }
 }

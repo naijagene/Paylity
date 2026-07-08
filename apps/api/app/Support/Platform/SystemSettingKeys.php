@@ -23,4 +23,6 @@ final class SystemSettingKeys
     public const OTP_RESEND_COOLDOWN_SECONDS = 'otp_resend_cooldown_seconds';
     public const OTP_PROVIDER = 'otp_provider';
     public const OTP_MESSAGE_TEMPLATE = 'otp_message_template';
+    public const VTPASS_LIVE_SAFETY_MODE = 'vtpass_live_safety_mode';
+    public const VTPASS_LIVE_TEST_MAX_AMOUNT = 'vtpass_live_test_max_amount';
 }

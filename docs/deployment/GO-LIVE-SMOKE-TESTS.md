@@ -23,7 +23,23 @@ php artisan test --filter=GoLiveSmokeTest
 | Verification | `GET /api/v1/receipts/verify/{token}` | 404 for invalid token |
 | History | `GET /api/v1/transactions?phone=` | HTTP 200 |
 | Monitoring | `GET /api/v1/ops/monitoring` | Queue metrics present |
+| Ops dashboard | `GET /api/v1/ops/dashboard` | VTPass environment, balance, safety mode |
 | Reports | `GET /api/v1/ops/reports/daily-reconciliation` | Summary payload |
+
+## VTPass live smoke tests (manual only)
+
+Run only when switching to `VTPASS_ENV=production`. Do not add to CI.
+
+See `docs/integrations/VTPASS-LIVE-GO-LIVE.md` for the full checklist. Minimum manual checks:
+
+| Step | Action | Expected |
+|------|--------|----------|
+| Preflight | `php artisan paylity:preflight` | VTPass environment PASS |
+| VTPass check | `php artisan paylity:vtpass-check` | Reachability + balance WARN/PASS |
+| Safety mode | Ops dashboard | `live_safety_mode=true`, max ₦500 |
+| Small airtime | ₦100 live purchase + manual fulfill | Fulfilled, receipt OK |
+| Product gate | Disable `provider_vtpass_data_enabled` | Fulfillment blocked with `VTPASS_PRODUCT_NOT_READY` |
+| Rollback | Set `FEATURE_VTPASS=false` | Ops fulfill returns `VTPASS_DISABLED` |
 
 ## Frontend smoke tests
 
@@ -40,6 +56,7 @@ php artisan test --filter=GoLiveSmokeTest
 
 - [ ] Operator key gate accepts valid key
 - [ ] Executive dashboard KPIs load
+- [ ] VTPass live readiness panel shows environment, balance, safety mode
 - [ ] Incident warning banner when incident mode on
 - [ ] Platform page toggles maintenance and incident mode
 - [ ] Reports page exports CSV
