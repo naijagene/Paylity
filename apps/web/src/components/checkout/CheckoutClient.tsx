@@ -20,12 +20,19 @@ import {
   getCatalogDiscos,
   getCatalogNetworks,
 } from "@/lib/checkout/catalogPlans";
+import {
+  getPaystackAuthorizationUrl,
+  MISSING_PAYSTACK_REDIRECT_MESSAGE,
+  redirectToPaystackAuthorizationUrl,
+  resolveCheckoutPaymentAction,
+} from "@/lib/checkout/paystackRedirect";
 import { resolveProduct } from "@/lib/checkout/checkoutSchemas";
 import { validateCheckoutForm } from "@/lib/checkout/checkoutValidation";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { useCheckoutState } from "@/hooks/useCheckoutState";
 import { usePlatformStatus } from "@/hooks/usePlatformStatus";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
+import { saveTransactionSession } from "@/lib/transaction/session";
 import type { ProductType } from "@/lib/checkout/types";
 
 const INVALID_VARIATION_MESSAGE =
@@ -92,6 +99,8 @@ function CheckoutEngine({ product }: { product: ProductType }) {
   const [isVerifyingMeter, setIsVerifyingMeter] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [paymentRedirectError, setPaymentRedirectError] = useState<string | null>(null);
+  const [redirectReference, setRedirectReference] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -202,6 +211,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
 
   const runCheckoutInitialize = useCallback(async (verificationTokenOverride?: string | null) => {
     setApiError(null);
+    setPaymentRedirectError(null);
 
     if (!checkoutAvailability.allowed) {
       setApiError(checkoutAvailability.message ?? catalogError);
@@ -236,15 +246,29 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         state.verificationToken ?? verificationTokenOverride,
       );
       const transaction = await initializeCheckout(payload);
-      setTransactionInitialized(transaction);
+      const paymentAction = resolveCheckoutPaymentAction(transaction);
 
-      if (transaction.authorization_url) {
-        redirecting = true;
-        setIsRedirecting(true);
-        window.location.assign(transaction.authorization_url);
+      if (paymentAction === "redirect") {
+        const authorizationUrl = getPaystackAuthorizationUrl(transaction);
+
+        if (authorizationUrl) {
+          saveTransactionSession(transaction.reference, transaction.status, product);
+          redirecting = true;
+          setIsRedirecting(true);
+          setRedirectReference(transaction.reference);
+          redirectToPaystackAuthorizationUrl(authorizationUrl);
+          return;
+        }
+      }
+
+      if (paymentAction === "fallback") {
+        setTransactionInitialized(transaction);
+        setPaymentRedirectError(MISSING_PAYSTACK_REDIRECT_MESSAGE);
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
 
+      setTransactionInitialized(transaction);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       if (error instanceof ApiError) {
@@ -278,6 +302,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     setTransactionInitialized,
     state.fields,
     state.verificationToken,
+    product,
   ]);
 
   const handleProceedFromReview = useCallback(() => {
@@ -385,6 +410,12 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [setStep]);
 
+  const handleRetryPayment = useCallback(() => {
+    setPaymentRedirectError(null);
+    setApiError(null);
+    void runCheckoutInitialize();
+  }, [runCheckoutInitialize]);
+
   const handleViewTransaction = useCallback(() => {
     if (!state.transactionRef) {
       return;
@@ -449,17 +480,46 @@ function CheckoutEngine({ product }: { product: ProductType }) {
             </p>
           ) : null}
 
+          {paymentRedirectError ? (
+            <p className="rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
+              {paymentRedirectError}
+            </p>
+          ) : null}
+
           <Button
             type="button"
             variant="outline"
             className="w-full"
             onClick={handleBackToForm}
-            disabled={isInitializing}
+            disabled={isInitializing || isRedirecting}
           >
             Edit details
           </Button>
 
-          {state.transactionInitialized && state.transactionRef ? (
+          {isRedirecting ? (
+            <Button type="button" className="min-h-12 w-full" disabled>
+              Redirecting to Paystack…
+            </Button>
+          ) : paymentRedirectError && state.transactionRef ? (
+            <>
+              <Button
+                type="button"
+                className="min-h-12 w-full"
+                onClick={handleRetryPayment}
+                disabled={isInitializing}
+              >
+                Try payment again
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12 w-full"
+                onClick={handleViewTransaction}
+              >
+                View transaction · {formatNaira(summaryPricing.payableAmount)}
+              </Button>
+            </>
+          ) : state.transactionInitialized && state.transactionRef ? (
             <Button
               type="button"
               className="min-h-12 w-full"
@@ -478,7 +538,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
                 ? "Initializing transaction..."
                 : requiresOtp
                   ? "Verify phone to continue"
-                  : `Initialize Transaction · ${formatNaira(summaryPricing.payableAmount)}`}
+                  : `Pay with Paystack · ${formatNaira(summaryPricing.payableAmount)}`}
             </Button>
           )}
 
@@ -561,7 +621,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
       {isInitializing || isRedirecting ? (
         <PaymentPendingOverlay
           product={product}
-          transactionRef={state.transactionRef}
+          transactionRef={redirectReference ?? state.transactionRef}
         />
       ) : null}
     </>

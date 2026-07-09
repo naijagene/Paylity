@@ -129,6 +129,46 @@ class PaystackCheckoutTest extends TestCase
         ]);
     }
 
+    public function test_paystack_missing_authorization_url_returns_error_and_fails_transaction(): void
+    {
+        $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);
+        config(['services.paystack.enabled' => true, 'services.paystack.secret_key' => 'sk_test_secret']);
+
+        Http::fake([
+            'https://api.paystack.co/transaction/initialize' => Http::response([
+                'status' => true,
+                'message' => 'Authorization URL created',
+                'data' => [
+                    'authorization_url' => '',
+                    'access_code' => 'ACCESS123',
+                    'reference' => 'PYL-20260702-TEST01',
+                ],
+            ]),
+        ]);
+
+        $response = $this->postJson('/api/v1/checkout/initialize', [
+            'product_type' => 'airtime',
+            'customer_phone' => '08031234567',
+            'product_amount' => 1000,
+            'payload' => [
+                'network' => 'MTN',
+                'recipient_phone' => '08031234567',
+            ],
+        ]);
+
+        $response
+            ->assertStatus(502)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('errors.code', 'PAYSTACK_REDIRECT_UNAVAILABLE')
+            ->assertJsonMissingPath('data.authorization_url');
+
+        $this->assertDatabaseHas('transactions', [
+            'status' => 'failed',
+            'payment_provider' => null,
+            'payment_authorization_url' => null,
+        ]);
+    }
+
     public function test_paystack_amount_uses_payable_amount_in_kobo(): void
     {
         $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);

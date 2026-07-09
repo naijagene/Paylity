@@ -155,6 +155,13 @@ class TransactionService
         try {
             $result = $this->paystackService->initializeTransaction($transaction);
 
+            if (trim($result['authorization_url']) === '') {
+                throw new PaystackException(
+                    'Paystack did not return a payment authorization URL.',
+                    'PAYSTACK_REDIRECT_UNAVAILABLE',
+                );
+            }
+
             $transaction->update([
                 'status' => TransactionStatus::PAYMENT_PENDING,
                 'payment_provider' => 'paystack',

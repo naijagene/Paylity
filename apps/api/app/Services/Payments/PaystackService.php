@@ -89,8 +89,17 @@ class PaystackService
             );
         }
 
+        $authorizationUrl = trim((string) data_get($payload, 'data.authorization_url', ''));
+
+        if ($authorizationUrl === '') {
+            throw new PaystackException(
+                'Paystack did not return a payment authorization URL.',
+                'PAYSTACK_REDIRECT_UNAVAILABLE',
+            );
+        }
+
         return [
-            'authorization_url' => (string) data_get($payload, 'data.authorization_url'),
+            'authorization_url' => $authorizationUrl,
             'access_code' => (string) data_get($payload, 'data.access_code'),
             'reference' => (string) data_get($payload, 'data.reference'),
             'raw' => is_array($payload) ? $payload : [],
