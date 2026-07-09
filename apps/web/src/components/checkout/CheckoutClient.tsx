@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/Button";
 import { CheckoutForm } from "@/components/checkout/CheckoutForm";
 import { CheckoutShell } from "@/components/checkout/CheckoutShell";
@@ -13,9 +13,13 @@ import {
   buildInitializeCheckoutPayload,
   initializeCheckout,
 } from "@/lib/api/checkout";
+import { verifyElectricityMeter } from "@/lib/api/electricity";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
-import { MOCK_METER_NAMES } from "@/lib/checkout/constants";
-import { canInitializeCheckout, getCatalogDiscos, getCatalogNetworks } from "@/lib/checkout/catalogPlans";
+import {
+  canInitializeCheckout,
+  getCatalogDiscos,
+  getCatalogNetworks,
+} from "@/lib/checkout/catalogPlans";
 import { resolveProduct } from "@/lib/checkout/checkoutSchemas";
 import { validateCheckoutForm } from "@/lib/checkout/checkoutValidation";
 import { formatNaira } from "@/lib/checkout/formatNaira";
@@ -27,10 +31,39 @@ import type { ProductType } from "@/lib/checkout/types";
 const INVALID_VARIATION_MESSAGE =
   "This data plan is currently unavailable. Please choose another plan.";
 
+function CatalogStatusBanner({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="mb-4 rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
+      <p>{message}</p>
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-2 font-semibold underline"
+        >
+          Retry
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function CheckoutEngine({ product }: { product: ProductType }) {
-  const { catalog, loading: catalogLoading, error: catalogError } =
-    useProductCatalog();
-  const { status: platformStatus, loading: platformLoading } = usePlatformStatus();
+  const router = useRouter();
+  const {
+    catalog,
+    loading: catalogLoading,
+    error: catalogError,
+    refetch: refetchCatalog,
+  } = useProductCatalog(product);
+  const { status: platformStatus, loading: platformLoading, error: platformError } =
+    usePlatformStatus();
 
   const {
     state,
@@ -70,6 +103,13 @@ function CheckoutEngine({ product }: { product: ProductType }) {
       };
     }
 
+    if (platformError) {
+      return {
+        allowed: false,
+        message: platformError,
+      };
+    }
+
     if (!platformStatus.checkout_enabled && platformStatus.message) {
       return {
         allowed: false,
@@ -78,17 +118,27 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     }
 
     return canInitializeCheckout(product, catalog, catalogLoading);
-  }, [platformLoading, platformStatus, product, catalog, catalogLoading]);
+  }, [
+    platformLoading,
+    platformError,
+    platformStatus,
+    product,
+    catalog,
+    catalogLoading,
+  ]);
 
-  const catalogNetworks = useMemo(
-    () => getCatalogNetworks(catalog, process.env.NODE_ENV === "development"),
-    [catalog],
-  );
+  const catalogNetworks = useMemo(() => {
+    if (product === "electricity") {
+      return [];
+    }
 
-  const catalogDiscos = useMemo(
-    () => getCatalogDiscos(catalog, process.env.NODE_ENV === "development"),
-    [catalog],
-  );
+    return getCatalogNetworks(
+      catalog,
+      product === "data" ? "data" : "airtime",
+    );
+  }, [catalog, product]);
+
+  const catalogDiscos = useMemo(() => getCatalogDiscos(catalog), [catalog]);
 
   const dataPlans = useMemo(
     () => resolveDataPlansForNetwork(state.fields.network),
@@ -254,16 +304,67 @@ function CheckoutEngine({ product }: { product: ProductType }) {
   );
 
   const handleVerifyMeter = useCallback(async () => {
-    if (!state.fields.meterNumber.trim()) return;
+    if (!state.fields.meterNumber.trim() || !state.fields.disco) {
+      return;
+    }
 
     setIsVerifyingMeter(true);
+    setApiError(null);
     resetMeterVerification();
 
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      const result = await verifyElectricityMeter({
+        disco: state.fields.disco,
+        meter_number: state.fields.meterNumber,
+        meter_type: state.fields.meterType,
+      });
 
-    markMeterVerified(MOCK_METER_NAMES.default);
-    setIsVerifyingMeter(false);
-  }, [markMeterVerified, resetMeterVerification, state.fields.meterNumber]);
+      if (result.verified && result.customer_name) {
+        markMeterVerified(result.customer_name);
+        setFieldErrors((previous) => {
+          const next = { ...previous };
+          delete next.meterNumber;
+          return next;
+        });
+        return;
+      }
+
+      setFieldErrors((previous) => ({
+        ...previous,
+        meterNumber:
+          result.message ||
+          (result.available
+            ? "Unable to verify this meter. Check the details and try again."
+            : "Meter verification is currently unavailable. Please try again later."),
+      }));
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setFieldErrors((previous) => ({
+          ...previous,
+          meterNumber: error.message,
+        }));
+      } else if (error instanceof ApiOfflineError) {
+        setFieldErrors((previous) => ({
+          ...previous,
+          meterNumber: error.message,
+        }));
+      } else {
+        setFieldErrors((previous) => ({
+          ...previous,
+          meterNumber: "Unable to verify meter. Please try again.",
+        }));
+      }
+    } finally {
+      setIsVerifyingMeter(false);
+    }
+  }, [
+    markMeterVerified,
+    resetMeterVerification,
+    setFieldErrors,
+    state.fields.disco,
+    state.fields.meterNumber,
+    state.fields.meterType,
+  ]);
 
   const handleReduceProductAmount = useCallback(() => {
     selectProductAmount(10000);
@@ -284,27 +385,38 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [setStep]);
 
+  const handleViewTransaction = useCallback(() => {
+    if (!state.transactionRef) {
+      return;
+    }
+
+    router.push(`/transaction/${state.transactionRef}`);
+  }, [router, state.transactionRef]);
+
   const paymentBlocked =
     isOverGuestLimit ||
     !checkoutAvailability.allowed ||
     isInitializing;
 
+  const catalogBlocked =
+    catalogLoading ||
+    Boolean(catalogError) ||
+    !checkoutAvailability.allowed;
+
   const footer =
     state.step === "form" ? (
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-dark/5 bg-white/95 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
         <div className="mx-auto w-full max-w-lg sm:max-w-2xl lg:max-w-4xl">
-          {catalogError && product === "data" ? (
-            <p className="mb-3 rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
-              {catalogError}
-            </p>
+          {catalogError ? (
+            <CatalogStatusBanner message={catalogError} onRetry={refetchCatalog} />
           ) : null}
           <Button
             type="button"
             className="w-full"
             onClick={handleContinue}
-            disabled={isOverGuestLimit || (product === "data" && catalogLoading)}
+            disabled={isOverGuestLimit || catalogBlocked}
           >
-            Continue to Review
+            {catalogLoading ? "Loading products…" : "Continue to Review"}
           </Button>
         </div>
       </div>
@@ -347,12 +459,13 @@ function CheckoutEngine({ product }: { product: ProductType }) {
             Edit details
           </Button>
 
-          {state.transactionInitialized ? (
-            <Button type="button" className="w-full" disabled>
-              Payment integration coming next
-              {summaryPricing.payableAmount > 0
-                ? ` · ${formatNaira(summaryPricing.payableAmount)}`
-                : ""}
+          {state.transactionInitialized && state.transactionRef ? (
+            <Button
+              type="button"
+              className="min-h-12 w-full"
+              onClick={handleViewTransaction}
+            >
+              View transaction · {formatNaira(summaryPricing.payableAmount)}
             </Button>
           ) : (
             <Button
@@ -407,7 +520,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
                 discos={catalogDiscos}
                 dataPlans={dataPlans}
                 catalogLoading={catalogLoading}
-                catalogError={product === "data" ? catalogError : null}
+                catalogError={catalogError}
                 onFieldChange={updateField}
                 onSelectProductAmount={selectProductAmount}
                 onCustomProductAmountChange={setCustomProductAmount}

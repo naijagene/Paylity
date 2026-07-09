@@ -81,6 +81,44 @@ describe("catalogPlans", () => {
       allowed: true,
     });
   });
+
+  it("blocks airtime checkout when no networks are available", () => {
+    expect(canInitializeCheckout("airtime", { ...sampleCatalog, airtime_networks: [] }, false)).toEqual({
+      allowed: false,
+      message:
+        "Product catalog is unavailable. Please refresh the page and try again.",
+    });
+  });
+
+  it("allows airtime checkout when networks are available", () => {
+    expect(
+      canInitializeCheckout(
+        "airtime",
+        {
+          ...sampleCatalog,
+          airtime_networks: [
+            {
+              service_name: "mtn",
+              service_id: "mtn",
+              display_name: "MTN",
+              network: "MTN",
+            },
+          ],
+        },
+        false,
+      ),
+    ).toEqual({ allowed: true });
+  });
+
+  it("blocks electricity checkout when no discos are available", () => {
+    expect(
+      canInitializeCheckout("electricity", { ...sampleCatalog, electricity_discos: [] }, false),
+    ).toEqual({
+      allowed: false,
+      message:
+        "Product catalog is unavailable. Please refresh the page and try again.",
+    });
+  });
 });
 
 describe("buildInitializeCheckoutPayload", () => {

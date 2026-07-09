@@ -1,7 +1,4 @@
-import {
-  findCatalogDataPlan,
-  getDevelopmentFallbackDataPlans,
-} from "./catalogPlans";
+import { findCatalogDataPlan } from "./catalogPlans";
 import type { ProductCatalog } from "@/lib/api/catalog";
 import {
   GUEST_HARD_LIMIT,
@@ -112,11 +109,7 @@ export function validateCheckoutForm(
     if (!fields.dataPlan) {
       errors.dataPlan = ERROR_MESSAGES.PLAN_REQUIRED;
     } else {
-      const plan =
-        findCatalogDataPlan(catalog, fields.network, fields.dataPlan) ??
-        getDevelopmentFallbackDataPlans(fields.network).find(
-          (item) => item.variationCode === fields.dataPlan,
-        );
+      const plan = findCatalogDataPlan(catalog, fields.network, fields.dataPlan);
 
       if (!plan) {
         errors.dataPlan = ERROR_MESSAGES.PLAN_UNAVAILABLE;

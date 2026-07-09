@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "@/lib/api/client";
+import { apiRequest } from "./client";
 
 export type PlatformStatus = {
   checkout_enabled: boolean;
@@ -8,15 +8,6 @@ export type PlatformStatus = {
 };
 
 export async function fetchPlatformStatus(): Promise<PlatformStatus> {
-  const response = await fetch(`${getApiBaseUrl()}/platform/status`, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 30 },
-  });
-
-  const body = (await response.json()) as {
-    success: boolean;
-    data: PlatformStatus;
-  };
-
-  return body.data;
+  const { data } = await apiRequest<PlatformStatus>("/platform/status");
+  return data;
 }

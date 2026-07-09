@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchPlatformStatus, type PlatformStatus } from "@/lib/api/platform";
+import { ApiOfflineError } from "@/lib/api/client";
 
 const DEFAULT_STATUS: PlatformStatus = {
   checkout_enabled: true,
@@ -13,6 +14,7 @@ const DEFAULT_STATUS: PlatformStatus = {
 export function usePlatformStatus() {
   const [status, setStatus] = useState<PlatformStatus>(DEFAULT_STATUS);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,12 +23,23 @@ export function usePlatformStatus() {
       .then((data) => {
         if (!cancelled) {
           setStatus(data);
+          setError(null);
         }
       })
-      .catch(() => {
-        if (!cancelled) {
-          setStatus(DEFAULT_STATUS);
+      .catch((err) => {
+        if (cancelled) {
+          return;
         }
+
+        if (err instanceof ApiOfflineError) {
+          setError(err.message);
+        } else if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("Unable to load platform status.");
+        }
+
+        setStatus(DEFAULT_STATUS);
       })
       .finally(() => {
         if (!cancelled) {
@@ -39,5 +52,5 @@ export function usePlatformStatus() {
     };
   }, []);
 
-  return { status, loading };
+  return { status, loading, error };
 }

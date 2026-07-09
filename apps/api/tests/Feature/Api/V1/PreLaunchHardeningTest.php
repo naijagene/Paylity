@@ -144,6 +144,20 @@ class PreLaunchHardeningTest extends TestCase
         $this->assertContains('http://localhost:3000', \App\Support\CorsOriginResolver::allowedOrigins());
     }
 
+    public function test_cors_config_includes_extra_allowed_origins(): void
+    {
+        config([
+            'app.env' => 'production',
+            'app.frontend_url' => 'https://paylity.ng',
+            'cors.allowed_origins_extra' => 'https://ops-paylity.vercel.app,https://ops-staging.paylity.ng',
+        ]);
+
+        $origins = \App\Support\CorsOriginResolver::allowedOrigins();
+
+        $this->assertContains('https://ops-paylity.vercel.app', $origins);
+        $this->assertContains('https://ops-staging.paylity.ng', $origins);
+    }
+
     public function test_production_paystack_errors_are_sanitized(): void
     {
         $this->withIntegratedFeatureFlags(['FEATURE_PAYSTACK' => true]);

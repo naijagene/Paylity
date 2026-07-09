@@ -7,6 +7,8 @@ return [
 
     'allowed_origins' => [],
 
+    'allowed_origins_extra' => env('CORS_ALLOWED_ORIGINS', ''),
+
     'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],

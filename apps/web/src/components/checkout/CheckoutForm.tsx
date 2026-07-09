@@ -88,7 +88,9 @@ export function CheckoutForm({
         <>
           <NetworkSelector
             value={fields.network}
-            networks={networks}
+            networks={networks ?? []}
+            loading={catalogLoading}
+            catalogError={catalogError}
             onChange={(value) => onFieldChange("network", value)}
             error={errors.network}
           />
@@ -176,7 +178,9 @@ export function CheckoutForm({
         <>
           <ElectricityProviderSelector
             value={fields.disco}
-            discos={discos}
+            discos={discos ?? []}
+            loading={catalogLoading}
+            catalogError={catalogError}
             onChange={(value) => onFieldChange("disco", value)}
             error={errors.disco}
           />

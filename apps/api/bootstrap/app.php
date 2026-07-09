@@ -29,8 +29,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'feature' => \App\Http\Middleware\EnsureFeatureEnabled::class,
         ]);
 
-        $middleware->append([
+        $middleware->prepend([
             \App\Http\Middleware\SecurityHeadersMiddleware::class,
+        ]);
+
+        $middleware->append([
             \App\Http\Middleware\CompressApiResponseMiddleware::class,
         ]);
     })

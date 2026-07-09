@@ -40,15 +40,6 @@ export type FieldErrors = Partial<
   Record<keyof CheckoutFields | "productAmount", string>
 >;
 
-export type DataPlan = {
-  id: string;
-  network: string;
-  name: string;
-  size: string;
-  validity: string;
-  price: number;
-};
-
 export type AmountMode = "quick-picks" | "plan-picker";
 
 export type ProductSchema = {

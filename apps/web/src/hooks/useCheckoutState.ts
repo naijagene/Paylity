@@ -9,7 +9,6 @@ import {
 } from "@/lib/checkout/constants";
 import {
   findCatalogDataPlan,
-  getDevelopmentFallbackDataPlans,
   resolveDataPlansForNetwork,
 } from "@/lib/checkout/catalogPlans";
 import type { ProductCatalog } from "@/lib/api/catalog";
@@ -164,11 +163,7 @@ function computeProductAmount(
   catalog: ProductCatalog | null,
 ): number {
   if (product === "data") {
-    const plan =
-      findCatalogDataPlan(catalog, fields.network, fields.dataPlan) ??
-      getDevelopmentFallbackDataPlans(fields.network).find(
-        (item) => item.variationCode === fields.dataPlan,
-      );
+    const plan = findCatalogDataPlan(catalog, fields.network, fields.dataPlan);
     return plan?.price ?? 0;
   }
 
@@ -395,10 +390,6 @@ export function useCheckoutState(
     resetMeterVerification,
     markMeterVerified,
     resolveDataPlansForNetwork: (network: string) =>
-      resolveDataPlansForNetwork(
-        catalog,
-        network,
-        process.env.NODE_ENV === "development",
-      ),
+      resolveDataPlansForNetwork(catalog, network),
   };
 }

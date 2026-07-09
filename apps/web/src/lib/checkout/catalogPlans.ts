@@ -1,6 +1,5 @@
 import type { ProductCatalog } from "@/lib/api/catalog";
-import { DATA_PLANS, DISCOS, NETWORKS } from "./constants";
-import type { DataPlan } from "./types";
+import type { ProductType } from "./types";
 
 export type CatalogDataPlan = {
   variationCode: string;
@@ -16,6 +15,9 @@ export type CatalogDataPlan = {
   dataSizeLabel?: string | null;
   sortOrder?: number | null;
 };
+
+const CATALOG_UNAVAILABLE_MESSAGE =
+  "Product catalog is unavailable. Please refresh the page and try again.";
 
 function mapVariationToPlan(
   service: NonNullable<ProductCatalog["data_services"]>[number],
@@ -97,87 +99,37 @@ export function findCatalogDataPlan(
   );
 }
 
-export function getDevelopmentFallbackDataPlans(network: string): CatalogDataPlan[] {
-  if (process.env.NODE_ENV !== "development") {
-    return [];
-  }
-
-  return sortPlans(
-    DATA_PLANS.filter((plan) => !network || plan.network === network).map(
-      (plan) => ({
-        variationCode: plan.id,
-        serviceId: `${plan.network.toLowerCase()}-data`,
-        network: plan.network,
-        name: plan.name,
-        displayName: plan.name,
-        providerName: plan.name,
-        price: plan.price,
-        fixedPrice: true,
-        isPopular: false,
-        validityLabel: plan.validity || null,
-        dataSizeLabel: plan.size || null,
-      }),
-    ),
-  );
-}
-
 export function resolveDataPlansForNetwork(
   catalog: ProductCatalog | null,
   network: string,
-  allowDevFallback: boolean,
 ): CatalogDataPlan[] {
-  const catalogPlans = getCatalogDataPlansForNetwork(catalog, network);
-
-  if (catalogPlans.length > 0) {
-    return catalogPlans;
-  }
-
-  if (allowDevFallback) {
-    return getDevelopmentFallbackDataPlans(network);
-  }
-
-  return [];
+  return getCatalogDataPlansForNetwork(catalog, network);
 }
 
 export function getCatalogNetworks(
   catalog: ProductCatalog | null,
-  allowDevFallback: boolean,
+  product: Extract<ProductType, "airtime" | "data">,
 ): string[] {
-  const networks = (catalog?.airtime_networks ?? []).map((item) => item.network);
+  if (product === "data") {
+    const networks = (catalog?.data_services ?? []).map((item) => item.network);
 
-  if (networks.length > 0) {
-    return networks;
+    return [...new Set(networks)];
   }
 
-  if (allowDevFallback && process.env.NODE_ENV === "development") {
-    return [...NETWORKS];
-  }
-
-  return [];
+  return (catalog?.airtime_networks ?? []).map((item) => item.network);
 }
 
 export function getCatalogDiscos(
   catalog: ProductCatalog | null,
-  allowDevFallback: boolean,
 ): Array<{ value: string; label: string }> {
-  const discos = (catalog?.electricity_discos ?? []).map((item) => ({
+  return (catalog?.electricity_discos ?? []).map((item) => ({
     value: item.disco,
     label: item.display_name || item.disco,
   }));
-
-  if (discos.length > 0) {
-    return discos;
-  }
-
-  if (allowDevFallback && process.env.NODE_ENV === "development") {
-    return DISCOS.map((disco) => ({ value: disco, label: disco }));
-  }
-
-  return [];
 }
 
 export function canInitializeCheckout(
-  product: "airtime" | "data" | "electricity",
+  product: ProductType,
   catalog: ProductCatalog | null,
   catalogLoading: boolean,
 ): { allowed: boolean; message?: string } {
@@ -188,38 +140,34 @@ export function canInitializeCheckout(
     };
   }
 
-  const isDev = process.env.NODE_ENV === "development";
-
   if (product === "data") {
     if (!hasCatalogDataVariations(catalog)) {
       return {
         allowed: false,
-        message:
-          "Product catalog is unavailable. Please refresh the page and try again.",
+        message: CATALOG_UNAVAILABLE_MESSAGE,
       };
     }
 
     return { allowed: true };
   }
 
-  if (!catalog && !isDev) {
+  if (product === "airtime") {
+    if ((catalog?.airtime_networks ?? []).length === 0) {
+      return {
+        allowed: false,
+        message: CATALOG_UNAVAILABLE_MESSAGE,
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  if ((catalog?.electricity_discos ?? []).length === 0) {
     return {
       allowed: false,
-      message:
-        "Product catalog is unavailable. Please refresh the page and try again.",
+      message: CATALOG_UNAVAILABLE_MESSAGE,
     };
   }
 
   return { allowed: true };
-}
-
-export function catalogDataPlanToLegacy(plan: CatalogDataPlan): DataPlan {
-  return {
-    id: plan.variationCode,
-    network: plan.network,
-    name: plan.displayName,
-    size: plan.dataSizeLabel || plan.displayName,
-    validity: plan.validityLabel || "",
-    price: plan.price,
-  };
 }

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Admin\FeatureFlagController;
 use App\Http\Controllers\Api\V1\Admin\SettingsController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
+use App\Http\Controllers\Api\V1\ElectricityMeterController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\OtpController;
 use App\Http\Controllers\Api\V1\Ops\OpsDashboardController;
@@ -28,6 +29,7 @@ Route::middleware('throttle:health')->group(function () {
 
 Route::middleware('throttle:catalog')->group(function () {
     Route::get('/catalog/products', [CatalogController::class, 'products']);
+    Route::post('/electricity/meter/verify', [ElectricityMeterController::class, 'verify']);
 });
 
 Route::middleware('throttle:checkout')->group(function () {
