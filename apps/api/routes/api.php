@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\ElectricityMeterController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\OtpController;
+use App\Http\Controllers\Api\V1\Ops\OpsAuthController;
 use App\Http\Controllers\Api\V1\Ops\OpsDashboardController;
 use App\Http\Controllers\Api\V1\Ops\OpsMonitoringController;
 use App\Http\Controllers\Api\V1\Ops\OpsNoteController;
@@ -71,6 +72,10 @@ Route::middleware(['operator', 'throttle:ops'])->group(function () {
     Route::put('/settings', [SettingsController::class, 'update']);
     Route::get('/feature-flags', [FeatureFlagController::class, 'index']);
     Route::put('/feature-flags', [FeatureFlagController::class, 'update']);
+});
+
+Route::middleware(['throttle:ops-auth', 'operator'])->prefix('ops')->group(function () {
+    Route::get('/auth/validate', [OpsAuthController::class, 'validate']);
 });
 
 Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function () {

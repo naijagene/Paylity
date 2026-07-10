@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Support\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class VerifyOperatorKey
@@ -24,6 +25,11 @@ class VerifyOperatorKey
         $providedKey = (string) $request->header('X-Operator-Key', '');
 
         if ($providedKey === '' || ! hash_equals($configuredKey, $providedKey)) {
+            Log::warning('Operator access denied.', [
+                'ip' => $request->ip(),
+                'path' => $request->path(),
+            ]);
+
             return ApiResponse::error(
                 message: 'Invalid or missing operator access key.',
                 errors: ['code' => 'OPERATOR_ACCESS_DENIED'],

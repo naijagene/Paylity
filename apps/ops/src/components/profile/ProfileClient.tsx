@@ -2,14 +2,19 @@
 
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
-import { CopyButton } from "@/components/ui/CopyButton";
-import { clearOperatorKey, getOperatorKey } from "@/lib/ops/operatorKey";
+import { useOperatorAuth } from "@/lib/ops/OperatorAuthProvider";
 
 export function ProfileClient() {
-  const operatorKey = typeof window !== "undefined" ? getOperatorKey() : null;
-  const maskedKey = operatorKey
-    ? `${operatorKey.slice(0, 4)}${"•".repeat(Math.max(operatorKey.length - 8, 4))}${operatorKey.slice(-4)}`
-    : "Not set";
+  const { status, lock, isAuthenticated } = useOperatorAuth();
+
+  const sessionLabel =
+    status === "authenticated"
+      ? "Authenticated"
+      : status === "session_expired"
+        ? "Expired"
+        : status === "validating"
+          ? "Validating"
+          : "Locked";
 
   return (
     <PageContainer className="py-8" narrow={false}>
@@ -40,16 +45,22 @@ export function ProfileClient() {
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="font-display text-lg font-extrabold text-dark">Operator Key</h2>
+          <h2 className="font-display text-lg font-extrabold text-dark">Operator Session</h2>
           <p className="mt-2 text-sm text-muted">
-            Your operator key is stored in this browser session only.
+            {isAuthenticated
+              ? "Operator session authenticated."
+              : "Operator session is not authenticated."}
           </p>
-          <p className="mt-4 font-mono text-sm font-semibold text-dark">{maskedKey}</p>
-          {operatorKey ? (
-            <div className="mt-4">
-              <CopyButton value={operatorKey} label="Copy Key" />
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted">Session status</dt>
+              <dd className="font-semibold text-dark">{sessionLabel}</dd>
             </div>
-          ) : null}
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted">Access verification</dt>
+              <dd className="font-semibold text-dark">Server validated</dd>
+            </div>
+          </dl>
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -62,16 +73,14 @@ export function ProfileClient() {
           </Button>
         </section>
 
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            clearOperatorKey();
-            window.location.reload();
-          }}
-        >
-          Logout
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button type="button" variant="secondary" onClick={lock}>
+            Logout
+          </Button>
+          <Button type="button" variant="outline" onClick={lock}>
+            Lock Console
+          </Button>
+        </div>
       </div>
     </PageContainer>
   );

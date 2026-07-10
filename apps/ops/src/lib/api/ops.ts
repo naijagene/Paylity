@@ -1,5 +1,7 @@
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import type { OpsDashboardSnapshot } from "@/lib/utils/dashboard";
+import { isOperatorAuthError } from "@/lib/ops/operatorAuth";
+import { handleOperatorAuthFailure } from "@/lib/ops/operatorAuth";
 import { getOperatorKey } from "@/lib/ops/operatorKey";
 
 export type ApiSuccessResponse<T> = {
@@ -68,18 +70,30 @@ export async function opsRequest<T>(
       body = (await response.json()) as ApiSuccessResponse<T> | ApiErrorResponse;
     } catch {
       if (!response.ok) {
-        throw new ApiError("Unexpected API response.", {}, response.status);
+        const apiError = new ApiError("Unexpected API response.", {}, response.status);
+
+        if (isOperatorAuthError(apiError)) {
+          handleOperatorAuthFailure();
+        }
+
+        throw apiError;
       }
 
       throw new ApiOfflineError();
     }
 
     if (!body.success) {
-      throw new ApiError(
+      const apiError = new ApiError(
         body.message || "Request failed.",
         body.errors ?? {},
         response.status,
       );
+
+      if (isOperatorAuthError(apiError)) {
+        handleOperatorAuthFailure();
+      }
+
+      throw apiError;
     }
 
     return {
