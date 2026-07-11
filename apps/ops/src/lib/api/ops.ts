@@ -470,6 +470,75 @@ export async function fetchSettlementSummary(params?: {
   return data;
 }
 
+export type OpsReconciliationItem = {
+  reference: string;
+  classification?: string | null;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  product_type: string;
+  amount: number;
+  payment_state: string;
+  fulfillment_state: string;
+  payment_reference?: string | null;
+  vtpass_request_id?: string | null;
+  provider_response?: string | null;
+  age_minutes?: number | null;
+  retry_count?: number;
+  next_retry_at?: string | null;
+  manual_review_reason?: string | null;
+  needs_manual_review?: boolean;
+};
+
+export type OpsReconciliationSnapshot = {
+  summary: {
+    paid_unfulfilled: number;
+    stale_payment_pending: number;
+    uncertain_provider_outcomes: number;
+    retry_due: number;
+    retry_exhausted: number;
+    manual_review: number;
+    amount_mismatch: number;
+    repaired_today: number;
+  };
+  queues: {
+    payment_exceptions: OpsReconciliationItem[];
+    fulfillment_exceptions: OpsReconciliationItem[];
+    provider_uncertainty: OpsReconciliationItem[];
+    manual_review: OpsReconciliationItem[];
+    dead_letters: OpsReconciliationItem[];
+  };
+  config: Record<string, number>;
+};
+
+export async function fetchOpsReconciliation() {
+  const { data } = await opsRequest<OpsReconciliationSnapshot>("/ops/reconciliation");
+  return data;
+}
+
+export async function opsReconcilePayment(reference: string) {
+  return opsRequest(`/ops/reconciliation/${encodeURIComponent(reference)}/reconcile-payment`, {
+    method: "POST",
+  });
+}
+
+export async function opsReconcileFulfillment(reference: string) {
+  return opsRequest(`/ops/reconciliation/${encodeURIComponent(reference)}/reconcile-fulfillment`, {
+    method: "POST",
+  });
+}
+
+export async function opsRetryReconciliation(reference: string) {
+  return opsRequest(`/ops/reconciliation/${encodeURIComponent(reference)}/retry`, {
+    method: "POST",
+  });
+}
+
+export async function opsResumeAutomation(reference: string) {
+  return opsRequest(`/ops/reconciliation/${encodeURIComponent(reference)}/resume-automation`, {
+    method: "POST",
+  });
+}
+
 export async function fetchRetrySummary(params?: {
   date_from?: string;
   date_to?: string;

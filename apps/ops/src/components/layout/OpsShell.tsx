@@ -9,6 +9,7 @@ import { Button } from "@/components/Button";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/transactions", label: "Transactions" },
+  { href: "/reconciliation", label: "Reconciliation" },
   { href: "/platform", label: "Platform" },
   { href: "/monitoring", label: "Monitoring" },
   { href: "/reports", label: "Reports" },
