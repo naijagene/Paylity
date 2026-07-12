@@ -5,6 +5,7 @@
   "/page": "/",
   "/platform/page": "/platform",
   "/profile/page": "/profile",
+  "/reconciliation/page": "/reconciliation",
   "/reports/page": "/reports",
   "/transactions/[reference]/page": "/transactions/[reference]",
   "/transactions/page": "/transactions"

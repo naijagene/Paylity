@@ -5,6 +5,7 @@
   "/page": "app/page.js",
   "/platform/page": "app/platform/page.js",
   "/profile/page": "app/profile/page.js",
+  "/reconciliation/page": "app/reconciliation/page.js",
   "/reports/page": "app/reports/page.js",
   "/transactions/[reference]/page": "app/transactions/[reference]/page.js",
   "/transactions/page": "app/transactions/page.js"

@@ -92,6 +92,12 @@
       "namedRegex": "^/profile(?:/)?$"
     },
     {
+      "page": "/reconciliation",
+      "regex": "^/reconciliation(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reconciliation(?:/)?$"
+    },
+    {
       "page": "/reports",
       "regex": "^/reports(?:/)?$",
       "routeKeys": {},

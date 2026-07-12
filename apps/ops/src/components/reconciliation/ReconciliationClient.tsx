@@ -110,8 +110,15 @@ export function ReconciliationClient() {
   const data = snapshot.data;
 
   return (
-    <PageContainer title="Reconciliation Center" description="Payment and fulfillment exception queues.">
-      <div className="space-y-6">
+    <PageContainer className="py-8" narrow={false}>
+      <div className="mx-auto w-full max-w-7xl space-y-6">
+        <header>
+          <h1 className="font-display text-3xl font-extrabold text-dark">Reconciliation Center</h1>
+          <p className="mt-2 text-sm text-muted">
+            Payment and fulfillment exception queues.
+          </p>
+        </header>
+
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard label="Paid Unfulfilled" value={data?.summary.paid_unfulfilled ?? "…"} />
           <KpiCard label="Stale Payment Pending" value={data?.summary.stale_payment_pending ?? "…"} />
