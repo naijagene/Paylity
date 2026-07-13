@@ -2,10 +2,13 @@
 
 namespace App\Services\Fulfillment;
 
+use App\Enums\FulfillmentAttemptStatus;
 use App\Enums\TransactionStatus;
 use App\Exceptions\FulfillmentException;
 use App\Exceptions\VTPassException;
+use App\Models\FulfillmentAttempt;
 use App\Models\Transaction;
+use App\Services\Finance\LedgerPostingService;
 use App\Services\Fulfillment\Adapters\AirtimeAdapter;
 use App\Services\Fulfillment\Adapters\DataAdapter;
 use App\Services\Fulfillment\Adapters\ElectricityAdapter;
@@ -25,6 +28,7 @@ class FulfillmentService
         private readonly TransactionEventService $transactionEventService,
         private readonly TransactionNotificationService $transactionNotificationService,
         private readonly VtpassFulfillmentGuard $vtpassFulfillmentGuard,
+        private readonly LedgerPostingService $ledgerPostingService,
         AirtimeAdapter $airtimeAdapter,
         DataAdapter $dataAdapter,
         ElectricityAdapter $electricityAdapter,
@@ -70,44 +74,51 @@ class FulfillmentService
             );
         }
 
-        return $this->fulfill($transaction);
+        throw new FulfillmentException(
+            'Direct fulfillment is disabled. Use ExactOnceFulfillmentService.',
+            'FULFILLMENT_ORCHESTRATION_REQUIRED',
+        );
+    }
+
+    /**
+     * @throws FulfillmentException
+     * @throws VTPassException
+     *
+     * @deprecated Use ExactOnceFulfillmentService::requestFulfillment()
+     */
+    public function fulfill(Transaction $transaction, string $actor = 'system', bool $isRetry = false): Transaction
+    {
+        throw new FulfillmentException(
+            'Direct fulfillment is disabled. Use ExactOnceFulfillmentService.',
+            'FULFILLMENT_ORCHESTRATION_REQUIRED',
+        );
     }
 
     /**
      * @throws FulfillmentException
      * @throws VTPassException
      */
-    public function fulfill(Transaction $transaction, string $actor = 'system', bool $isRetry = false): Transaction
-    {
-        if (! in_array($transaction->status, [
-            TransactionStatus::PAYMENT_SUCCESS,
-            TransactionStatus::FAILED,
-        ], true)) {
-            throw new FulfillmentException(
-                'Transaction must be payment_success or failed before fulfillment.',
-                'INVALID_TRANSACTION_STATUS',
-            );
-        }
-
+    public function executeAttempt(
+        Transaction $transaction,
+        FulfillmentAttempt $attempt,
+        string $actor = 'system',
+        bool $isRetry = false,
+    ): Transaction {
         $this->vtpassFulfillmentGuard->assertCanFulfill($transaction);
         $this->vtpassService->assertConfigured();
 
         $adapter = $this->resolveAdapter($transaction->product_type);
         $payload = $adapter->buildPayload($transaction);
+        $payload['request_id'] = (string) $attempt->request_id;
 
-        $transaction->update([
-            'status' => TransactionStatus::FULFILLMENT_PENDING,
-            'fulfillment_provider' => 'vtpass',
-            'failure_reason' => null,
-        ]);
+        $this->fulfillmentAttemptRecorder->markSubmitted($attempt, $payload);
 
         $this->transactionEventService->record(
-            $transaction->fresh(),
-            $isRetry
-                ? TransactionEventService::TYPE_FULFILLMENT_RETRY
-                : TransactionEventService::TYPE_FULFILLMENT_PENDING,
-            $isRetry ? 'Fulfillment retry started.' : 'Fulfillment started.',
+            $transaction,
+            TransactionEventService::TYPE_FULFILLMENT_REQUEST_SUBMITTED,
+            'Fulfillment request submitted to provider.',
             $actor,
+            ['request_id' => $attempt->request_id],
         );
 
         $startedAt = microtime(true);
@@ -115,117 +126,104 @@ class FulfillmentService
         try {
             $response = $this->vtpassService->pay($payload);
             $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+            $mapped = $this->responseMapper->map($response);
 
-            if ($this->responseMapper->isSuccessful($response)) {
-                $transaction->update([
-                    'status' => TransactionStatus::FULFILLED,
-                    'fulfillment_provider' => 'vtpass',
-                    'fulfillment_reference' => $this->resolveFulfillmentReference($response, $payload),
-                    'response_payload' => array_merge(
-                        (array) $transaction->response_payload,
-                        ['fulfillment' => $response],
-                    ),
-                    'failure_reason' => null,
-                    'fulfilled_at' => now(),
-                ]);
-
-                $fresh = $transaction->fresh();
-
-                $this->fulfillmentAttemptRecorder->record(
-                    $fresh,
-                    'success',
-                    $actor,
-                    (string) ($payload['request_id'] ?? null),
-                    $payload,
+            if ($mapped['status'] === VTPassResponseMapper::STATUS_SUCCESS) {
+                return $this->markFulfilled(
+                    $transaction,
+                    $attempt,
                     $response,
-                    null,
-                    $durationMs,
-                );
-
-                $this->transactionEventService->record(
-                    $fresh,
-                    TransactionEventService::TYPE_FULFILLED,
-                    'Fulfillment completed successfully.',
+                    $payload,
                     $actor,
+                    $isRetry,
+                    $durationMs,
+                    $mapped,
                 );
-
-                if ($isRetry) {
-                    $this->transactionNotificationService->sendRetrySuccess($fresh);
-                } else {
-                    $this->transactionNotificationService->sendDeliverySuccess($fresh);
-                }
-
-                $this->transactionNotificationService->sendReceipt($fresh);
-
-                return $fresh;
             }
 
-            $reason = $this->responseMapper->failureReason($response);
+            if (in_array($mapped['status'], [
+                VTPassResponseMapper::STATUS_PENDING,
+                VTPassResponseMapper::STATUS_UNKNOWN,
+            ], true)) {
+                return $this->markUncertainAndThrow(
+                    $transaction,
+                    $attempt,
+                    $payload,
+                    $response,
+                    $mapped['message'],
+                    $durationMs,
+                    $mapped['code'],
+                );
+            }
 
-            $transaction->update([
-                'status' => TransactionStatus::FAILED,
-                'failure_reason' => $reason,
-                'response_payload' => array_merge(
-                    (array) $transaction->response_payload,
-                    ['fulfillment' => $response],
-                ),
-            ]);
-
-            $fresh = $transaction->fresh();
-
-            $this->fulfillmentAttemptRecorder->record(
-                $fresh,
-                'failed',
-                $actor,
-                (string) ($payload['request_id'] ?? null),
-                $payload,
+            return $this->markFailedAndThrow(
+                $transaction,
+                $attempt,
                 $response,
-                $reason,
-                $durationMs,
-            );
-
-            $this->transactionEventService->record(
-                $fresh,
-                TransactionEventService::TYPE_FULFILLMENT_FAILED,
-                'Fulfillment failed.',
+                $payload,
+                $mapped['message'],
                 $actor,
-                ['reason' => $reason],
+                $durationMs,
+                $mapped['code'],
             );
-
-            $this->transactionNotificationService->sendDeliveryFailure($fresh);
-            $this->transactionNotificationService->sendReceipt($fresh);
-
-            throw new FulfillmentException($reason, 'VTPASS_FULFILLMENT_FAILED');
         } catch (VTPassException $exception) {
             $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
+            if ($exception->errorCode === 'VTPASS_TIMEOUT') {
+                $this->fulfillmentAttemptRecorder->markUncertain(
+                    $attempt,
+                    $payload,
+                    null,
+                    $exception->getMessage(),
+                    $durationMs,
+                    VTPassException::class,
+                    $exception->errorCode,
+                );
+
+                $transaction->update([
+                    'status' => TransactionStatus::FULFILLMENT_PENDING,
+                    'failure_reason' => $exception->getMessage(),
+                ]);
+
+                $this->transactionEventService->record(
+                    $transaction->fresh(),
+                    TransactionEventService::TYPE_FULFILLMENT_PROVIDER_UNCERTAIN,
+                    'Fulfillment provider outcome uncertain after timeout.',
+                    $actor,
+                    ['request_id' => $attempt->request_id],
+                );
+
+                throw new FulfillmentException(
+                    $exception->getMessage(),
+                    'FULFILLMENT_UNCERTAIN',
+                );
+            }
+
+            $this->fulfillmentAttemptRecorder->markConfirmedFailed(
+                $attempt,
+                null,
+                $exception->errorCode,
+                $exception->getMessage(),
+                $exception->getMessage(),
+                $durationMs,
+                VTPassException::class,
+                $exception->errorCode,
+            );
 
             $transaction->update([
                 'status' => TransactionStatus::FAILED,
                 'failure_reason' => $exception->getMessage(),
             ]);
 
-            $fresh = $transaction->fresh();
-
-            $this->fulfillmentAttemptRecorder->record(
-                $fresh,
-                'error',
-                $actor,
-                (string) ($payload['request_id'] ?? null),
-                $payload,
-                null,
-                $exception->getMessage(),
-                $durationMs,
-            );
-
             $this->transactionEventService->record(
-                $fresh,
-                TransactionEventService::TYPE_FULFILLMENT_FAILED,
+                $transaction->fresh(),
+                TransactionEventService::TYPE_FULFILLMENT_PROVIDER_FAILED,
                 'Fulfillment provider error.',
                 $actor,
                 ['reason' => $exception->getMessage()],
             );
 
-            $this->transactionNotificationService->sendDeliveryFailure($fresh);
+            $this->transactionNotificationService->sendDeliveryFailure($transaction->fresh());
 
             throw $exception;
         }
@@ -233,11 +231,187 @@ class FulfillmentService
 
     /**
      * @throws FulfillmentException
-     * @throws VTPassException
      */
     public function retryFulfillment(Transaction $transaction, string $actor = 'operator'): Transaction
     {
-        return $this->fulfill($transaction, $actor, true);
+        throw new FulfillmentException(
+            'Direct fulfillment retry is disabled. Use ExactOnceFulfillmentService.',
+            'FULFILLMENT_ORCHESTRATION_REQUIRED',
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $mapped
+     */
+    private function markFulfilled(
+        Transaction $transaction,
+        FulfillmentAttempt $attempt,
+        array $response,
+        array $payload,
+        string $actor,
+        bool $isRetry,
+        int $durationMs,
+        array $mapped,
+    ): Transaction {
+        $providerReference = $this->resolveFulfillmentReference($response, $payload);
+
+        $transaction->update([
+            'status' => TransactionStatus::FULFILLED,
+            'fulfillment_provider' => 'vtpass',
+            'fulfillment_reference' => $providerReference,
+            'response_payload' => array_merge(
+                (array) $transaction->response_payload,
+                ['fulfillment' => $response],
+            ),
+            'failure_reason' => null,
+            'fulfilled_at' => now(),
+            'fulfillment_retry_count' => 0,
+            'next_fulfillment_retry_at' => null,
+            'needs_manual_review' => false,
+            'manual_review_reason' => null,
+            'manual_review_at' => null,
+        ]);
+
+        $this->fulfillmentAttemptRecorder->markSucceeded(
+            $attempt,
+            $response,
+            $providerReference,
+            $mapped['code'],
+            $mapped['message'],
+            $durationMs,
+        );
+
+        $fresh = $transaction->fresh();
+
+        $this->transactionEventService->record(
+            $fresh,
+            TransactionEventService::TYPE_FULFILLMENT_PROVIDER_SUCCEEDED,
+            'Fulfillment completed successfully.',
+            $actor,
+        );
+
+        $this->transactionEventService->record(
+            $fresh,
+            TransactionEventService::TYPE_FULFILLED,
+            'Transaction fulfilled.',
+            $actor,
+        );
+
+        if ($isRetry) {
+            $this->transactionNotificationService->sendRetrySuccess($fresh);
+        } else {
+            $this->transactionNotificationService->sendDeliverySuccess($fresh);
+        }
+
+        $this->transactionNotificationService->sendReceipt($fresh);
+
+        $this->ledgerPostingService->postFulfillmentRecognized($fresh, $attempt);
+
+        return $fresh;
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @param  array<string, mixed>  $payload
+     *
+     * @throws FulfillmentException
+     */
+    private function markFailedAndThrow(
+        Transaction $transaction,
+        FulfillmentAttempt $attempt,
+        array $response,
+        array $payload,
+        string $reason,
+        string $actor,
+        int $durationMs,
+        ?string $providerCode,
+    ): Transaction {
+        $this->fulfillmentAttemptRecorder->markConfirmedFailed(
+            $attempt,
+            $response,
+            $providerCode,
+            $reason,
+            $reason,
+            $durationMs,
+        );
+
+        $transaction->update([
+            'status' => TransactionStatus::FAILED,
+            'failure_reason' => $reason,
+            'response_payload' => array_merge(
+                (array) $transaction->response_payload,
+                ['fulfillment' => $response],
+            ),
+        ]);
+
+        $fresh = $transaction->fresh();
+
+        $this->transactionEventService->record(
+            $fresh,
+            TransactionEventService::TYPE_FULFILLMENT_PROVIDER_FAILED,
+            'Fulfillment failed.',
+            $actor,
+            ['reason' => $reason],
+        );
+
+        $this->transactionEventService->record(
+            $fresh,
+            TransactionEventService::TYPE_FULFILLMENT_FAILED,
+            'Fulfillment failed.',
+            $actor,
+            ['reason' => $reason],
+        );
+
+        $this->transactionNotificationService->sendDeliveryFailure($fresh);
+        $this->transactionNotificationService->sendReceipt($fresh);
+
+        throw new FulfillmentException($reason, 'VTPASS_FULFILLMENT_FAILED');
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $response
+     * @param  array<string, mixed>  $payload
+     *
+     * @throws FulfillmentException
+     */
+    private function markUncertainAndThrow(
+        Transaction $transaction,
+        FulfillmentAttempt $attempt,
+        array $payload,
+        ?array $response,
+        string $reason,
+        int $durationMs,
+        ?string $providerCode,
+    ): Transaction {
+        $this->fulfillmentAttemptRecorder->markUncertain(
+            $attempt,
+            $payload,
+            $response,
+            $reason,
+            $durationMs,
+            null,
+            $providerCode,
+        );
+
+        $transaction->update([
+            'status' => TransactionStatus::FULFILLMENT_PENDING,
+            'failure_reason' => $reason,
+            'response_payload' => $response
+                ? array_merge((array) $transaction->response_payload, ['fulfillment' => $response])
+                : $transaction->response_payload,
+        ]);
+
+        $this->transactionEventService->record(
+            $transaction->fresh(),
+            TransactionEventService::TYPE_FULFILLMENT_PROVIDER_UNCERTAIN,
+            'Fulfillment provider outcome uncertain.',
+            'system',
+            ['request_id' => $attempt->request_id, 'reason' => $reason],
+        );
+
+        throw new FulfillmentException($reason, 'FULFILLMENT_UNCERTAIN');
     }
 
     private function resolveAdapter(string $productType): FulfillmentAdapterInterface

@@ -13,9 +13,12 @@ use App\Http\Controllers\Api\V1\Ops\OpsDashboardController;
 use App\Http\Controllers\Api\V1\Ops\OpsMonitoringController;
 use App\Http\Controllers\Api\V1\Ops\OpsNoteController;
 use App\Http\Controllers\Api\V1\Ops\OpsReliabilityController;
+use App\Http\Controllers\Api\V1\Ops\OpsFinanceController;
+use App\Http\Controllers\Api\V1\Ops\OpsReconciliationController;
 use App\Http\Controllers\Api\V1\Ops\OpsReportsController;
 use App\Http\Controllers\Api\V1\Ops\OpsSummaryController;
 use App\Http\Controllers\Api\V1\Ops\OpsTransactionController;
+use App\Http\Controllers\Api\V1\Ops\OpsVtpassWalletController;
 use App\Http\Controllers\Api\V1\PaystackController;
 use App\Http\Controllers\Api\V1\PlatformStatusController;
 use App\Http\Controllers\Api\V1\ReceiptController;
@@ -80,7 +83,21 @@ Route::middleware(['throttle:ops-auth', 'operator'])->prefix('ops')->group(funct
 
 Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function () {
     Route::get('/dashboard', OpsDashboardController::class);
+    Route::post('/vtpass/wallet/refresh', [OpsVtpassWalletController::class, 'refresh']);
     Route::get('/reliability', OpsReliabilityController::class);
+    Route::get('/reconciliation', [OpsReconciliationController::class, 'index']);
+    Route::get('/finance', [OpsFinanceController::class, 'dashboard']);
+    Route::get('/finance/ledger', [OpsFinanceController::class, 'ledgerEntries']);
+    Route::get('/finance/exports/daily-summary', [OpsFinanceController::class, 'exportDailySummary']);
+    Route::post('/finance/reconcile-settlements', [OpsFinanceController::class, 'reconcileSettlements']);
+    Route::post('/finance/backfill', [OpsFinanceController::class, 'backfill']);
+    Route::post('/finance/close', [OpsFinanceController::class, 'close']);
+    Route::get('/finance/transactions/{reference}', [OpsFinanceController::class, 'transactionFinance']);
+    Route::post('/reconciliation/{reference}/reconcile-payment', [OpsReconciliationController::class, 'reconcilePayment']);
+    Route::post('/reconciliation/{reference}/reconcile-fulfillment', [OpsReconciliationController::class, 'reconcileFulfillment']);
+    Route::post('/reconciliation/{reference}/retry', [OpsReconciliationController::class, 'retry']);
+    Route::post('/reconciliation/{reference}/manual-review', [OpsReconciliationController::class, 'manualReview']);
+    Route::post('/reconciliation/{reference}/resume-automation', [OpsReconciliationController::class, 'resumeAutomation']);
     Route::get('/summary', OpsSummaryController::class);
     Route::get('/monitoring', OpsMonitoringController::class);
     Route::get('/reports/daily-reconciliation', [OpsReportsController::class, 'dailyReconciliation']);

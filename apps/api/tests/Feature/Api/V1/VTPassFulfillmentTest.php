@@ -91,7 +91,7 @@ class VTPassFulfillmentTest extends TestCase
 
         $response
             ->assertStatus(422)
-            ->assertJsonPath('errors.code', 'INVALID_TRANSACTION_STATUS');
+            ->assertJsonPath('errors.code', 'PAYMENT_NOT_CONFIRMED');
 
         Http::assertNothingSent();
     }
@@ -112,14 +112,14 @@ class VTPassFulfillmentTest extends TestCase
             ],
         ]);
 
-        Http::fake(function ($request) {
+        Http::fake(function ($request) use ($transaction) {
             if (str_contains($request->url(), '/api/pay')) {
                 $payload = $request->data();
 
                 $this->assertSame('etisalat', $payload['serviceID']);
                 $this->assertSame(1000, $payload['amount']);
                 $this->assertSame('08091112233', $payload['phone']);
-                $this->assertSame('202607030924sandbox01', $payload['request_id']);
+                $this->assertSame($transaction->reference.'-F01', $payload['request_id']);
 
                 return Http::response([
                     'code' => '000',
@@ -201,7 +201,7 @@ class VTPassFulfillmentTest extends TestCase
 
         $response
             ->assertStatus(422)
-            ->assertJsonPath('errors.code', 'VTPASS_FULFILLMENT_FAILED');
+            ->assertJsonPath('errors.code', 'FAILED');
 
         $this->assertDatabaseHas('transactions', [
             'reference' => $transaction->reference,

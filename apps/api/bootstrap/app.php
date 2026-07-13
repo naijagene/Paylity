@@ -18,10 +18,32 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api/v1',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('paylity:reconcile-payments')->everyTenMinutes();
-        $schedule->command('paylity:process-fulfillment-retries')->everyFiveMinutes();
-        $schedule->command('paylity:cleanup-otp')->dailyAt('02:30');
-        $schedule->command('paylity:cleanup-webhooks')->weeklyOn(0, '03:00');
+        $schedule->command('paylity:reconcile-payments')
+            ->everyTenMinutes()
+            ->withoutOverlapping(15)
+            ->onOneServer();
+        $schedule->command('paylity:reconcile-fulfillments')
+            ->everyTenMinutes()
+            ->withoutOverlapping(15)
+            ->onOneServer();
+        $schedule->command('paylity:process-fulfillment-retries')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(10)
+            ->onOneServer();
+        $schedule->command('paylity:reconcile-settlements')
+            ->everyThirtyMinutes()
+            ->withoutOverlapping(35)
+            ->onOneServer();
+        $schedule->command('paylity:financial-close')
+            ->dailyAt('01:00')
+            ->withoutOverlapping(60)
+            ->onOneServer();
+        $schedule->command('paylity:financial-alert-scan')
+            ->everyFifteenMinutes()
+            ->withoutOverlapping(20)
+            ->onOneServer();
+        $schedule->command('paylity:cleanup-otp')->dailyAt('02:30')->onOneServer();
+        $schedule->command('paylity:cleanup-webhooks')->weeklyOn(0, '03:00')->onOneServer();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

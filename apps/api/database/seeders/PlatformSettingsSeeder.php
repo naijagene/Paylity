@@ -163,6 +163,96 @@ class PlatformSettingsSeeder extends Seeder
                 'type' => 'integer',
                 'description' => 'Age in minutes before fulfillment_pending transactions are repaired.',
             ],
+            [
+                'key' => SystemSettingKeys::PAYMENT_PENDING_STALE_MINUTES,
+                'value' => '15',
+                'type' => 'integer',
+                'description' => 'Age in minutes before payment_pending is classified stale.',
+            ],
+            [
+                'key' => SystemSettingKeys::FULFILLMENT_PROCESSING_STALE_MINUTES,
+                'value' => '30',
+                'type' => 'integer',
+                'description' => 'Age in minutes before in-flight fulfillment attempts are stale.',
+            ],
+            [
+                'key' => SystemSettingKeys::FULFILLMENT_UNCERTAIN_ESCALATION_MINUTES,
+                'value' => '120',
+                'type' => 'integer',
+                'description' => 'Minutes before uncertain provider outcomes escalate to manual review.',
+            ],
+            [
+                'key' => SystemSettingKeys::RECONCILIATION_BATCH_SIZE,
+                'value' => '50',
+                'type' => 'integer',
+                'description' => 'Maximum records processed per reconciliation command run.',
+            ],
+            [
+                'key' => SystemSettingKeys::RECONCILIATION_MAX_AGE_DAYS,
+                'value' => '30',
+                'type' => 'integer',
+                'description' => 'Maximum age in days for fulfillment reconciliation candidates.',
+            ],
+            [
+                'key' => SystemSettingKeys::WALLET_LOW_BALANCE_THRESHOLD,
+                'value' => '500000',
+                'type' => 'integer',
+                'description' => 'VTPass wallet balance below this amount triggers a warning alert.',
+            ],
+            [
+                'key' => SystemSettingKeys::WALLET_CRITICAL_BALANCE_THRESHOLD,
+                'value' => '100000',
+                'type' => 'integer',
+                'description' => 'VTPass wallet balance below this amount triggers a critical alert.',
+            ],
+            [
+                'key' => SystemSettingKeys::WALLET_REFRESH_SECONDS,
+                'value' => '60',
+                'type' => 'integer',
+                'description' => 'Server-side cache TTL for VTPass wallet balance checks.',
+            ],
+            [
+                'key' => SystemSettingKeys::FINANCIAL_SETTLEMENT_DIFFERENCE_THRESHOLD,
+                'value' => '50000',
+                'type' => 'integer',
+                'description' => 'Settlement difference alert threshold in kobo.',
+            ],
+            [
+                'key' => SystemSettingKeys::FINANCIAL_NEGATIVE_MARGIN_ALERT_ENABLED,
+                'value' => '1',
+                'type' => 'boolean',
+                'description' => 'Alert when fulfilled transactions have negative gross margin.',
+            ],
+            [
+                'key' => SystemSettingKeys::FINANCIAL_CLOSE_HOUR,
+                'value' => '1',
+                'type' => 'integer',
+                'description' => 'Hour (0-23) after midnight to run daily financial close.',
+            ],
+            [
+                'key' => SystemSettingKeys::FINANCIAL_BACKFILL_BATCH_SIZE,
+                'value' => '50',
+                'type' => 'integer',
+                'description' => 'Default batch size for ledger backfill command.',
+            ],
+            [
+                'key' => SystemSettingKeys::FINANCIAL_CLEARING_STALE_HOURS,
+                'value' => '48',
+                'type' => 'integer',
+                'description' => 'Hours before non-zero Paystack clearing triggers a stale alert.',
+            ],
+            [
+                'key' => SystemSettingKeys::FINANCIAL_PAYSTACK_FEE_BASIS_POINTS,
+                'value' => '150',
+                'type' => 'integer',
+                'description' => 'Expected Paystack fee basis points (1.50% = 150).',
+            ],
+            [
+                'key' => SystemSettingKeys::FINANCIAL_PAYSTACK_FEE_FLAT_KOBO,
+                'value' => '10000',
+                'type' => 'integer',
+                'description' => 'Expected Paystack flat fee in kobo (₦100 = 10000).',
+            ],
         ];
 
         foreach ($settings as $setting) {

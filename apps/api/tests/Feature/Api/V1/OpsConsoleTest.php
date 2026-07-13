@@ -182,7 +182,7 @@ class OpsConsoleTest extends TestCase
 
         $response
             ->assertStatus(422)
-            ->assertJsonPath('errors.code', 'INVALID_TRANSACTION_STATUS');
+            ->assertJsonPath('errors.code', 'PAYMENT_NOT_CONFIRMED');
 
         Http::assertNothingSent();
     }

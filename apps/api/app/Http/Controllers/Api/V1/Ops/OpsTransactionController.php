@@ -7,6 +7,7 @@ use App\Exceptions\VTPassConfigurationException;
 use App\Exceptions\VTPassException;
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
+use App\Services\Fulfillment\ExactOnceFulfillmentService;
 use App\Services\Fulfillment\FulfillmentService;
 use App\Services\Ops\OpsTransactionService;
 use App\Support\ApiResponse;
@@ -17,6 +18,7 @@ class OpsTransactionController extends Controller
 {
     public function __construct(
         private readonly OpsTransactionService $opsTransactionService,
+        private readonly ExactOnceFulfillmentService $exactOnceFulfillmentService,
         private readonly FulfillmentService $fulfillmentService,
     ) {
     }
@@ -93,10 +95,26 @@ class OpsTransactionController extends Controller
                 );
             }
 
-            $transaction = $this->fulfillmentService->fulfill($transaction, 'operator');
+            $result = $this->exactOnceFulfillmentService->requestFromOperator($transaction);
+
+            if (! $result->fulfilled()) {
+                $code = match ($result->outcome) {
+                    'payment_not_confirmed' => 'PAYMENT_NOT_CONFIRMED',
+                    'manual_review' => 'MANUAL_REVIEW',
+                    'active_attempt' => 'ACTIVE_ATTEMPT',
+                    'already_fulfilled' => 'ALREADY_FULFILLED',
+                    default => strtoupper($result->outcome),
+                };
+
+                return ApiResponse::error(
+                    message: $result->reason ?? 'Fulfillment could not be completed.',
+                    errors: ['code' => $code],
+                    status: 422,
+                );
+            }
 
             return ApiResponse::success(
-                data: $this->fulfillmentService->toResponse($transaction),
+                data: $this->fulfillmentService->toResponse($result->transaction),
                 message: 'Fulfillment completed successfully.',
             );
         } catch (FulfillmentException $exception) {
@@ -139,10 +157,26 @@ class OpsTransactionController extends Controller
                 );
             }
 
-            $transaction = $this->fulfillmentService->retryFulfillment($transaction, 'operator');
+            $result = $this->exactOnceFulfillmentService->requestFromManualRetry($transaction);
+
+            if (! $result->fulfilled()) {
+                $code = match ($result->outcome) {
+                    'payment_not_confirmed' => 'PAYMENT_NOT_CONFIRMED',
+                    'manual_review' => 'MANUAL_REVIEW',
+                    'active_attempt' => 'ACTIVE_ATTEMPT',
+                    'already_fulfilled' => 'ALREADY_FULFILLED',
+                    default => strtoupper($result->outcome),
+                };
+
+                return ApiResponse::error(
+                    message: $result->reason ?? 'Fulfillment retry could not be completed.',
+                    errors: ['code' => $code],
+                    status: 422,
+                );
+            }
 
             return ApiResponse::success(
-                data: $this->fulfillmentService->toResponse($transaction),
+                data: $this->fulfillmentService->toResponse($result->transaction),
                 message: 'Fulfillment retry completed successfully.',
             );
         } catch (FulfillmentException $exception) {

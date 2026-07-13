@@ -5,11 +5,17 @@ namespace App\Services\Ops;
 use App\Enums\TransactionStatus;
 use App\Models\FulfillmentAttempt;
 use App\Models\Transaction;
+use App\Services\Fulfillment\VtpassWalletBalanceService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 
 class OpsReportsService
 {
+    public function __construct(
+        private readonly VtpassWalletBalanceService $walletBalanceService,
+    ) {
+    }
+
     /**
      * @return array<string, int|float|string>
      */
@@ -53,6 +59,7 @@ class OpsReportsService
             'success_rate' => $totalTransactions > 0
                 ? round(($successfulPayments / $totalTransactions) * 100, 1)
                 : 0.0,
+            'wallet' => $this->walletBalanceService->dailyStats($day->toDateString()),
         ];
     }
 

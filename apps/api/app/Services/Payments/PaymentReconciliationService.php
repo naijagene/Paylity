@@ -2,10 +2,13 @@
 
 namespace App\Services\Payments;
 
+use App\Enums\FulfillmentAttemptStatus;
 use App\Enums\TransactionStatus;
 use App\Exceptions\PaymentVerificationException;
 use App\Exceptions\PaystackException;
+use App\Models\FulfillmentAttempt;
 use App\Models\Transaction;
+use App\Services\Fulfillment\ExactOnceFulfillmentService;
 use App\Services\Fulfillment\FulfillmentRetryService;
 use App\Services\TransactionEventService;
 use App\Services\WebhookEventService;
@@ -16,6 +19,7 @@ class PaymentReconciliationService
 {
     public function __construct(
         private readonly PaymentVerificationService $paymentVerificationService,
+        private readonly ExactOnceFulfillmentService $exactOnceFulfillmentService,
         private readonly FulfillmentRetryService $fulfillmentRetryService,
         private readonly TransactionEventService $transactionEventService,
         private readonly WebhookEventService $webhookEventService,
@@ -29,12 +33,18 @@ class PaymentReconciliationService
      *     fulfillments_checked: int,
      *     fulfillments_repaired: int,
      *     webhooks_retried: int,
+     *     escalated: int,
      *     errors: int
      * }
      */
     public function reconcile(
         int $paymentStaleMinutes = 15,
         int $fulfillmentStaleMinutes = 30,
+        ?string $reference = null,
+        ?Carbon $since = null,
+        int $limit = 50,
+        bool $dryRun = false,
+        bool $repair = true,
     ): array {
         $summary = [
             'payments_checked' => 0,
@@ -42,52 +52,140 @@ class PaymentReconciliationService
             'fulfillments_checked' => 0,
             'fulfillments_repaired' => 0,
             'webhooks_retried' => 0,
+            'escalated' => 0,
             'errors' => 0,
         ];
+
+        if ($reference !== null && $reference !== '') {
+            $transaction = Transaction::query()->where('reference', $reference)->first();
+            if ($transaction) {
+                $summary['payments_checked']++;
+                if (! $dryRun && $repair) {
+                    $this->reconcileTransaction($transaction, $summary, $paymentStaleMinutes, $fulfillmentStaleMinutes);
+                }
+            }
+
+            return $summary;
+        }
 
         $paymentCutoff = now()->subMinutes($paymentStaleMinutes);
         $fulfillmentCutoff = now()->subMinutes($fulfillmentStaleMinutes);
 
-        Transaction::query()
-            ->where('status', TransactionStatus::PAYMENT_PENDING)
-            ->where('updated_at', '<=', $paymentCutoff)
-            ->orderBy('id')
-            ->chunkById(50, function ($transactions) use (&$summary) {
-                foreach ($transactions as $transaction) {
-                    $summary['payments_checked']++;
-                    $this->reconcilePayment($transaction, $summary);
-                }
-            });
-
-        Transaction::query()
-            ->where('status', TransactionStatus::PAYMENT_SUCCESS)
-            ->where('needs_manual_review', false)
-            ->where('updated_at', '<=', $paymentCutoff)
-            ->orderBy('id')
-            ->chunkById(50, function ($transactions) use (&$summary) {
-                foreach ($transactions as $transaction) {
-                    $summary['fulfillments_checked']++;
-                    $this->reconcileUnfulfilledPayment($transaction, $summary);
-                }
-            });
-
-        Transaction::query()
-            ->where('status', TransactionStatus::FULFILLMENT_PENDING)
-            ->where('updated_at', '<=', $fulfillmentCutoff)
-            ->orderBy('id')
-            ->chunkById(50, function ($transactions) use (&$summary) {
-                foreach ($transactions as $transaction) {
-                    $summary['fulfillments_checked']++;
-                    $this->reconcileStaleFulfillment($transaction, $summary);
-                }
-            });
-
-        foreach ($this->webhookEventService->failedEventsForRetry() as $event) {
-            $summary['webhooks_retried']++;
-            $this->retryFailedWebhook($event, $summary);
+        if ($since !== null) {
+            $paymentCutoff = $since;
+            $fulfillmentCutoff = $since;
         }
 
+        $this->eachCandidate(
+            Transaction::query()
+                ->whereIn('status', [
+                    TransactionStatus::PAYMENT_PENDING,
+                    TransactionStatus::PAYMENT_SUCCESS,
+                    TransactionStatus::FULFILLMENT_PENDING,
+                    TransactionStatus::FAILED,
+                ])
+                ->when($since, fn ($query) => $query->where('created_at', '>=', $since))
+                ->orderBy('id')
+                ->limit($limit),
+            function (Transaction $transaction) use (
+                &$summary,
+                $paymentStaleMinutes,
+                $paymentCutoff,
+                $fulfillmentCutoff,
+                $fulfillmentStaleMinutes,
+                $dryRun,
+                $repair,
+            ) {
+                if ($transaction->status === TransactionStatus::PAYMENT_PENDING
+                    && $transaction->updated_at->gt($paymentCutoff)) {
+                    return;
+                }
+
+                if (in_array($transaction->status, [
+                    TransactionStatus::PAYMENT_SUCCESS,
+                    TransactionStatus::FAILED,
+                ], true) && $transaction->updated_at->gt($paymentCutoff)) {
+                    return;
+                }
+
+                if ($transaction->status === TransactionStatus::FULFILLMENT_PENDING
+                    && $transaction->updated_at->gt($fulfillmentCutoff)) {
+                    return;
+                }
+
+                $summary['payments_checked']++;
+
+                if ($dryRun || ! $repair) {
+                    return;
+                }
+
+                $this->reconcileTransaction(
+                    $transaction,
+                    $summary,
+                    $paymentStaleMinutes,
+                    $fulfillmentStaleMinutes,
+                );
+            },
+        );
+
+        if (! $dryRun && $repair) {
+            foreach ($this->webhookEventService->failedEventsForRetry() as $event) {
+                if ($summary['webhooks_retried'] >= $limit) {
+                    break;
+                }
+
+                $summary['webhooks_retried']++;
+                $this->retryFailedWebhook($event, $summary);
+            }
+        }
+
+        $this->auditLedgerMismatches($summary, $limit, $dryRun, $repair);
+
         return $summary;
+    }
+
+    /**
+     * @param  array<string, int>  $summary
+     */
+    private function reconcileTransaction(
+        Transaction $transaction,
+        array &$summary,
+        int $paymentStaleMinutes,
+        int $fulfillmentStaleMinutes,
+    ): void {
+        $this->transactionEventService->record(
+            $transaction,
+            TransactionEventService::TYPE_PAYMENT_RECONCILIATION_STARTED,
+            'Payment reconciliation started.',
+            'reconciliation',
+        );
+
+        if (in_array($transaction->status, [
+            TransactionStatus::PAYMENT_PENDING,
+            TransactionStatus::CREATED,
+        ], true)) {
+            $this->reconcilePayment($transaction, $summary);
+
+            return;
+        }
+
+        if ($transaction->status === TransactionStatus::PAYMENT_SUCCESS) {
+            $summary['fulfillments_checked']++;
+            $this->reconcileUnfulfilledPayment($transaction, $summary);
+
+            return;
+        }
+
+        if ($transaction->status === TransactionStatus::FULFILLMENT_PENDING) {
+            $summary['fulfillments_checked']++;
+            $this->reconcileStaleFulfillment($transaction, $summary);
+        }
+
+        if ($transaction->status === TransactionStatus::FAILED
+            && $transaction->payment_reference
+            && data_get($transaction->response_payload, 'verify.status') === 'success') {
+            $this->escalateMismatch($transaction, 'Failed transaction has verified Paystack success.', $summary);
+        }
     }
 
     /**
@@ -107,7 +205,11 @@ class PaymentReconciliationService
 
             if ($fresh && $fresh->status !== $previousStatus) {
                 $summary['payments_repaired']++;
-                $this->recordRepair($fresh, 'Payment state repaired during reconciliation.');
+                $this->recordRepair(
+                    $fresh,
+                    'Payment state repaired during reconciliation.',
+                    TransactionEventService::TYPE_PAYMENT_RECONCILIATION_REPAIRED,
+                );
             }
         } catch (PaymentVerificationException|PaystackException $exception) {
             $summary['errors']++;
@@ -127,9 +229,35 @@ class PaymentReconciliationService
             return;
         }
 
-        if (! $transaction->fulfillmentAttempts()->exists()
-            && ! data_get($transaction->response_payload, 'auto_fulfill.attempted')
-            && $transaction->fulfillment_retry_count === 0) {
+        if ($transaction->needs_manual_review) {
+            return;
+        }
+
+        $hasSuccessfulAttempt = FulfillmentAttempt::query()
+            ->where('transaction_id', $transaction->id)
+            ->where('status', FulfillmentAttemptStatus::SUCCEEDED)
+            ->exists();
+
+        if ($hasSuccessfulAttempt && $transaction->status !== TransactionStatus::FULFILLED) {
+            $this->escalateMismatch($transaction, 'Successful attempt exists without fulfilled status.', $summary);
+
+            return;
+        }
+
+        $result = $this->exactOnceFulfillmentService->requestFromReconciliation($transaction);
+
+        if ($result->fulfilled()) {
+            $summary['fulfillments_repaired']++;
+            $this->recordRepair(
+                $result->transaction,
+                'Paid transaction fulfilled during reconciliation.',
+                TransactionEventService::TYPE_FULFILLMENT_RECONCILIATION_REPAIRED,
+            );
+
+            return;
+        }
+
+        if ($result->outcome === 'uncertain' || $result->outcome === 'active_attempt') {
             return;
         }
 
@@ -138,6 +266,7 @@ class PaymentReconciliationService
             $this->recordRepair(
                 $transaction->fresh(),
                 'Unfulfilled payment queued for automated fulfillment retry.',
+                TransactionEventService::TYPE_FULFILLMENT_RECONCILIATION_REPAIRED,
             );
         }
     }
@@ -147,11 +276,21 @@ class PaymentReconciliationService
      */
     private function reconcileStaleFulfillment(Transaction $transaction, array &$summary): void
     {
+        $uncertain = FulfillmentAttempt::query()
+            ->where('transaction_id', $transaction->id)
+            ->whereIn('status', [FulfillmentAttemptStatus::UNCERTAIN, FulfillmentAttemptStatus::SUBMITTED])
+            ->exists();
+
+        if ($uncertain) {
+            return;
+        }
+
         if ($this->fulfillmentRetryService->scheduleOrProcess($transaction->fresh())) {
             $summary['fulfillments_repaired']++;
             $this->recordRepair(
                 $transaction->fresh(),
                 'Stale fulfillment pending state repaired during reconciliation.',
+                TransactionEventService::TYPE_FULFILLMENT_RECONCILIATION_REPAIRED,
             );
         }
     }
@@ -181,14 +320,80 @@ class PaymentReconciliationService
         }
     }
 
-    private function recordRepair(Transaction $transaction, string $summary): void
+    /**
+     * @param  array<string, int>  $summary
+     */
+    private function auditLedgerMismatches(
+        array &$summary,
+        int $limit,
+        bool $dryRun,
+        bool $repair,
+    ): void {
+        Transaction::query()
+            ->where('status', TransactionStatus::FULFILLED)
+            ->whereDoesntHave('fulfillmentAttempts', function ($query) {
+                $query->where('status', FulfillmentAttemptStatus::SUCCEEDED);
+            })
+            ->limit($limit)
+            ->get()
+            ->each(function (Transaction $transaction) use (&$summary, $dryRun, $repair) {
+                $summary['fulfillments_checked']++;
+
+                if ($dryRun || ! $repair) {
+                    return;
+                }
+
+                $this->escalateMismatch(
+                    $transaction,
+                    'Fulfilled transaction missing successful fulfillment attempt ledger entry.',
+                    $summary,
+                );
+            });
+    }
+
+    /**
+     * @param  array<string, int>  $summary
+     */
+    private function escalateMismatch(Transaction $transaction, string $reason, array &$summary): void
     {
+        $transaction->update([
+            'needs_manual_review' => true,
+            'manual_review_reason' => $reason,
+            'manual_review_at' => now(),
+            'next_fulfillment_retry_at' => null,
+        ]);
+
+        $this->transactionEventService->record(
+            $transaction->fresh(),
+            TransactionEventService::TYPE_MANUAL_REVIEW_OPENED,
+            $reason,
+            'reconciliation',
+        );
+
+        $summary['escalated']++;
+    }
+
+    private function recordRepair(
+        Transaction $transaction,
+        string $summary,
+        string $eventType = TransactionEventService::TYPE_RECONCILIATION_REPAIRED,
+    ): void {
         $this->transactionEventService->record(
             $transaction,
-            TransactionEventService::TYPE_RECONCILIATION_REPAIRED,
+            $eventType,
             $summary,
             'reconciliation',
         );
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<Transaction>  $query
+     */
+    private function eachCandidate($query, callable $callback): void
+    {
+        foreach ($query->get() as $transaction) {
+            $callback($transaction);
+        }
     }
 
     /**
@@ -204,7 +409,7 @@ class PaymentReconciliationService
                 ->where('status', TransactionStatus::PAYMENT_PENDING)
                 ->where('updated_at', '<=', $paymentCutoff)
                 ->count(),
-            'stale_payment_success' => (int) Transaction::query()
+            'paid_unfulfilled' => (int) Transaction::query()
                 ->where('status', TransactionStatus::PAYMENT_SUCCESS)
                 ->where('needs_manual_review', false)
                 ->where('updated_at', '<=', $paymentCutoff)
@@ -212,6 +417,9 @@ class PaymentReconciliationService
             'stale_fulfillment_pending' => (int) Transaction::query()
                 ->where('status', TransactionStatus::FULFILLMENT_PENDING)
                 ->where('updated_at', '<=', $fulfillmentCutoff)
+                ->count(),
+            'manual_review' => (int) Transaction::query()
+                ->where('needs_manual_review', true)
                 ->count(),
         ];
     }

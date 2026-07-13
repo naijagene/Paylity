@@ -29,4 +29,19 @@ final class SystemSettingKeys
     public const FULFILLMENT_RETRY_INTERVALS_MINUTES = 'fulfillment_retry_intervals_minutes';
     public const PAYMENT_RECONCILE_STALE_MINUTES = 'payment_reconcile_stale_minutes';
     public const FULFILLMENT_STALE_MINUTES = 'fulfillment_stale_minutes';
+    public const PAYMENT_PENDING_STALE_MINUTES = 'payment_pending_stale_minutes';
+    public const FULFILLMENT_PROCESSING_STALE_MINUTES = 'fulfillment_processing_stale_minutes';
+    public const FULFILLMENT_UNCERTAIN_ESCALATION_MINUTES = 'fulfillment_uncertain_escalation_minutes';
+    public const RECONCILIATION_BATCH_SIZE = 'reconciliation_batch_size';
+    public const RECONCILIATION_MAX_AGE_DAYS = 'reconciliation_max_age_days';
+    public const WALLET_LOW_BALANCE_THRESHOLD = 'wallet_low_balance_threshold';
+    public const WALLET_CRITICAL_BALANCE_THRESHOLD = 'wallet_critical_balance_threshold';
+    public const WALLET_REFRESH_SECONDS = 'wallet_refresh_seconds';
+    public const FINANCIAL_SETTLEMENT_DIFFERENCE_THRESHOLD = 'financial_settlement_difference_threshold';
+    public const FINANCIAL_NEGATIVE_MARGIN_ALERT_ENABLED = 'financial_negative_margin_alert_enabled';
+    public const FINANCIAL_CLOSE_HOUR = 'financial_close_hour';
+    public const FINANCIAL_BACKFILL_BATCH_SIZE = 'financial_backfill_batch_size';
+    public const FINANCIAL_CLEARING_STALE_HOURS = 'financial_clearing_stale_hours';
+    public const FINANCIAL_PAYSTACK_FEE_BASIS_POINTS = 'financial_paystack_fee_basis_points';
+    public const FINANCIAL_PAYSTACK_FEE_FLAT_KOBO = 'financial_paystack_fee_flat_kobo';
 }

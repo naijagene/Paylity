@@ -6,9 +6,10 @@ use App\Enums\TransactionStatus;
 use App\Exceptions\PaymentVerificationException;
 use App\Models\Transaction;
 use App\Exceptions\PaystackException;
+use App\Services\Finance\LedgerPostingService;
 use App\Services\Fulfillment\AutoFulfillmentRecorder;
+use App\Services\Fulfillment\ExactOnceFulfillmentService;
 use App\Services\Fulfillment\FulfillmentRetryService;
-use App\Services\Fulfillment\FulfillmentService;
 use App\Services\Fulfillment\VTPassService;
 use App\Services\Notifications\TransactionNotificationService;
 use App\Services\ReceiptService;
@@ -27,12 +28,13 @@ class PaymentVerificationService
     public function __construct(
         private readonly PaystackService $paystackService,
         private readonly VTPassService $vtpassService,
-        private readonly FulfillmentService $fulfillmentService,
+        private readonly ExactOnceFulfillmentService $exactOnceFulfillmentService,
         private readonly AutoFulfillmentRecorder $autoFulfillmentRecorder,
         private readonly FulfillmentRetryService $fulfillmentRetryService,
         private readonly TransactionEventService $transactionEventService,
         private readonly TransactionNotificationService $transactionNotificationService,
         private readonly ReceiptService $receiptService,
+        private readonly LedgerPostingService $ledgerPostingService,
     ) {
     }
 
@@ -208,6 +210,7 @@ class PaymentVerificationService
             );
             $this->receiptService->ensureVerificationToken($transaction->fresh());
             $this->transactionNotificationService->sendReceipt($transaction->fresh());
+            $this->ledgerPostingService->postPaymentReceived($transaction->fresh());
 
             return $transaction;
         }
@@ -275,24 +278,38 @@ class PaymentVerificationService
 
         $transaction = $this->autoFulfillmentRecorder->recordAttempt($transaction->fresh());
 
-        try {
-            $fulfilled = $this->fulfillmentService->fulfill($transaction->fresh());
+        $triggerSource = data_get($transaction->response_payload, 'verify.source', 'callback');
+        $result = $triggerSource === 'webhook'
+            ? $this->exactOnceFulfillmentService->requestFromWebhook($transaction->fresh())
+            : $this->exactOnceFulfillmentService->requestFromCallback($transaction->fresh());
 
-            return $this->autoFulfillmentRecorder->recordSuccess($fulfilled);
-        } catch (\Throwable $exception) {
-            $fresh = $transaction->fresh();
-            $reason = $fresh->failure_reason ?: $exception->getMessage();
-
-            if (! $fresh->failure_reason && $fresh->status === TransactionStatus::PAYMENT_SUCCESS) {
-                $fresh->update(['failure_reason' => $reason]);
-                $fresh = $fresh->fresh();
-            }
-
-            $recorded = $this->autoFulfillmentRecorder->recordFailure($fresh, $reason);
-            $this->fulfillmentRetryService->scheduleAfterFailure($recorded, $reason);
-
-            return $recorded;
+        if ($result->fulfilled()) {
+            return $this->autoFulfillmentRecorder->recordSuccess($result->transaction);
         }
+
+        if ($result->ignored()) {
+            return $this->autoFulfillmentRecorder->recordSkip(
+                $result->transaction,
+                $result->reason ?? AutoFulfillmentRecorder::SKIP_FEATURE_FLAG_OFF,
+            );
+        }
+
+        $fresh = $result->transaction->fresh();
+        $reason = $fresh->failure_reason ?: ($result->reason ?? 'Fulfillment failed.');
+
+        if ($result->outcome === 'uncertain') {
+            return $this->autoFulfillmentRecorder->recordFailure($fresh, $reason);
+        }
+
+        if (! $fresh->failure_reason && $fresh->status === TransactionStatus::PAYMENT_SUCCESS) {
+            $fresh->update(['failure_reason' => $reason]);
+            $fresh = $fresh->fresh();
+        }
+
+        $recorded = $this->autoFulfillmentRecorder->recordFailure($fresh, $reason);
+        $this->fulfillmentRetryService->scheduleAfterFailure($recorded, $reason);
+
+        return $recorded;
     }
 
     private function paymentStatusLabel(Transaction $transaction): string

@@ -6,9 +6,11 @@ use App\Enums\OtpStatus;
 use App\Enums\TransactionStatus;
 use App\Models\OtpVerification;
 use App\Models\Transaction;
+use App\Services\Finance\FinancialAlertService;
 use App\Services\Fulfillment\VTPassService;
 use App\Services\Fulfillment\VtpassFulfillmentGuard;
 use App\Services\Fulfillment\VtpassProductReadinessService;
+use App\Services\Fulfillment\VtpassWalletBalanceService;
 use App\Services\Otp\OtpService;
 use App\Services\Platform\FeatureFlagService;
 use App\Services\Platform\HealthCheckService;
@@ -29,9 +31,11 @@ class OpsDashboardService
         private readonly FeatureFlagService $featureFlags,
         private readonly OtpService $otpService,
         private readonly VTPassService $vtpassService,
+        private readonly VtpassWalletBalanceService $walletBalanceService,
         private readonly VtpassFulfillmentGuard $vtpassFulfillmentGuard,
         private readonly VtpassProductReadinessService $vtpassProductReadiness,
         private readonly OpsReliabilityService $opsReliabilityService,
+        private readonly FinancialAlertService $financialAlertService,
     ) {
     }
 
@@ -43,6 +47,7 @@ class OpsDashboardService
         $todayMonitoring = $this->opsMonitoringService->summary();
         $health = $this->healthCheckService->report();
         $platformStatus = $this->platformStatusService->publicStatus();
+        $walletBalance = $this->walletBalanceService->snapshot();
 
         $successfulPaymentStatuses = $this->successfulPaymentStatuses();
         $todayFrom = today()->startOfDay();
@@ -86,7 +91,7 @@ class OpsDashboardService
             'vtpass' => $this->vtpassOperations($health),
             'reliability' => $this->opsReliabilityService->snapshot(),
             'fraud' => $this->fraudMonitoring(),
-            'alerts' => $this->buildAlerts($health, $todayMonitoring, $platformStatus),
+            'alerts' => $this->buildAlerts($health, $todayMonitoring, $platformStatus, $walletBalance),
             'platform' => $platformStatus,
         ];
     }
@@ -260,8 +265,12 @@ class OpsDashboardService
      * @param  array<string, mixed>  $platformStatus
      * @return list<array<string, string>>
      */
-    private function buildAlerts(array $health, array $monitoring, array $platformStatus): array
-    {
+    private function buildAlerts(
+        array $health,
+        array $monitoring,
+        array $platformStatus,
+        array $walletBalance,
+    ): array {
         $alerts = [];
 
         if ($this->systemSettings->getBool(SystemSettingKeys::INCIDENT_MODE)) {
@@ -311,6 +320,24 @@ class OpsDashboardService
                 'severity' => 'critical',
                 'code' => 'VTPASS_FAILURE',
                 'message' => 'VTPass provider check failed.',
+            ];
+        }
+
+        if (($walletBalance['health'] ?? '') === VtpassWalletBalanceService::HEALTH_CRITICAL) {
+            $alerts[] = [
+                'severity' => 'critical',
+                'code' => 'VTPASS_WALLET_CRITICAL',
+                'message' => 'VTPass wallet balance is critically low at ₦'
+                    .number_format((float) ($walletBalance['balance'] ?? 0), 2)
+                    .' (threshold ₦'.number_format($this->walletBalanceService->criticalThreshold()).').',
+            ];
+        } elseif (($walletBalance['health'] ?? '') === VtpassWalletBalanceService::HEALTH_WARNING) {
+            $alerts[] = [
+                'severity' => 'warning',
+                'code' => 'VTPASS_WALLET_LOW',
+                'message' => 'VTPass wallet balance is below the low threshold at ₦'
+                    .number_format((float) ($walletBalance['balance'] ?? 0), 2)
+                    .' (threshold ₦'.number_format($this->walletBalanceService->lowThreshold()).').',
             ];
         }
 
@@ -365,6 +392,10 @@ class OpsDashboardService
             ];
         }
 
+        foreach ($this->financialAlertService->scan()['alerts'] as $financialAlert) {
+            $alerts[] = $financialAlert;
+        }
+
         return $alerts;
     }
 
@@ -374,7 +405,7 @@ class OpsDashboardService
      */
     private function vtpassOperations(array $health): array
     {
-        $balance = $this->vtpassService->checkBalance();
+        $balance = $this->walletBalanceService->snapshot();
         $checks = is_array($health['checks'] ?? null) ? $health['checks'] : [];
 
         return [

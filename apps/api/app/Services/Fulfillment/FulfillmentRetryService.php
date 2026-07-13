@@ -4,6 +4,8 @@ namespace App\Services\Fulfillment;
 
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
+use App\Services\Fulfillment\ExactOnceFulfillmentService;
+use App\Services\Fulfillment\FulfillmentAttemptRecorder;
 use App\Services\Platform\SystemSettingsService;
 use App\Services\TransactionEventService;
 use App\Support\Platform\SystemSettingKeys;
@@ -12,7 +14,7 @@ use Illuminate\Support\Carbon;
 class FulfillmentRetryService
 {
     public function __construct(
-        private readonly FulfillmentService $fulfillmentService,
+        private readonly ExactOnceFulfillmentService $exactOnceFulfillmentService,
         private readonly FulfillmentAttemptRecorder $fulfillmentAttemptRecorder,
         private readonly TransactionEventService $transactionEventService,
         private readonly SystemSettingsService $systemSettings,
@@ -129,39 +131,36 @@ class FulfillmentRetryService
             return 'escalated';
         }
 
-        try {
-            $fulfilled = $this->fulfillmentService->retryFulfillment($transaction, 'retry_engine');
-            $fulfilled->update([
-                'fulfillment_retry_count' => 0,
-                'next_fulfillment_retry_at' => null,
-                'needs_manual_review' => false,
-                'manual_review_reason' => null,
-                'manual_review_at' => null,
-            ]);
+        $result = $this->exactOnceFulfillmentService->requestFromAutomaticRetry($transaction);
 
+        if ($result->fulfilled()) {
             return 'succeeded';
-        } catch (\Throwable $exception) {
-            $fresh = $transaction->fresh();
-            $attemptNumber = (int) $fresh->fulfillment_retry_count + 1;
+        }
 
-            if ($attemptNumber >= $this->maxAttempts()) {
-                $this->escalateToManualReview(
-                    $fresh,
-                    $fresh->failure_reason ?: $exception->getMessage(),
-                );
+        if ($result->outcome === 'uncertain' || $result->outcome === 'active_attempt') {
+            return 'skipped';
+        }
 
-                return 'escalated';
-            }
+        $fresh = $result->transaction->fresh();
+        $attemptNumber = (int) $fresh->fulfillment_retry_count + 1;
 
-            $this->scheduleNextRetry(
+        if ($attemptNumber >= $this->maxAttempts()) {
+            $this->escalateToManualReview(
                 $fresh,
-                'Automated fulfillment retry failed; next attempt scheduled.',
-                $attemptNumber,
-                $fresh->failure_reason ?: $exception->getMessage(),
+                $fresh->failure_reason ?: ($result->reason ?? 'Retry failed.'),
             );
 
-            return 'scheduled';
+            return 'escalated';
         }
+
+        $this->scheduleNextRetry(
+            $fresh,
+            'Automated fulfillment retry failed; next attempt scheduled.',
+            $attemptNumber,
+            $fresh->failure_reason ?: ($result->reason ?? 'Retry failed.'),
+        );
+
+        return 'scheduled';
     }
 
     public function scheduleAfterFailure(Transaction $transaction, string $reason): void

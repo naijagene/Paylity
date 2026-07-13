@@ -40,6 +40,34 @@ class TransactionEventService
 
     public const TYPE_OPS_NOTE = 'ops.note';
 
+    public const TYPE_FULFILLMENT_ATTEMPT_CREATED = 'fulfillment.attempt.created';
+
+    public const TYPE_FULFILLMENT_REQUEST_SUBMITTED = 'fulfillment.request.submitted';
+
+    public const TYPE_FULFILLMENT_PROVIDER_SUCCEEDED = 'fulfillment.provider.succeeded';
+
+    public const TYPE_FULFILLMENT_PROVIDER_FAILED = 'fulfillment.provider.failed';
+
+    public const TYPE_FULFILLMENT_PROVIDER_UNCERTAIN = 'fulfillment.provider.uncertain';
+
+    public const TYPE_FULFILLMENT_TRIGGER_IGNORED = 'fulfillment.trigger.ignored';
+
+    public const TYPE_PAYMENT_RECONCILIATION_STARTED = 'payment.reconciliation.started';
+
+    public const TYPE_PAYMENT_RECONCILIATION_REPAIRED = 'payment.reconciliation.repaired';
+
+    public const TYPE_FULFILLMENT_RECONCILIATION_STARTED = 'fulfillment.reconciliation.started';
+
+    public const TYPE_FULFILLMENT_RECONCILIATION_REPAIRED = 'fulfillment.reconciliation.repaired';
+
+    public const TYPE_MANUAL_REVIEW_OPENED = 'manual_review.opened';
+
+    public const TYPE_MANUAL_REVIEW_RESOLVED = 'manual_review.resolved';
+
+    public const TYPE_OPERATOR_RETRY_REQUESTED = 'operator.retry.requested';
+
+    public const TYPE_RECEIPT_GENERATED = 'receipt.generated';
+
     /**
      * @param  array<string, mixed>|null  $metadata
      */

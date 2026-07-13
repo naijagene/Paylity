@@ -6,7 +6,12 @@ use App\Enums\OtpStatus;
 use App\Enums\TransactionStatus;
 use App\Models\OtpVerification;
 use App\Models\Transaction;
+use App\Services\Fulfillment\VtpassWalletBalanceService;
 use App\Services\Otp\OtpService;
+use App\Services\Platform\FeatureFlagService;
+use App\Services\Platform\HealthCheckService;
+use App\Support\Fulfillment\VTPassEnvironment;
+use App\Support\Platform\FeatureFlagKeys;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +21,9 @@ class OpsMonitoringService
 {
     public function __construct(
         private readonly OtpService $otpService,
+        private readonly VtpassWalletBalanceService $walletBalanceService,
+        private readonly HealthCheckService $healthCheckService,
+        private readonly FeatureFlagService $featureFlags,
     ) {
     }
 
@@ -47,6 +55,9 @@ class OpsMonitoringService
 
         $avgFulfillmentSeconds = $this->averageFulfillmentSeconds($from, $to);
         $queueMetrics = $this->queueMetrics();
+        $wallet = $this->walletBalanceService->snapshot();
+        $health = $this->healthCheckService->report();
+        $checks = is_array($health['checks'] ?? null) ? $health['checks'] : [];
 
         return [
             'revenue' => $revenue,
@@ -57,6 +68,13 @@ class OpsMonitoringService
             'date_from' => $from->toDateString(),
             'date_to' => $to->toDateString(),
             'queue' => $queueMetrics,
+            'wallet' => $wallet,
+            'vtpass' => [
+                'status' => (string) ($checks['vtpass'] ?? 'unknown'),
+                'enabled' => $this->featureFlags->isEnabled(FeatureFlagKeys::VTPASS),
+                'environment' => VTPassEnvironment::mode(),
+                'balance' => $wallet,
+            ],
             'otp' => [
                 'enabled' => $this->otpService->isEnabled(),
                 'pending' => (int) OtpVerification::query()->where('status', OtpStatus::PENDING)->count(),

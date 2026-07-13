@@ -74,4 +74,14 @@ class Transaction extends Model
     {
         return $this->hasMany(OpsNote::class);
     }
+
+    public function ledgerTransactions(): HasMany
+    {
+        return $this->hasMany(LedgerTransaction::class);
+    }
+
+    public function financial(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TransactionFinancial::class);
+    }
 }

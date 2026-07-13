@@ -20,6 +20,7 @@ class OpsTransactionService
         private readonly FulfillmentAttemptRecorder $fulfillmentAttemptRecorder,
         private readonly WebhookEventService $webhookEventService,
         private readonly SystemSettingsService $systemSettings,
+        private readonly OpsFinanceService $opsFinanceService,
     ) {
     }
 
@@ -120,7 +121,9 @@ class OpsTransactionService
             ),
         ], AutoFulfillmentRecorder::summaryFromResponsePayload(
             is_array($transaction->response_payload) ? $transaction->response_payload : null,
-        ));
+        ), [
+            'finance' => $this->opsFinanceService->transactionFinance($transaction),
+        ]);
     }
 
     /**
