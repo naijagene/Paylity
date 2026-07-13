@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Services\Finance\FinancialCloseService;
 use App\Services\Finance\LedgerBackfillService;
+use App\Services\Finance\LedgerProductionValidationService;
 use App\Services\Finance\SettlementReconciliationService;
 use App\Services\Ops\OpsFinanceService;
 use App\Support\ApiResponse;
@@ -19,6 +20,7 @@ class OpsFinanceController extends Controller
         private readonly SettlementReconciliationService $settlementReconciliationService,
         private readonly LedgerBackfillService $ledgerBackfillService,
         private readonly FinancialCloseService $financialCloseService,
+        private readonly LedgerProductionValidationService $ledgerProductionValidationService,
     ) {
     }
 
@@ -86,6 +88,18 @@ class OpsFinanceController extends Controller
         return ApiResponse::success(
             data: $summary,
             message: $dryRun ? 'Settlement reconciliation dry run complete.' : 'Settlement reconciliation complete.',
+        );
+    }
+
+    public function validate(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->ledgerProductionValidationService->report(
+                candidateLimit: (int) $request->query('limit', 50),
+                since: $request->query('since'),
+                date: $request->query('date'),
+            ),
+            message: 'Ledger production validation report generated.',
         );
     }
 

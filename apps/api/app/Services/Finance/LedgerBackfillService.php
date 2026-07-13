@@ -210,6 +210,11 @@ class LedgerBackfillService
         ];
     }
 
+    public function diagnoseForCandidateBatch(int $candidatesSelected): array
+    {
+        return $this->finalizeDiagnostics($this->diagnose(), $candidatesSelected);
+    }
+
     /**
      * @param  array<string, int>  $statusBreakdown
      * @param  list<string>  $eligibleStatuses
@@ -356,7 +361,7 @@ class LedgerBackfillService
     /**
      * @return list<string>
      */
-    private function eligibleStatuses(): array
+    public function eligibleStatuses(): array
     {
         return [
             TransactionStatus::PAYMENT_SUCCESS,
@@ -364,6 +369,11 @@ class LedgerBackfillService
             TransactionStatus::FULFILLED,
             TransactionStatus::FAILED,
         ];
+    }
+
+    public function buildCandidateQuery(?string $since = null, ?string $date = null): Builder
+    {
+        return $this->candidateQuery($since, $date);
     }
 
     /**

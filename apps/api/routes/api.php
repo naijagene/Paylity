@@ -87,6 +87,7 @@ Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function (
     Route::get('/reliability', OpsReliabilityController::class);
     Route::get('/reconciliation', [OpsReconciliationController::class, 'index']);
     Route::get('/finance', [OpsFinanceController::class, 'dashboard']);
+    Route::get('/finance/validate', [OpsFinanceController::class, 'validate']);
     Route::get('/finance/ledger', [OpsFinanceController::class, 'ledgerEntries']);
     Route::get('/finance/exports/daily-summary', [OpsFinanceController::class, 'exportDailySummary']);
     Route::post('/finance/reconcile-settlements', [OpsFinanceController::class, 'reconcileSettlements']);
