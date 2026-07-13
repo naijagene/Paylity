@@ -103,15 +103,15 @@ class Pay032FinancialLedgerTest extends TestCase
 
     public function test_backfill_is_idempotent_for_historical_transactions(): void
     {
-        $this->createFulfilledTransaction();
+        $transaction = $this->createFulfilledTransaction();
 
         $service = app(LedgerBackfillService::class);
-        $first = $service->backfill(limit: 10, dryRun: false, repair: true);
-        $second = $service->backfill(limit: 10, dryRun: false, repair: true);
+        $first = $service->backfill(reference: $transaction->reference, dryRun: false, repair: true);
+        $second = $service->backfill(reference: $transaction->reference, dryRun: false, repair: true);
 
         $this->assertSame(1, $first['payment_postings_created']);
         $this->assertSame(1, $first['fulfillment_postings_created']);
-        $this->assertGreaterThan(0, $second['already_posted']);
+        $this->assertSame(1, $second['already_posted']);
     }
 
     public function test_settlement_dry_run_makes_no_changes(): void

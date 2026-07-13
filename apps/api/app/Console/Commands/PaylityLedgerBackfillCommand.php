@@ -11,7 +11,8 @@ class PaylityLedgerBackfillCommand extends Command
 {
     protected $signature = 'paylity:ledger-backfill
                             {--reference= : Backfill a single transaction reference}
-                            {--since= : Only transactions created after this ISO date}
+                            {--since= : Only transactions created on or after this ISO date}
+                            {--date= : Only transactions created on this date (YYYY-MM-DD)}
                             {--limit= : Maximum transactions to inspect}
                             {--dry-run : Inspect without making changes}
                             {--repair : Apply postings (default unless --dry-run)}';
@@ -41,22 +42,36 @@ class PaylityLedgerBackfillCommand extends Command
         $summary = $this->ledgerBackfillService->backfill(
             reference: $this->option('reference') ? (string) $this->option('reference') : null,
             since: $this->option('since') ? (string) $this->option('since') : null,
+            date: $this->option('date') ? (string) $this->option('date') : null,
             limit: $limit,
             dryRun: $dryRun,
             repair: $repair,
+            verbose: $this->output->isVerbose(),
         );
 
         $this->table(
             ['Metric', 'Count'],
-            collect($summary)->map(fn (int $count, string $metric) => [$metric, $count])->values()->all(),
+            collect($summary)
+                ->filter(fn ($value, $key) => $key !== 'verbose_details' && is_int($value))
+                ->map(fn (int $count, string $metric) => [$metric, $count])
+                ->values()
+                ->all(),
         );
+
+        if ($this->output->isVerbose() && ! empty($summary['verbose_details'])) {
+            $this->table(
+                ['Reference', 'Status', 'Reason', 'Details'],
+                collect($summary['verbose_details'])->map(fn (array $row) => [
+                    $row['reference'],
+                    $row['status'],
+                    $row['reason'],
+                    isset($row['payment']) ? json_encode(['payment' => $row['payment'], 'fulfillment' => $row['fulfillment']]) : '',
+                ])->all(),
+            );
+        }
 
         if ($dryRun) {
             $this->info('Dry run — no changes were applied.');
-        }
-
-        if ($this->output->isVerbose()) {
-            $this->line('Verbose mode enabled (use -v, -vv, or -vvv).');
         }
 
         return self::SUCCESS;

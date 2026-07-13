@@ -45,9 +45,7 @@ class Pay032aFinancialCommandHotfixTest extends TestCase
             '--dry-run' => true,
             '--limit' => 1,
             '-v' => true,
-        ])
-            ->assertSuccessful()
-            ->expectsOutputToContain('Verbose mode enabled');
+        ])->assertSuccessful();
 
         $this->artisan('paylity:reconcile-settlements', [
             '--dry-run' => true,

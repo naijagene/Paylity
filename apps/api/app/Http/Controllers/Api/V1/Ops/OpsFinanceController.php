@@ -96,6 +96,7 @@ class OpsFinanceController extends Controller
         $summary = $this->ledgerBackfillService->backfill(
             reference: $request->query('reference'),
             since: $request->query('since'),
+            date: $request->query('date'),
             limit: (int) $request->query('limit', 50),
             dryRun: $dryRun,
             repair: ! $dryRun,
