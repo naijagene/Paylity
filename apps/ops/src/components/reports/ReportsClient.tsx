@@ -211,6 +211,54 @@ export function ReportsClient() {
           </section>
         ) : null}
 
+        {reconciliation?.wallet ? (
+          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="font-display text-lg font-extrabold text-dark">VTPass Wallet Summary</h2>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-muted">Opening Balance</dt>
+                <dd className="font-semibold text-dark">
+                  {reconciliation.wallet.opening_balance !== null
+                    ? formatNaira(reconciliation.wallet.opening_balance)
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted">Closing Balance</dt>
+                <dd className="font-semibold text-dark">
+                  {reconciliation.wallet.closing_balance !== null
+                    ? formatNaira(reconciliation.wallet.closing_balance)
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted">Lowest Balance</dt>
+                <dd className="font-semibold text-dark">
+                  {reconciliation.wallet.lowest_balance !== null
+                    ? formatNaira(reconciliation.wallet.lowest_balance)
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted">Highest Balance</dt>
+                <dd className="font-semibold text-dark">
+                  {reconciliation.wallet.highest_balance !== null
+                    ? formatNaira(reconciliation.wallet.highest_balance)
+                    : "—"}
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-muted">Recharge Events</dt>
+                <dd className="font-semibold text-dark">
+                  {reconciliation.wallet.recharge_events_available
+                    ? `${reconciliation.wallet.recharge_events.length} event(s)`
+                    : reconciliation.wallet.recharge_events_note ?? "Not available"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
         {settlement ? (
           <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <h2 className="font-display text-lg font-extrabold text-dark">Settlement Summary</h2>

@@ -110,6 +110,20 @@ export type OpsVtpassProductReadiness = {
   ready: boolean;
 };
 
+export type OpsVtpassWalletBalance = {
+  available: boolean;
+  balance: number | null;
+  currency: string;
+  environment: string;
+  message: string | null;
+  health?: "healthy" | "warning" | "critical" | "unknown";
+  checked_at?: string | null;
+  cached?: boolean;
+  low_threshold?: number;
+  critical_threshold?: number;
+  refresh_seconds?: number;
+};
+
 export type OpsVtpassOperations = {
   environment: string;
   base_url_host: string;
@@ -118,13 +132,7 @@ export type OpsVtpassOperations = {
   auto_fulfill: boolean;
   live_safety_mode: boolean;
   live_test_max_amount: number;
-  balance: {
-    available: boolean;
-    balance: number | null;
-    currency: string;
-    environment: string;
-    message: string | null;
-  };
+  balance: OpsVtpassWalletBalance;
   product_readiness: Record<string, OpsVtpassProductReadiness>;
 };
 
@@ -215,7 +223,7 @@ export function formatVtpassEnvironment(environment: string): string {
 }
 
 export function formatVtpassBalance(
-  balance: OpsVtpassOperations["balance"] | undefined,
+  balance: OpsVtpassWalletBalance | undefined,
 ): string {
   if (!balance?.available || balance.balance === null) {
     return balance?.message ?? "Unavailable";
@@ -225,6 +233,36 @@ export function formatVtpassBalance(
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+export function formatWalletHealth(
+  health: OpsVtpassWalletBalance["health"] | undefined,
+): string {
+  switch (health) {
+    case "healthy":
+      return "Healthy";
+    case "warning":
+      return "Warning";
+    case "critical":
+      return "Critical";
+    default:
+      return "Unknown";
+  }
+}
+
+export function walletHealthIndicator(
+  health: OpsVtpassWalletBalance["health"] | undefined,
+): "healthy" | "warning" | "offline" {
+  switch (health) {
+    case "healthy":
+      return "healthy";
+    case "warning":
+      return "warning";
+    case "critical":
+      return "offline";
+    default:
+      return "warning";
+  }
 }
 
 export function productIcon(productType: string): string {

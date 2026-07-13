@@ -74,6 +74,12 @@
       "namedRegex": "^/_not\\-found(?:/)?$"
     },
     {
+      "page": "/finance",
+      "regex": "^/finance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/finance(?:/)?$"
+    },
+    {
       "page": "/monitoring",
       "regex": "^/monitoring(?:/)?$",
       "routeKeys": {},

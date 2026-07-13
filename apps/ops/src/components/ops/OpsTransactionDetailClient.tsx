@@ -19,6 +19,7 @@ import {
   type OpsTransactionDetail,
 } from "@/lib/api/ops";
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
+import { formatNaira } from "@/lib/checkout/formatNaira";
 import {
   getFulfillmentBadgeLabel,
   getFulfillmentBadgeVariant,
@@ -342,6 +343,78 @@ export function OpsTransactionDetailClient() {
           transactionStatus={transaction.status}
           failureReason={transaction.failure_reason}
         />
+
+        {transaction.finance ? (
+          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">
+              Financial Summary
+            </h2>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-foreground/60">Customer paid</dt>
+                <dd className="font-semibold">
+                  {formatNaira(Math.round(transaction.finance.summary.customer_paid_kobo / 100))}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-foreground/60">Provider cost</dt>
+                <dd className="font-semibold">
+                  {transaction.finance.summary.provider_cost_kobo != null
+                    ? formatNaira(Math.round(transaction.finance.summary.provider_cost_kobo / 100))
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-foreground/60">Provider cost status</dt>
+                <dd className="font-semibold">
+                  {transaction.finance.summary.provider_cost_status || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-foreground/60">Gross margin</dt>
+                <dd className="font-semibold">
+                  {transaction.finance.summary.gross_margin_kobo != null
+                    ? formatNaira(Math.round(transaction.finance.summary.gross_margin_kobo / 100))
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-foreground/60">Settlement status</dt>
+                <dd className="font-semibold">{transaction.finance.summary.settlement_status}</dd>
+              </div>
+            </dl>
+
+            {transaction.finance.ledger_history.length > 0 ? (
+              <div className="mt-5 overflow-x-auto">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/45">
+                  Ledger History
+                </h3>
+                <table className="min-w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-foreground/60">
+                      <th className="px-2 py-2">Event</th>
+                      <th className="px-2 py-2">Amount</th>
+                      <th className="px-2 py-2">Posted</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transaction.finance.ledger_history.map((entry) => (
+                      <tr key={entry.id} className="border-b border-border/60">
+                        <td className="px-2 py-2">{entry.event_type}</td>
+                        <td className="px-2 py-2">
+                          {formatNaira(Math.round(entry.amount_kobo / 100))}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-foreground/60">
+                          {entry.posted_at ? new Date(entry.posted_at).toLocaleString() : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/45">

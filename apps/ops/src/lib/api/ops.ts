@@ -1,5 +1,5 @@
 import { ApiError, ApiOfflineError } from "@/lib/api/client";
-import type { OpsDashboardSnapshot } from "@/lib/utils/dashboard";
+import type { OpsDashboardSnapshot, OpsVtpassWalletBalance } from "@/lib/utils/dashboard";
 import { isOperatorAuthError } from "@/lib/ops/operatorAuth";
 import { handleOperatorAuthFailure } from "@/lib/ops/operatorAuth";
 import { getOperatorKey } from "@/lib/ops/operatorKey";
@@ -205,6 +205,7 @@ export type OpsTransactionDetail = {
     network?: string | null;
     disco?: string | null;
   };
+  finance?: OpsTransactionFinance;
 };
 
 export type OpsSummary = {
@@ -237,6 +238,13 @@ export type OpsMonitoringSummary = {
     verified_today: number;
     failed_today: number;
   };
+  wallet?: OpsVtpassWalletBalance;
+  vtpass?: {
+    status: string;
+    enabled: boolean;
+    environment: string;
+    balance: OpsVtpassWalletBalance;
+  };
 };
 
 export type OpsDailyReconciliation = {
@@ -252,6 +260,18 @@ export type OpsDailyReconciliation = {
   convenience_fees: number;
   gateway_fees: number;
   success_rate: number;
+  wallet?: {
+    date: string;
+    opening_balance: number | null;
+    closing_balance: number | null;
+    lowest_balance: number | null;
+    highest_balance: number | null;
+    readings: number;
+    last_checked_at: string | null;
+    recharge_events: unknown[];
+    recharge_events_available?: boolean;
+    recharge_events_note?: string;
+  };
 };
 
 export type OpsFailedTransaction = {
@@ -321,6 +341,14 @@ export function getReceiptDownloadUrl(reference: string): string {
 
 export async function fetchOpsDashboard(): Promise<OpsDashboardSnapshot> {
   const { data } = await opsRequest<OpsDashboardSnapshot>("/ops/dashboard");
+
+  return data;
+}
+
+export async function refreshVtpassWallet() {
+  const { data } = await opsRequest<OpsVtpassWalletBalance>("/ops/vtpass/wallet/refresh", {
+    method: "POST",
+  });
 
   return data;
 }
@@ -559,4 +587,100 @@ export async function fetchRetrySummary(params?: {
   );
 
   return data;
+}
+
+export type OpsFinancePosting = {
+  id: number;
+  reference?: string | null;
+  event_type: string;
+  description: string;
+  debit_account?: string | null;
+  credit_account?: string | null;
+  amount_kobo: number;
+  status: string;
+  posted_at?: string | null;
+  reversed: boolean;
+};
+
+export type OpsFinanceSnapshot = {
+  refreshed_at: string;
+  cards: {
+    gross_collection_today_kobo: number;
+    paylity_revenue_today_kobo: number;
+    product_value_today_kobo: number;
+    provider_cost_today_kobo: number;
+    gateway_fees_today_kobo: number;
+    gross_margin_today_kobo: number;
+    paystack_clearing_kobo: number;
+    settlement_difference_kobo: number;
+  };
+  recent_postings: OpsFinancePosting[];
+  daily_summaries: Array<{
+    date: string;
+    collections_kobo: number;
+    revenue_kobo: number;
+    provider_cost_kobo: number;
+    gateway_fee_kobo: number;
+    margin_kobo: number;
+    difference_kobo: number;
+    close_status: string;
+  }>;
+  settlement_exceptions: Array<{
+    reference: string;
+    provider: string;
+    expected_kobo: number;
+    actual_kobo: number;
+    difference_kobo: number;
+    age_days?: number | null;
+    status: string;
+    exception_count: number;
+  }>;
+  alerts: Array<{
+    code: string;
+    severity: string;
+    message: string;
+  }>;
+};
+
+export type OpsTransactionFinance = {
+  summary: {
+    customer_paid_kobo: number;
+    product_amount_kobo: number;
+    convenience_fee_kobo: number;
+    gateway_fee_charged_kobo: number;
+    gateway_fee: {
+      expected_kobo?: number | null;
+      actual_kobo?: number | null;
+      charged_kobo: number;
+    };
+    provider_cost_kobo?: number | null;
+    provider_cost_source?: string | null;
+    provider_cost_status?: string | null;
+    gross_margin_kobo?: number | null;
+    settlement_status: string;
+  };
+  ledger_history: OpsFinancePosting[];
+};
+
+export async function fetchOpsFinance() {
+  const { data } = await opsRequest<OpsFinanceSnapshot>("/ops/finance");
+  return data;
+}
+
+export async function opsFinanceReconcileSettlements(dryRun = true) {
+  return opsRequest(`/ops/finance/reconcile-settlements?dry_run=${dryRun ? "1" : "0"}`, {
+    method: "POST",
+  });
+}
+
+export async function opsFinanceBackfill(dryRun = true) {
+  return opsRequest(`/ops/finance/backfill?dry_run=${dryRun ? "1" : "0"}`, {
+    method: "POST",
+  });
+}
+
+export async function opsFinanceClose(dryRun = true) {
+  return opsRequest(`/ops/finance/close?dry_run=${dryRun ? "1" : "0"}`, {
+    method: "POST",
+  });
 }

@@ -6,7 +6,9 @@ import {
   calculateAverageTransaction,
   formatVtpassBalance,
   formatVtpassEnvironment,
+  formatWalletHealth,
   sortLiveFeedNewestFirst,
+  walletHealthIndicator,
 } from "@/lib/utils/dashboard";
 
 describe("dashboard calculations", () => {
@@ -151,5 +153,13 @@ describe("vtpass dashboard helpers", () => {
         message: "Balance check unavailable",
       }),
     ).toBe("Balance check unavailable");
+  });
+
+  it("formats wallet health labels and indicators", () => {
+    expect(formatWalletHealth("healthy")).toBe("Healthy");
+    expect(formatWalletHealth("warning")).toBe("Warning");
+    expect(formatWalletHealth("critical")).toBe("Critical");
+    expect(walletHealthIndicator("healthy")).toBe("healthy");
+    expect(walletHealthIndicator("critical")).toBe("offline");
   });
 });

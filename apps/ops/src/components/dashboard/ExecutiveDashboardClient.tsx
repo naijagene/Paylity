@@ -7,7 +7,7 @@ import { AlertCenter } from "@/components/dashboard/AlertCenter";
 import { LiveTransactionFeed } from "@/components/dashboard/LiveTransactionFeed";
 import { SimpleBarChart } from "@/components/dashboard/SimpleBarChart";
 import { KpiCard, SectionCard } from "@/components/ui/OpsCards";
-import { fetchOpsDashboard, searchOpsTransactions } from "@/lib/api/ops";
+import { fetchOpsDashboard, refreshVtpassWallet, searchOpsTransactions } from "@/lib/api/ops";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { usePolling } from "@/lib/hooks/usePolling";
 import {
@@ -15,6 +15,9 @@ import {
   buildRevenueChartData,
   formatVtpassBalance,
   formatVtpassEnvironment,
+  formatRelativeTimestamp,
+  formatWalletHealth,
+  walletHealthIndicator,
   type LiveFeedItem,
   type OpsDashboardSnapshot,
 } from "@/lib/utils/dashboard";
@@ -26,7 +29,7 @@ import {
 } from "@/lib/utils/health";
 import { exportCsv } from "@/lib/utils/csv";
 
-const POLL_INTERVAL_MS = 5000;
+const DEFAULT_WALLET_POLL_MS = 60000;
 
 function mapProviderIndicator(status: string): "healthy" | "warning" | "offline" {
   if (status === "ok" || status === "skipped") {
@@ -90,15 +93,20 @@ export function ExecutiveDashboardClient() {
 
   const dashboard = usePolling({
     fetcher: loadDashboard,
-    intervalMs: POLL_INTERVAL_MS,
+    intervalMs: DEFAULT_WALLET_POLL_MS,
   });
 
   const feed = usePolling({
     fetcher: loadFeed,
-    intervalMs: POLL_INTERVAL_MS,
+    intervalMs: 5000,
   });
 
   const snapshot = dashboard.data;
+
+  const handleWalletRefresh = async () => {
+    await refreshVtpassWallet();
+    await dashboard.refresh();
+  };
   const revenueChart = useMemo(
     () => (snapshot ? buildRevenueChartData(snapshot.revenue) : []),
     [snapshot],
@@ -238,7 +246,16 @@ export function ExecutiveDashboardClient() {
             {snapshot ? <ProviderHealthGrid providers={snapshot.providers} /> : "…"}
           </SectionCard>
 
-          <SectionCard title="VTPass Live Readiness">
+          <SectionCard
+            title="VTPass Live Readiness"
+            action={
+              snapshot?.vtpass ? (
+                <Button type="button" variant="outline" onClick={() => void handleWalletRefresh()}>
+                  Refresh Wallet
+                </Button>
+              ) : null
+            }
+          >
             {snapshot?.vtpass ? (
               <div className="space-y-4">
                 <dl className="grid gap-4 sm:grid-cols-2">
@@ -249,7 +266,7 @@ export function ExecutiveDashboardClient() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-muted">Status</dt>
+                    <dt className="text-sm text-muted">Provider Status</dt>
                     <dd className="text-lg font-extrabold text-dark">
                       {snapshot.vtpass.status}
                     </dd>
@@ -258,6 +275,23 @@ export function ExecutiveDashboardClient() {
                     <dt className="text-sm text-muted">Wallet Balance</dt>
                     <dd className="text-lg font-extrabold text-dark">
                       {formatVtpassBalance(snapshot.vtpass.balance)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Wallet Health</dt>
+                    <dd
+                      className={`text-lg font-extrabold ${healthClasses(
+                        walletHealthIndicator(snapshot.vtpass.balance.health),
+                      )} rounded-xl px-3 py-1 inline-block`}
+                    >
+                      {formatWalletHealth(snapshot.vtpass.balance.health)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted">Last Updated</dt>
+                    <dd className="text-lg font-extrabold text-dark">
+                      {formatRelativeTimestamp(snapshot.vtpass.balance.checked_at)}
+                      {snapshot.vtpass.balance.cached ? " (cached)" : ""}
                     </dd>
                   </div>
                   <div>

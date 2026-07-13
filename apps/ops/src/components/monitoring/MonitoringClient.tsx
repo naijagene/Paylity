@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
+import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
-import { fetchFeatureFlags } from "@/lib/api/admin";
-import { fetchOpsDashboard } from "@/lib/api/ops";
-import { fetchPublicHealth } from "@/lib/api/health";
-import { ApiError, ApiOfflineError } from "@/lib/api/client";
+import { fetchOpsMonitoring, refreshVtpassWallet } from "@/lib/api/ops";
+import { usePolling } from "@/lib/hooks/usePolling";
+import {
+  formatRelativeTimestamp,
+  formatVtpassBalance,
+  formatWalletHealth,
+  walletHealthIndicator,
+} from "@/lib/utils/dashboard";
 import {
   healthClasses,
   healthLabel,
-  mapApiHealth,
-  mapDatabaseHealth,
-  mapFeatureHealth,
   type HealthIndicator,
 } from "@/lib/utils/health";
 
@@ -33,91 +35,68 @@ type MonitorItem = {
   detail: string;
 };
 
+const DEFAULT_POLL_MS = 60000;
+
 export function MonitoringClient() {
-  const [items, setItems] = useState<MonitorItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const loadMonitoring = useCallback(async () => fetchOpsMonitoring(), []);
+  const monitoring = usePolling({
+    fetcher: loadMonitoring,
+    intervalMs: DEFAULT_POLL_MS,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
+  const handleWalletRefresh = async () => {
+    await refreshVtpassWallet();
+    await monitoring.refresh();
+  };
 
-    Promise.all([fetchPublicHealth(), fetchFeatureFlags(), fetchOpsDashboard()])
-      .then(([health, flags, dashboard]) => {
-        if (cancelled) {
-          return;
-        }
+  const data = monitoring.data;
+  const wallet = data?.wallet ?? data?.vtpass?.balance;
+  const error = monitoring.error;
 
-        const paystack = flags.find((flag) => flag.key === "paystack");
-        const vtpass = dashboard.vtpass;
-        const otp = dashboard.fraud;
-
-        setItems([
-          {
-            label: "API",
-            indicator: mapApiHealth(health.status),
-            detail: `Environment: ${health.environment ?? "unknown"}`,
-          },
-          {
-            label: "Database",
-            indicator: mapDatabaseHealth(health.checks?.database),
-            detail: `Status: ${health.checks?.database ?? "unknown"}`,
-          },
-          {
-            label: "Paystack",
-            indicator: mapFeatureHealth(Boolean(paystack?.enabled)),
-            detail: paystack?.enabled ? "Feature flag enabled" : "Feature flag disabled",
-          },
-          {
-            label: "VTPass",
-            indicator: mapProviderIndicator(vtpass?.status ?? health.checks?.vtpass ?? "unknown"),
-            detail: vtpass
-              ? `${vtpass.environment} · ${vtpass.enabled ? "enabled" : "disabled"} · balance ${vtpass.balance.available ? `₦${vtpass.balance.balance}` : "unavailable"}`
-              : `Health: ${health.checks?.vtpass ?? "unknown"}`,
-          },
-          {
-            label: "Queue",
-            indicator: mapProviderIndicator(dashboard.providers.queue?.status ?? "unknown"),
-            detail: `pending ${dashboard.providers.queue?.pending_jobs ?? 0} · failed ${dashboard.providers.queue?.failed_jobs ?? 0}`,
-          },
-          {
-            label: "OTP",
-            indicator: otp?.otp_enabled ? "healthy" : "warning",
-            detail: otp
-              ? `${otp.otp_pending} pending · ${otp.otp_failures_today} failed today`
-              : "OTP monitoring unavailable",
-          },
-        ]);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(
-            err instanceof ApiOfflineError
-              ? "Network unavailable."
-              : err instanceof ApiError
-                ? err.message
-                : "Unable to load monitoring data.",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const items: MonitorItem[] = data
+    ? [
+        {
+          label: "VTPass Wallet",
+          indicator: walletHealthIndicator(wallet?.health),
+          detail: wallet
+            ? `${formatVtpassBalance(wallet)} · ${formatWalletHealth(wallet.health)} · updated ${formatRelativeTimestamp(wallet.checked_at)}`
+            : "Wallet data unavailable",
+        },
+        {
+          label: "VTPass Provider",
+          indicator: mapProviderIndicator(data.vtpass?.status ?? "unknown"),
+          detail: data.vtpass
+            ? `${data.vtpass.environment} · ${data.vtpass.enabled ? "enabled" : "disabled"}`
+            : "Provider status unavailable",
+        },
+        {
+          label: "Queue",
+          indicator: mapProviderIndicator(data.queue?.status ?? "unknown"),
+          detail: `pending ${data.queue?.pending_jobs ?? 0} · failed ${data.queue?.failed_jobs ?? 0}`,
+        },
+        {
+          label: "OTP",
+          indicator: data.otp?.enabled ? "healthy" : "warning",
+          detail: data.otp
+            ? `${data.otp.pending} pending · ${data.otp.failed_today} failed today`
+            : "OTP monitoring unavailable",
+        },
+      ]
+    : [];
 
   return (
     <PageContainer className="py-8" narrow={false}>
       <div className="mx-auto w-full max-w-5xl space-y-6">
-        <header>
-          <h1 className="font-display text-3xl font-extrabold text-dark">Monitoring</h1>
-          <p className="mt-2 text-sm text-muted">
-            Track core platform dependencies during soft launch.
-          </p>
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="font-display text-3xl font-extrabold text-dark">Monitoring</h1>
+            <p className="mt-2 text-sm text-muted">
+              Track core platform dependencies and VTPass wallet readiness during soft launch.
+            </p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => void handleWalletRefresh()}>
+            Refresh Wallet
+          </Button>
         </header>
 
         {error ? (
@@ -127,29 +106,51 @@ export function MonitoringClient() {
         ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {(loading
-            ? ["API", "Database", "Paystack", "VTPass", "Queue", "OTP"]
-            : items.map((item) => item.label)
-          ).map((label, index) => {
-            const item = items[index];
-            const indicator = item?.indicator ?? "warning";
-
-            return (
-              <div
-                key={label}
-                className={`rounded-2xl border p-5 ${healthClasses(indicator)}`}
-              >
-                <p className="text-sm font-semibold">{label}</p>
-                <p className="mt-3 text-2xl font-extrabold">
-                  {loading ? "…" : healthLabel(indicator)}
-                </p>
-                <p className="mt-2 text-xs opacity-80">
-                  {loading ? "Checking service status" : item?.detail}
-                </p>
-              </div>
-            );
-          })}
+          {(monitoring.loading && items.length === 0
+            ? Array.from({ length: 4 }, (_, index) => ({
+                label: `Loading ${index + 1}`,
+                indicator: "warning" as const,
+                detail: "…",
+              }))
+            : items
+          ).map((item) => (
+            <div
+              key={item.label}
+              className={`rounded-2xl border p-4 ${healthClasses(item.indicator)}`}
+            >
+              <p className="text-sm font-semibold">{item.label}</p>
+              <p className="mt-2 text-lg font-extrabold">{healthLabel(item.indicator)}</p>
+              <p className="mt-1 text-xs opacity-80">{item.detail}</p>
+            </div>
+          ))}
         </div>
+
+        {wallet ? (
+          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="font-display text-lg font-extrabold text-dark">VTPass Wallet</h2>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-muted">Balance</dt>
+                <dd className="font-semibold text-dark">{formatVtpassBalance(wallet)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted">Health</dt>
+                <dd className="font-semibold text-dark">{formatWalletHealth(wallet.health)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted">Last Refresh</dt>
+                <dd className="font-semibold text-dark">
+                  {formatRelativeTimestamp(wallet.checked_at)}
+                  {wallet.cached ? " (cached)" : ""}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted">Provider Status</dt>
+                <dd className="font-semibold text-dark">{data?.vtpass?.status ?? "unknown"}</dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
       </div>
     </PageContainer>
   );

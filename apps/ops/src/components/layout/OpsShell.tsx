@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/transactions", label: "Transactions" },
   { href: "/reconciliation", label: "Reconciliation" },
+  { href: "/finance", label: "Finance" },
   { href: "/platform", label: "Platform" },
   { href: "/monitoring", label: "Monitoring" },
   { href: "/reports", label: "Reports" },
