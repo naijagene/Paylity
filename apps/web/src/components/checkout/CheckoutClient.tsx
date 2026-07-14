@@ -27,6 +27,7 @@ import {
   resolveCheckoutPaymentAction,
 } from "@/lib/checkout/paystackRedirect";
 import { resolveProduct } from "@/lib/checkout/checkoutSchemas";
+import { validateCheckoutForm } from "@/lib/checkout/checkoutValidation";
 import { validateVoucher } from "@/lib/api/vouchers";
 import { getDeviceId } from "@/lib/checkout/deviceId";
 import { calculatePricingWithVoucher } from "@/lib/checkout/pricing";
