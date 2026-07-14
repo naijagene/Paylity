@@ -15,15 +15,35 @@ export const MIN_PRODUCT_AMOUNT = 50;
 /** Flat PAYLITY convenience fee (all products). */
 export const CONVENIENCE_FEE = 100;
 
-/** Gateway charge passed to customer. Zero until Paystack integration. */
-export const GATEWAY_FEE = 0;
+/** Paystack fee assumptions mirrored from backend platform settings defaults. */
+export const PAYSTACK_FEE_BASIS_POINTS = 150;
+export const PAYSTACK_FEE_FLAT_NAIRA = 100;
 
-/** When false, UI shows "Calculated securely during payment" for gateway line. */
-export const IS_GATEWAY_FEE_KNOWN = false;
+/** Gateway charge passed to customer when Paystack checkout is enabled. */
+export const IS_GATEWAY_FEE_KNOWN = true;
+
+export function calculateGatewayFee(
+  productAmount: number,
+  convenienceFee: number = CONVENIENCE_FEE,
+): number {
+  const subtotalKobo = (productAmount + convenienceFee) * 100;
+  let gatewayKobo = 0;
+
+  for (let iteration = 0; iteration < 5; iteration += 1) {
+    const payableKobo = subtotalKobo + gatewayKobo;
+    const percentageFee = Math.round(payableKobo * (PAYSTACK_FEE_BASIS_POINTS / 10000));
+    gatewayKobo = percentageFee + PAYSTACK_FEE_FLAT_NAIRA * 100;
+  }
+
+  return Math.round(gatewayKobo / 100);
+}
+
+/** @deprecated Use calculateGatewayFee(). */
+export const GATEWAY_FEE = 0;
 
 export function calculatePayableAmount(
   productAmount: number,
-  gatewayFee: number = GATEWAY_FEE,
+  gatewayFee: number = calculateGatewayFee(productAmount),
 ): number {
   return productAmount + CONVENIENCE_FEE + gatewayFee;
 }

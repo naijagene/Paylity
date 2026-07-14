@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   CHECKOUT_STORAGE_KEY,
   CONVENIENCE_FEE,
-  GATEWAY_FEE,
 } from "@/lib/checkout/constants";
 import {
   findCatalogDataPlan,
@@ -13,6 +12,7 @@ import {
 } from "@/lib/checkout/catalogPlans";
 import type { ProductCatalog } from "@/lib/api/catalog";
 import {
+  calculateGatewayFee,
   calculatePayableAmount,
   isOverGuestHardLimit,
   requiresOtpVerification,
@@ -54,7 +54,7 @@ function createInitialState(product: ProductType): CheckoutState {
     fields: defaultFields(),
     productAmount: 0,
     convenienceFee: CONVENIENCE_FEE,
-    gatewayFee: GATEWAY_FEE,
+    gatewayFee: 0,
     payableAmount: 0,
     customProductAmount: "",
     transactionRef: null,
@@ -83,7 +83,7 @@ function normalizeStoredState(
       ...parsed,
       product,
       convenienceFee: parsed.convenienceFee ?? CONVENIENCE_FEE,
-      gatewayFee: parsed.gatewayFee ?? GATEWAY_FEE,
+      gatewayFee: parsed.gatewayFee ?? 0,
       transactionInitialized: parsed.transactionInitialized ?? false,
       phoneVerified: parsed.phoneVerified ?? false,
       verificationToken: parsed.verificationToken ?? null,
@@ -101,7 +101,7 @@ function normalizeStoredState(
     fields: parsed.fields ?? defaultFields(),
     productAmount,
     convenienceFee: parsed.fee ?? CONVENIENCE_FEE,
-    gatewayFee: GATEWAY_FEE,
+    gatewayFee: 0,
     payableAmount: parsed.total ?? calculatePayableAmount(productAmount),
     customProductAmount: parsed.customAmount ?? "",
     transactionRef: parsed.transactionRef ?? null,
@@ -207,7 +207,10 @@ export function useCheckoutState(
   );
 
   const convenienceFee = CONVENIENCE_FEE;
-  const gatewayFee = GATEWAY_FEE;
+  const gatewayFee = useMemo(
+    () => calculateGatewayFee(productAmount, convenienceFee),
+    [productAmount, convenienceFee],
+  );
   const payableAmount = useMemo(
     () => calculatePayableAmount(productAmount, gatewayFee),
     [productAmount, gatewayFee],

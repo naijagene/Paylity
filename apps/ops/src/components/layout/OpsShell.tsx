@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/transactions", label: "Transactions" },
   { href: "/reconciliation", label: "Reconciliation" },
   { href: "/finance", label: "Finance" },
+  { href: "/go-live", label: "Go Live" },
   { href: "/platform", label: "Platform" },
   { href: "/monitoring", label: "Monitoring" },
   { href: "/reports", label: "Reports" },

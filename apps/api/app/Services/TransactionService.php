@@ -11,6 +11,7 @@ use App\Exceptions\ProductCatalogValidationException;
 use App\Models\Transaction;
 use App\Services\Catalog\ProductCatalogService;
 use App\Services\Fulfillment\FulfillmentPayloadExtractor;
+use App\Services\Launch\LaunchModeService;
 use App\Services\Otp\OtpService;
 use App\Services\Payments\PaystackService;
 use App\Services\Platform\PurchasePolicyContext;
@@ -37,6 +38,7 @@ class TransactionService
         private readonly ProductCatalogService $productCatalogService,
         private readonly PurchasePolicyService $purchasePolicyService,
         private readonly OtpService $otpService,
+        private readonly LaunchModeService $launchModeService,
     ) {
     }
 
@@ -55,13 +57,10 @@ class TransactionService
         $productType = $input['product_type'];
         $productAmount = (int) $input['product_amount'];
         $customerPhone = (string) $input['customer_phone'];
-        $convenienceFee = $this->feeService->convenienceFeeFor($productType);
-        $gatewayFee = $this->feeService->gatewayFee();
-        $payableAmount = $this->feeService->payableAmount(
-            $productAmount,
-            $convenienceFee,
-            $gatewayFee,
-        );
+        $feeQuote = $this->feeService->quote($productType, $productAmount);
+        $convenienceFee = $feeQuote['convenience_fee'];
+        $gatewayFee = $feeQuote['gateway_fee'];
+        $payableAmount = $feeQuote['payable_amount'];
 
         $verifiedPhone = false;
         $policyEvaluation = $this->purchasePolicyService->evaluate(
@@ -99,6 +98,8 @@ class TransactionService
             ipAddress: $ipAddress,
             verifiedPhone: $verifiedPhone,
         );
+
+        $this->launchModeService->assertCheckoutAllowed($productType, $payableAmount);
 
         $validatedPayload = $this->productCatalogService->validateAndEnrichCheckout(
             productType: $productType,

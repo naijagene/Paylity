@@ -80,6 +80,12 @@
       "namedRegex": "^/finance(?:/)?$"
     },
     {
+      "page": "/go-live",
+      "regex": "^/go\\-live(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/go\\-live(?:/)?$"
+    },
+    {
       "page": "/monitoring",
       "regex": "^/monitoring(?:/)?$",
       "routeKeys": {},

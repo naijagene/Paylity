@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api/v1',
     )
     ->withSchedule(function (Schedule $schedule): void {
+        $schedule->call(function (): void {
+            app(\App\Services\Launch\SchedulerHeartbeatService::class)->record();
+        })->everyMinute()->name('scheduler-heartbeat')->evenInMaintenanceMode();
+
         $schedule->command('paylity:reconcile-payments')
             ->everyTenMinutes()
             ->withoutOverlapping(15)

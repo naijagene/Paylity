@@ -44,4 +44,20 @@ final class SystemSettingKeys
     public const FINANCIAL_CLEARING_STALE_HOURS = 'financial_clearing_stale_hours';
     public const FINANCIAL_PAYSTACK_FEE_BASIS_POINTS = 'financial_paystack_fee_basis_points';
     public const FINANCIAL_PAYSTACK_FEE_FLAT_KOBO = 'financial_paystack_fee_flat_kobo';
+
+    public const LAUNCH_MODE = 'launch_mode';
+    public const LAUNCH_STARTED_AT = 'launch_started_at';
+    public const LAUNCH_TRANSACTION_LIMIT_DAILY = 'launch_transaction_limit_daily';
+    public const LAUNCH_REVENUE_LIMIT_DAILY = 'launch_revenue_limit_daily';
+    public const LAUNCH_ALLOWED_PRODUCTS = 'launch_allowed_products';
+    public const LAUNCH_SUPPORT_PHONE = 'launch_support_phone';
+    public const LAUNCH_SUPPORT_EMAIL = 'launch_support_email';
+    public const LAUNCH_INCIDENT_MESSAGE = 'launch_incident_message';
+    public const SCHEDULER_LAST_RUN_AT = 'scheduler_last_run_at';
+    public const PREFLIGHT_LAST_RUN_AT = 'preflight_last_run_at';
+    public const PREFLIGHT_LAST_STATUS = 'preflight_last_status';
+    public const BACKUP_LAST_RUN_AT = 'backup_last_run_at';
+    public const BACKUP_LAST_CHECKSUM = 'backup_last_checksum';
+    public const BACKUP_LAST_PATH = 'backup_last_path';
+    public const BACKUP_LAST_VERIFIED_AT = 'backup_last_verified_at';
 }

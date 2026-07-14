@@ -253,6 +253,48 @@ class PlatformSettingsSeeder extends Seeder
                 'type' => 'integer',
                 'description' => 'Expected Paystack flat fee in kobo (₦100 = 10000).',
             ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_MODE,
+                'value' => 'staging',
+                'type' => 'string',
+                'description' => 'Launch mode: staging, soft_launch, live, maintenance.',
+            ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_TRANSACTION_LIMIT_DAILY,
+                'value' => '100',
+                'type' => 'integer',
+                'description' => 'Soft-launch daily transaction cap (0 disables).',
+            ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_REVENUE_LIMIT_DAILY,
+                'value' => '200000',
+                'type' => 'integer',
+                'description' => 'Soft-launch daily gross collection cap in naira (0 disables).',
+            ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_ALLOWED_PRODUCTS,
+                'value' => 'airtime,data,electricity',
+                'type' => 'string',
+                'description' => 'Comma-separated products allowed during launch.',
+            ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_SUPPORT_PHONE,
+                'value' => '',
+                'type' => 'string',
+                'description' => 'Customer support phone shown during launch incidents.',
+            ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_SUPPORT_EMAIL,
+                'value' => 'support@paylity.ng',
+                'type' => 'string',
+                'description' => 'Customer support email shown during launch incidents.',
+            ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_INCIDENT_MESSAGE,
+                'value' => 'PAYLITY is temporarily unavailable for checkout.',
+                'type' => 'string',
+                'description' => 'Checkout message when launch_mode=maintenance.',
+            ],
         ];
 
         foreach ($settings as $setting) {

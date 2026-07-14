@@ -2,33 +2,22 @@
 
 namespace App\Services\Finance;
 
-use App\Support\Finance\Money;
 use App\Models\Transaction;
-use App\Services\Platform\SystemSettingsService;
-use App\Support\Platform\SystemSettingKeys;
+use App\Services\Finance\PaystackGatewayFeeCalculator;
+use App\Support\Finance\Money;
 
 class GatewayFeeResolver
 {
     public function __construct(
-        private readonly SystemSettingsService $systemSettings,
+        private readonly PaystackGatewayFeeCalculator $paystackGatewayFeeCalculator,
     ) {
     }
 
     public function expectedFeeKobo(Transaction $transaction): int
     {
-        $basisPoints = max(0, $this->systemSettings->getInt(
-            SystemSettingKeys::FINANCIAL_PAYSTACK_FEE_BASIS_POINTS,
-            150,
-        ));
-        $flatFee = max(0, $this->systemSettings->getInt(
-            SystemSettingKeys::FINANCIAL_PAYSTACK_FEE_FLAT_KOBO,
-            10000,
-        ));
-
-        $payableKobo = Money::nairaToKobo((int) $transaction->payable_amount);
-        $percentageFee = (int) round($payableKobo * ($basisPoints / 10000));
-
-        return $percentageFee + $flatFee;
+        return $this->paystackGatewayFeeCalculator->feeKoboForPayable(
+            Money::nairaToKobo((int) $transaction->payable_amount),
+        );
     }
 
     public function actualFeeKobo(Transaction $transaction): ?int

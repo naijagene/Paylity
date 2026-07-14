@@ -23,11 +23,19 @@ class PlatformStatusService
     {
         $maintenanceMode = $this->settings->getBool(SystemSettingKeys::MAINTENANCE_MODE);
         $incidentMode = $this->settings->getBool(SystemSettingKeys::INCIDENT_MODE);
+        $launchMode = $this->settings->getString(SystemSettingKeys::LAUNCH_MODE, 'staging');
         $guestCheckoutEnabled = $this->settings->getBool(SystemSettingKeys::GUEST_CHECKOUT_ENABLED, true);
 
-        $checkoutEnabled = $guestCheckoutEnabled && ! $maintenanceMode && ! $incidentMode;
+        $checkoutEnabled = $guestCheckoutEnabled
+            && ! $maintenanceMode
+            && ! $incidentMode
+            && $launchMode !== 'maintenance';
 
         $message = match (true) {
+            $launchMode === 'maintenance' => $this->settings->getString(
+                SystemSettingKeys::LAUNCH_INCIDENT_MESSAGE,
+                'PAYLITY is temporarily unavailable for checkout.',
+            ),
             $incidentMode => 'PAYLITY is experiencing an incident. Checkout is temporarily paused.',
             $maintenanceMode => 'PAYLITY is temporarily unavailable for checkout.',
             ! $guestCheckoutEnabled => 'Guest checkout is currently unavailable.',

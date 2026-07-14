@@ -684,3 +684,62 @@ export async function opsFinanceClose(dryRun = true) {
     method: "POST",
   });
 }
+
+export type OpsGoLiveSnapshot = {
+  refreshed_at: string;
+  launch_status: {
+    status: string;
+    environment: string;
+    version: string;
+    build: string;
+    last_preflight_at?: string | null;
+    scheduler: { status: string; last_run_at?: string | null; age_seconds?: number | null };
+    backup: { last_run_at?: string | null; last_verified_at?: string | null };
+  };
+  launch_mode: {
+    mode: string;
+    daily_usage: {
+      transaction_count: number;
+      gross_collection_naira: number;
+      transaction_limit_daily: number;
+      revenue_limit_daily: number;
+    };
+  };
+  provider_mode: {
+    paystack: {
+      mode: string;
+      callback_url: string;
+      webhook_route: string;
+      configuration_complete: boolean;
+    };
+    vtpass: { mode: string; configuration_complete: boolean };
+  };
+  security: { app_debug: boolean; https_app_url: boolean; cors_origins: string[] };
+  finance: {
+    negative_margin_count: number;
+    paystack_clearing_kobo: number;
+    settlement_difference_kobo: number;
+  };
+  pricing_audit_summary: { negative_margin_count: number; all_positive: boolean };
+};
+
+export async function fetchOpsGoLive() {
+  const { data } = await opsRequest<OpsGoLiveSnapshot>("/ops/go-live");
+  return data;
+}
+
+export async function opsGoLivePreflight(strict = false) {
+  return opsRequest(`/ops/go-live/preflight?strict=${strict ? "1" : "0"}`, { method: "POST" });
+}
+
+export async function opsGoLiveBackup() {
+  return opsRequest("/ops/go-live/backup", { method: "POST" });
+}
+
+export async function opsGoLiveVerifyBackup() {
+  return opsRequest("/ops/go-live/backup/verify", { method: "POST" });
+}
+
+export async function opsGoLivePricingAudit(product = "airtime") {
+  return opsRequest(`/ops/go-live/pricing-audit?product=${product}`);
+}
