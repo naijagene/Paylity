@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\V1\Ops;
 
 use App\Http\Controllers\Controller;
 use App\Models\LaunchVoucher;
+use App\Models\LaunchVoucherCampaign;
 use App\Services\Ops\OpsMarketingService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OpsMarketingController extends Controller
 {
@@ -16,54 +18,34 @@ class OpsMarketingController extends Controller
     ) {
     }
 
-    public function snapshot(): JsonResponse
+    public function snapshot(Request $request): JsonResponse
     {
         return ApiResponse::success(
-            data: $this->opsMarketingService->snapshot(),
+            data: $this->opsMarketingService->snapshot($request->query('search')),
             message: 'Marketing snapshot loaded.',
         );
     }
 
-    public function store(Request $request): JsonResponse
+    public function storeCampaign(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'code' => ['required', 'string', 'max:64', 'unique:launch_vouchers,code'],
-            'amount' => ['required', 'integer', 'min:1'],
+            'amount' => ['required', 'integer', 'in:500,1000'],
+            'quantity' => ['required', 'integer', 'in:1,5,10,25,50,100'],
             'network' => ['nullable', 'string', 'max:32'],
-            'max_redemptions' => ['required', 'integer', 'min:1'],
             'expires_at' => ['nullable', 'date'],
             'active' => ['sometimes', 'boolean'],
             'one_per_phone' => ['sometimes', 'boolean'],
             'one_per_email' => ['sometimes', 'boolean'],
             'one_per_device' => ['sometimes', 'boolean'],
+            'shared_code' => ['sometimes', 'boolean'],
+            'max_redemptions' => ['nullable', 'integer', 'min:1'],
         ]);
 
         return ApiResponse::success(
-            data: $this->opsMarketingService->create($validated, $request->header('X-Operator-Name')),
-            message: 'Launch voucher created.',
+            data: $this->opsMarketingService->createCampaign($validated, $request->header('X-Operator-Name')),
+            message: 'Launch voucher campaign created.',
             status: 201,
-        );
-    }
-
-    public function update(Request $request, LaunchVoucher $voucher): JsonResponse
-    {
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:255'],
-            'code' => ['sometimes', 'string', 'max:64', 'unique:launch_vouchers,code,'.$voucher->id],
-            'amount' => ['sometimes', 'integer', 'min:1'],
-            'network' => ['nullable', 'string', 'max:32'],
-            'max_redemptions' => ['sometimes', 'integer', 'min:1'],
-            'expires_at' => ['nullable', 'date'],
-            'active' => ['sometimes', 'boolean'],
-            'one_per_phone' => ['sometimes', 'boolean'],
-            'one_per_email' => ['sometimes', 'boolean'],
-            'one_per_device' => ['sometimes', 'boolean'],
-        ]);
-
-        return ApiResponse::success(
-            data: $this->opsMarketingService->update($voucher, $validated),
-            message: 'Launch voucher updated.',
         );
     }
 
@@ -79,11 +61,58 @@ class OpsMarketingController extends Controller
         );
     }
 
-    public function exportUsage(): JsonResponse
+    public function setCampaignActive(Request $request, LaunchVoucherCampaign $campaign): JsonResponse
+    {
+        $validated = $request->validate([
+            'active' => ['required', 'boolean'],
+        ]);
+
+        return ApiResponse::success(
+            data: $this->opsMarketingService->setCampaignActive($campaign, (bool) $validated['active']),
+            message: 'Launch voucher campaign status updated.',
+        );
+    }
+
+    public function regenerateCode(Request $request, LaunchVoucher $voucher): JsonResponse
     {
         return ApiResponse::success(
-            data: $this->opsMarketingService->exportUsage(),
+            data: $this->opsMarketingService->regenerateCode($voucher, $request->header('X-Operator-Name')),
+            message: 'Replacement voucher code generated.',
+        );
+    }
+
+    public function exportUsage(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->opsMarketingService->exportUsage($request->integer('campaign_id') ?: null),
             message: 'Voucher usage exported.',
         );
+    }
+
+    public function exportCsv(Request $request): StreamedResponse
+    {
+        $rows = $this->opsMarketingService->exportUsage($request->integer('campaign_id') ?: null);
+
+        return response()->streamDownload(function () use ($rows): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['voucher_code', 'campaign_id', 'reference', 'status', 'discount_amount', 'customer_phone', 'reserved_at', 'redeemed_at']);
+
+            foreach ($rows as $row) {
+                fputcsv($handle, [
+                    $row['voucher_code'] ?? '',
+                    $row['campaign_id'] ?? '',
+                    $row['reference'] ?? '',
+                    $row['status'] ?? '',
+                    $row['discount_amount'] ?? '',
+                    $row['customer_phone'] ?? '',
+                    $row['reserved_at'] ?? '',
+                    $row['redeemed_at'] ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, 'voucher-usage-'.now()->format('Ymd-His').'.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
     }
 }

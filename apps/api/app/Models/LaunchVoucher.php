@@ -3,13 +3,18 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LaunchVoucher extends Model
 {
+    public const ALLOWED_AMOUNTS = [500, 1000];
+
     protected $fillable = [
+        'campaign_id',
         'name',
         'code',
+        'code_normalized',
         'product_type',
         'amount',
         'network',
@@ -37,6 +42,11 @@ class LaunchVoucher extends Model
         ];
     }
 
+    public function campaign(): BelongsTo
+    {
+        return $this->belongsTo(LaunchVoucherCampaign::class, 'campaign_id');
+    }
+
     public function redemptions(): HasMany
     {
         return $this->hasMany(LaunchVoucherRedemption::class);
@@ -49,6 +59,20 @@ class LaunchVoucher extends Model
 
     public function isExpired(): bool
     {
-        return $this->expires_at !== null && $this->expires_at->isPast();
+        if ($this->expires_at !== null && $this->expires_at->isPast()) {
+            return true;
+        }
+
+        return $this->campaign?->isExpired() ?? false;
+    }
+
+    public function hasReservationOrRedemption(): bool
+    {
+        return $this->redemptions()
+            ->whereIn('status', [
+                LaunchVoucherRedemption::STATUS_RESERVED,
+                LaunchVoucherRedemption::STATUS_REDEEMED,
+            ])
+            ->exists();
     }
 }

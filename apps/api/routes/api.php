@@ -113,10 +113,12 @@ Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function (
     Route::get('/go-live/export/json', [OpsGoLiveController::class, 'exportJson']);
     Route::get('/go-live/export/pdf', [OpsGoLiveController::class, 'exportPdf']);
     Route::get('/marketing/vouchers', [OpsMarketingController::class, 'snapshot']);
-    Route::post('/marketing/vouchers', [OpsMarketingController::class, 'store']);
-    Route::patch('/marketing/vouchers/{voucher}', [OpsMarketingController::class, 'update']);
+    Route::post('/marketing/campaigns', [OpsMarketingController::class, 'storeCampaign']);
     Route::post('/marketing/vouchers/{voucher}/active', [OpsMarketingController::class, 'setActive']);
+    Route::post('/marketing/vouchers/{voucher}/regenerate', [OpsMarketingController::class, 'regenerateCode']);
+    Route::post('/marketing/campaigns/{campaign}/active', [OpsMarketingController::class, 'setCampaignActive']);
     Route::get('/marketing/vouchers/export', [OpsMarketingController::class, 'exportUsage']);
+    Route::get('/marketing/vouchers/export.csv', [OpsMarketingController::class, 'exportCsv']);
     Route::post('/reconciliation/{reference}/reconcile-payment', [OpsReconciliationController::class, 'reconcilePayment']);
     Route::post('/reconciliation/{reference}/reconcile-fulfillment', [OpsReconciliationController::class, 'reconcileFulfillment']);
     Route::post('/reconciliation/{reference}/retry', [OpsReconciliationController::class, 'retry']);

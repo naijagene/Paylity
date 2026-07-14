@@ -7,39 +7,34 @@ use Illuminate\Database\Seeder;
 
 class LaunchVoucherSeeder extends Seeder
 {
+    private const LEGACY_CODES = [
+        'PAYLITY500',
+        'PAYLITY1000',
+        'SOFT500',
+        'SOFT1000',
+        'WELCOME500',
+    ];
+
     public function run(): void
     {
-        $vouchers = [
-            [
-                'name' => 'Soft Launch Airtime ₦500',
-                'code' => 'PAYLITY500',
-                'amount' => 500,
-                'max_redemptions' => 500,
-                'expires_at' => now()->addMonths(3),
-                'created_by' => 'system',
-            ],
-            [
-                'name' => 'Soft Launch Airtime ₦1,000',
-                'code' => 'PAYLITY1000',
-                'amount' => 1000,
-                'max_redemptions' => 250,
-                'expires_at' => now()->addMonths(3),
-                'created_by' => 'system',
-            ],
-        ];
-
-        foreach ($vouchers as $voucher) {
+        foreach (self::LEGACY_CODES as $code) {
             LaunchVoucher::query()->updateOrCreate(
-                ['code' => $voucher['code']],
-                array_merge($voucher, [
+                ['code' => $code],
+                [
+                    'code_normalized' => $code,
+                    'name' => 'Legacy predictable voucher (deactivated)',
                     'product_type' => 'airtime',
+                    'amount' => str_contains($code, '1000') ? 1000 : 500,
                     'network' => null,
+                    'max_redemptions' => 0,
                     'redeemed_count' => 0,
-                    'active' => true,
+                    'expires_at' => now()->subDay(),
+                    'active' => false,
                     'one_per_phone' => true,
                     'one_per_email' => false,
                     'one_per_device' => true,
-                ]),
+                    'created_by' => 'system',
+                ],
             );
         }
     }

@@ -19,11 +19,13 @@ use Database\Seeders\LedgerAccountSeeder;
 use Database\Seeders\PlatformSettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\CreatesLaunchVouchers;
 use Tests\Concerns\SeedsProductCatalog;
 use Tests\TestCase;
 
 class Pay033bVoucherPricingAuditTest extends TestCase
 {
+    use CreatesLaunchVouchers;
     use RefreshDatabase;
     use SeedsProductCatalog;
 
@@ -96,14 +98,10 @@ class Pay033bVoucherPricingAuditTest extends TestCase
         int $gatewayFee,
         int $payableAmount,
     ): void {
-        $code = match ($voucherDiscount) {
-            500 => 'PAYLITY500',
-            1000 => 'PAYLITY1000',
-            default => 'PAYLITY500',
-        };
+        $fixture = $this->createLaunchVoucherCampaign(amount: $voucherDiscount, quantity: 1);
 
         $response = $this->postJson('/api/v1/vouchers/validate', [
-            'code' => $code,
+            'code' => $fixture['code'],
             'product_type' => 'airtime',
             'product_amount' => $productAmount,
             'network' => 'MTN',
@@ -131,13 +129,13 @@ class Pay033bVoucherPricingAuditTest extends TestCase
         int $gatewayFee,
         int $payableAmount,
     ): void {
-        $code = $voucherDiscount >= 1000 ? 'PAYLITY1000' : 'PAYLITY500';
+        $fixture = $this->createLaunchVoucherCampaign(amount: $voucherDiscount, quantity: 1);
 
         $response = $this->postJson('/api/v1/checkout/initialize', [
             'product_type' => 'airtime',
             'customer_phone' => '0803888'.str_pad((string) $productAmount, 4, '0', STR_PAD_LEFT),
             'product_amount' => $productAmount,
-            'voucher_code' => $code,
+            'voucher_code' => $fixture['code'],
             'device_id' => 'checkout-device-'.$productAmount.'-'.$voucherDiscount,
             'payload' => [
                 'network' => 'MTN',
@@ -171,12 +169,13 @@ class Pay033bVoucherPricingAuditTest extends TestCase
 
     public function test_expired_voucher_is_rejected(): void
     {
-        LaunchVoucher::query()->where('code', 'PAYLITY500')->update([
+        $fixture = $this->createLaunchVoucherCampaign(amount: 500, quantity: 1);
+        LaunchVoucher::query()->where('id', $fixture['vouchers'][0]->id)->update([
             'expires_at' => now()->subDay(),
         ]);
 
         $this->postJson('/api/v1/vouchers/validate', [
-            'code' => 'PAYLITY500',
+            'code' => $fixture['code'],
             'product_type' => 'airtime',
             'product_amount' => 1000,
         ])
@@ -186,13 +185,14 @@ class Pay033bVoucherPricingAuditTest extends TestCase
 
     public function test_exhausted_voucher_is_rejected(): void
     {
-        LaunchVoucher::query()->where('code', 'PAYLITY500')->update([
-            'redeemed_count' => 500,
-            'max_redemptions' => 500,
+        $fixture = $this->createLaunchVoucherCampaign(amount: 500, quantity: 1);
+        LaunchVoucher::query()->where('id', $fixture['vouchers'][0]->id)->update([
+            'redeemed_count' => 1,
+            'max_redemptions' => 1,
         ]);
 
         $this->postJson('/api/v1/vouchers/validate', [
-            'code' => 'PAYLITY500',
+            'code' => $fixture['code'],
             'product_type' => 'airtime',
             'product_amount' => 1000,
         ])
@@ -213,7 +213,9 @@ class Pay033bVoucherPricingAuditTest extends TestCase
 
     public function test_duplicate_device_redemption_is_blocked(): void
     {
-        $voucher = LaunchVoucher::query()->where('code', 'PAYLITY500')->firstOrFail();
+        $fixture = $this->createLaunchVoucherCampaign(amount: 500, quantity: 2);
+        $voucher = $fixture['vouchers'][0];
+        $secondCode = $fixture['vouchers'][1]->code;
         $transaction = Transaction::query()->create([
             'reference' => 'PYL-20260714-DEV001',
             'product_type' => 'airtime',
@@ -223,7 +225,7 @@ class Pay033bVoucherPricingAuditTest extends TestCase
             'gateway_fee' => 111,
             'payable_amount' => 711,
             'launch_voucher_id' => $voucher->id,
-            'voucher_code' => 'PAYLITY500',
+            'voucher_code' => $voucher->code,
             'voucher_discount_amount' => 500,
             'currency' => 'NGN',
             'status' => TransactionStatus::FULFILLED,
@@ -235,13 +237,14 @@ class Pay033bVoucherPricingAuditTest extends TestCase
             'transaction_id' => $transaction->id,
             'customer_phone' => '08037770001',
             'device_id' => 'shared-device-audit',
-            'status' => LaunchVoucherRedemption::STATUS_COMPLETED,
+            'status' => LaunchVoucherRedemption::STATUS_REDEEMED,
             'discount_amount' => 500,
+            'reserved_at' => now(),
             'redeemed_at' => now(),
         ]);
 
         $this->postJson('/api/v1/vouchers/validate', [
-            'code' => 'PAYLITY500',
+            'code' => $secondCode,
             'product_type' => 'airtime',
             'product_amount' => 1000,
             'customer_phone' => '08037779999',
@@ -261,7 +264,7 @@ class Pay033bVoucherPricingAuditTest extends TestCase
             'convenience_fee' => 100,
             'gateway_fee' => 111,
             'payable_amount' => 711,
-            'voucher_code' => 'PAYLITY500',
+            'voucher_code' => 'PYL-TEST-AUD1',
             'voucher_discount_amount' => 500,
             'currency' => 'NGN',
             'status' => TransactionStatus::FULFILLED,
@@ -300,7 +303,7 @@ class Pay033bVoucherPricingAuditTest extends TestCase
             'convenience_fee' => 100,
             'gateway_fee' => 103,
             'payable_amount' => 203,
-            'voucher_code' => 'PAYLITY1000',
+            'voucher_code' => 'PYL-TEST-AUD2',
             'voucher_discount_amount' => 1000,
             'currency' => 'NGN',
             'status' => TransactionStatus::FULFILLED,

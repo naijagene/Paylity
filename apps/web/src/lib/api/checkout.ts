@@ -19,10 +19,11 @@ export type InitializeCheckoutResponse = {
   reference: string;
   product_type: ProductType;
   product_amount: number;
+  net_product_amount?: number;
   convenience_fee: number;
   gateway_fee: number;
   payable_amount: number;
-  voucher_code?: string | null;
+  voucher_code_masked?: string | null;
   voucher_discount_amount?: number;
   currency: string;
   status: string;

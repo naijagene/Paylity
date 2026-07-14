@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Services\Fulfillment\FulfillmentPayloadExtractor;
+use App\Services\Marketing\LaunchVoucherService;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
@@ -14,6 +15,7 @@ class ReceiptService
 
     public function __construct(
         private readonly FulfillmentPayloadExtractor $fulfillmentPayloadExtractor,
+        private readonly LaunchVoucherService $launchVoucherService,
     ) {
     }
 
@@ -59,6 +61,9 @@ class ReceiptService
             'phone_display' => $maskedPhone,
             'customer_email' => $transaction->customer_email,
             'product_amount' => $transaction->product_amount,
+            'voucher_discount_amount' => (int) ($transaction->voucher_discount_amount ?? 0),
+            'voucher_code_masked' => $this->launchVoucherService->maskCode($transaction->voucher_code),
+            'net_product_amount' => max(0, (int) $transaction->product_amount - (int) ($transaction->voucher_discount_amount ?? 0)),
             'convenience_fee' => $transaction->convenience_fee,
             'gateway_fee' => $transaction->gateway_fee,
             'payable_amount' => $transaction->payable_amount,

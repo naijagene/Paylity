@@ -18,12 +18,20 @@ export async function trackTransactionShare(reference: string, channel: string) 
   });
 }
 
-export function buildCampaignShareMessage(reference: string): string {
-  return `I just got free airtime on PAYLITY with launch vouchers. Try PAYLITY for fast airtime, data, and electricity top-ups. Ref: ${reference}`;
+export function buildCampaignShareMessage(): string {
+  return "I just got free airtime on PAYLITY and only paid the service charges. Try PAYLITY for fast airtime, data and electricity payments.";
 }
 
-export function buildShareLinks(reference: string, pageUrl: string) {
-  const text = encodeURIComponent(buildCampaignShareMessage(reference));
+export function getCampaignLandingUrl(): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/airtime`;
+  }
+
+  return "https://paylity.ng/airtime";
+}
+
+export function buildShareLinks(pageUrl: string) {
+  const text = encodeURIComponent(buildCampaignShareMessage());
   const url = encodeURIComponent(pageUrl);
 
   return {

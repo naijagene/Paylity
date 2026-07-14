@@ -11,6 +11,7 @@ use App\Services\Fulfillment\AutoFulfillmentRecorder;
 use App\Services\Fulfillment\ExactOnceFulfillmentService;
 use App\Services\Fulfillment\FulfillmentRetryService;
 use App\Services\Fulfillment\VTPassService;
+use App\Services\Marketing\LaunchVoucherService;
 use App\Services\Notifications\TransactionNotificationService;
 use App\Services\ReceiptService;
 use App\Services\TransactionEventService;
@@ -35,6 +36,7 @@ class PaymentVerificationService
         private readonly TransactionNotificationService $transactionNotificationService,
         private readonly ReceiptService $receiptService,
         private readonly LedgerPostingService $ledgerPostingService,
+        private readonly LaunchVoucherService $launchVoucherService,
     ) {
     }
 
@@ -232,6 +234,8 @@ class PaymentVerificationService
                 'system',
                 ['reason' => $transaction->fresh()->failure_reason],
             );
+
+            $this->launchVoucherService->releaseReservation($transaction->fresh(), 'payment_failed');
 
             return $transaction;
         }

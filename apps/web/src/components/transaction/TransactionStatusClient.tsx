@@ -424,6 +424,8 @@ export function TransactionStatusClient() {
           customerPhone={phoneDisplay}
           customerEmail={transaction.receipt?.customer_email ?? transaction.customer_email}
           productAmount={transaction.product_amount}
+          voucherDiscountAmount={transaction.receipt?.voucher_discount_amount ?? transaction.voucher_discount_amount ?? 0}
+          voucherCodeMasked={transaction.receipt?.voucher_code_masked ?? transaction.voucher_code_masked}
           convenienceFee={transaction.convenience_fee}
           gatewayFee={transaction.gateway_fee}
           payableAmount={transaction.payable_amount}
@@ -467,10 +469,7 @@ export function TransactionStatusClient() {
                 }}
               />
             ) : (
-              <ViralShareCard
-                reference={transaction.reference}
-                pageUrl={typeof window !== "undefined" ? window.location.href : ""}
-              />
+              <ViralShareCard reference={transaction.reference} />
             )}
           </>
         ) : null}

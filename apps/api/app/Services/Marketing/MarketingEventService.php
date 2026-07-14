@@ -9,7 +9,15 @@ class MarketingEventService
 {
     public const TYPE_VOUCHER_VALIDATED = 'voucher.validated';
 
+    public const TYPE_VOUCHER_RESERVED = 'voucher.reserved';
+
+    public const TYPE_VOUCHER_RELEASED = 'voucher.released';
+
     public const TYPE_VOUCHER_REDEEMED = 'voucher.redeemed';
+
+    public const TYPE_VOUCHER_BLOCKED = 'voucher.blocked';
+
+    public const TYPE_VOUCHER_GENERATED = 'voucher.generated';
 
     public const TYPE_PAYMENT_COMPLETED = 'payment.completed';
 

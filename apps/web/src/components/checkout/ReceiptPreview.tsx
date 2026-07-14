@@ -12,6 +12,8 @@ type ReceiptPreviewProps = {
   product: ProductType;
   fields: CheckoutFields;
   productAmount: number;
+  voucherDiscountAmount?: number;
+  voucherCodeMasked?: string | null;
   convenienceFee: number;
   gatewayFee: number;
   payableAmount: number;
@@ -25,6 +27,8 @@ export function ReceiptPreview({
   product,
   fields,
   productAmount,
+  voucherDiscountAmount = 0,
+  voucherCodeMasked,
   convenienceFee,
   gatewayFee,
   payableAmount,
@@ -59,6 +63,12 @@ export function ReceiptPreview({
       ? [{ label: "Email", value: fields.customerEmail }]
       : []),
     { label: "Product Amount", value: formatNaira(productAmount) },
+    ...(voucherDiscountAmount > 0
+      ? [
+          { label: "Voucher Discount", value: `-${formatNaira(voucherDiscountAmount)}` },
+          ...(voucherCodeMasked ? [{ label: "Voucher", value: voucherCodeMasked }] : []),
+        ]
+      : []),
     { label: "Convenience Fee", value: formatNaira(convenienceFee) },
     { label: "Payment Processing Fee", value: gatewayFeeLabel },
     { label: "Total Paid", value: formatNaira(payableAmount) },

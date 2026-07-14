@@ -834,14 +834,26 @@ export type OpsMarketingSnapshot = {
   refreshed_at: string;
   kpis: {
     generated: number;
+    unused?: number;
+    reserved?: number;
     redeemed: number;
     remaining: number;
     expired: number;
     active: number;
+    blocked_attempts?: number;
     review_rate_pct: number;
     share_rate_pct: number;
   };
   reviews: { count: number; average_rating: number | null; distribution: Record<number, number> };
+  campaigns?: Array<{
+    id: number;
+    name: string;
+    amount: number;
+    generated_count: number;
+    redeemed_count: number;
+    unused_count?: number;
+    active: boolean;
+  }>;
   vouchers: Array<{
     id: number;
     name: string;
@@ -851,23 +863,50 @@ export type OpsMarketingSnapshot = {
     redeemed_count: number;
     remaining_redemptions: number;
     active: boolean;
+    status?: string;
+    immutable?: boolean;
   }>;
 };
 
-export async function fetchOpsMarketing() {
-  const { data } = await opsRequest<OpsMarketingSnapshot>("/ops/marketing/vouchers");
+export async function fetchOpsMarketing(search?: string) {
+  const query = search ? `?search=${encodeURIComponent(search)}` : "";
+  const { data } = await opsRequest<OpsMarketingSnapshot>(`/ops/marketing/vouchers${query}`);
   return data;
 }
 
-export async function opsMarketingCreateVoucher(payload: Record<string, unknown>) {
-  return opsRequest("/ops/marketing/vouchers", {
+export async function opsMarketingCreateCampaign(payload: {
+  name: string;
+  amount: 500 | 1000;
+  quantity: number;
+  network?: string | null;
+  expires_at?: string | null;
+  active?: boolean;
+  one_per_phone?: boolean;
+  one_per_email?: boolean;
+  one_per_device?: boolean;
+  shared_code?: boolean;
+  max_redemptions?: number;
+}) {
+  const { data } = await opsRequest<{
+    campaign: NonNullable<OpsMarketingSnapshot["campaigns"]>[number];
+    codes: string[];
+  }>("/ops/marketing/campaigns", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+  return data;
 }
 
 export async function opsMarketingSetVoucherActive(id: number, active: boolean) {
   return opsRequest(`/ops/marketing/vouchers/${id}/active`, {
+    method: "POST",
+    body: JSON.stringify({ active }),
+  });
+}
+
+export async function opsMarketingSetCampaignActive(id: number, active: boolean) {
+  return opsRequest(`/ops/marketing/campaigns/${id}/active`, {
     method: "POST",
     body: JSON.stringify({ active }),
   });

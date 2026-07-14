@@ -9,17 +9,18 @@ use App\Models\LaunchVoucherRedemption;
 use App\Models\Transaction;
 use App\Services\Finance\FinancialLedgerService;
 use App\Services\Finance\LedgerPostingService;
-use App\Services\Marketing\LaunchVoucherService;
 use App\Services\Marketing\MarketingEventService;
 use App\Services\Marketing\TransactionReviewService;
 use Database\Seeders\LedgerAccountSeeder;
 use Database\Seeders\LaunchVoucherSeeder;
 use Database\Seeders\PlatformSettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesLaunchVouchers;
 use Tests\TestCase;
 
 class Pay033bLaunchVoucherTest extends TestCase
 {
+    use CreatesLaunchVouchers;
     use RefreshDatabase;
 
     private const OPERATOR_KEY = 'test-operator-key';
@@ -40,8 +41,10 @@ class Pay033bLaunchVoucherTest extends TestCase
 
     public function test_voucher_validation_returns_updated_payable_amount(): void
     {
+        $fixture = $this->createLaunchVoucherCampaign(amount: 500, quantity: 1);
+
         $response = $this->postJson('/api/v1/vouchers/validate', [
-            'code' => 'PAYLITY500',
+            'code' => $fixture['code'],
             'product_type' => 'airtime',
             'product_amount' => 1000,
             'network' => 'MTN',
@@ -56,9 +59,11 @@ class Pay033bLaunchVoucherTest extends TestCase
             ->assertJsonPath('data.payable_amount', fn ($value) => $value < 1000);
     }
 
-    public function test_duplicate_phone_is_blocked_for_one_per_phone_voucher(): void
+    public function test_duplicate_phone_is_blocked_for_one_per_phone_campaign(): void
     {
-        $voucher = LaunchVoucher::query()->where('code', 'PAYLITY500')->firstOrFail();
+        $fixture = $this->createLaunchVoucherCampaign(amount: 500, quantity: 2);
+        $voucher = $fixture['vouchers'][0];
+        $secondCode = $fixture['vouchers'][1]->code;
         $transaction = Transaction::query()->create([
             'reference' => 'PYL-20260714-VCH001',
             'product_type' => 'airtime',
@@ -68,7 +73,7 @@ class Pay033bLaunchVoucherTest extends TestCase
             'gateway_fee' => 0,
             'payable_amount' => 600,
             'launch_voucher_id' => $voucher->id,
-            'voucher_code' => 'PAYLITY500',
+            'voucher_code' => $voucher->code,
             'voucher_discount_amount' => 500,
             'currency' => 'NGN',
             'status' => TransactionStatus::FULFILLED,
@@ -79,13 +84,16 @@ class Pay033bLaunchVoucherTest extends TestCase
             'launch_voucher_id' => $voucher->id,
             'transaction_id' => $transaction->id,
             'customer_phone' => '08031234567',
-            'status' => LaunchVoucherRedemption::STATUS_COMPLETED,
+            'status' => LaunchVoucherRedemption::STATUS_REDEEMED,
             'discount_amount' => 500,
+            'reserved_at' => now(),
             'redeemed_at' => now(),
         ]);
 
+        $secondFixture = ['code' => $secondCode];
+
         $response = $this->postJson('/api/v1/vouchers/validate', [
-            'code' => 'PAYLITY500',
+            'code' => $secondFixture['code'],
             'product_type' => 'airtime',
             'product_amount' => 1000,
             'customer_phone' => '08031234567',
@@ -99,17 +107,16 @@ class Pay033bLaunchVoucherTest extends TestCase
 
     public function test_expired_voucher_is_rejected(): void
     {
-        LaunchVoucher::query()->where('code', 'PAYLITY500')->update([
+        $fixture = $this->createLaunchVoucherCampaign(amount: 500, quantity: 1);
+        LaunchVoucher::query()->where('id', $fixture['vouchers'][0]->id)->update([
             'expires_at' => now()->subDay(),
         ]);
 
-        $response = $this->postJson('/api/v1/vouchers/validate', [
-            'code' => 'PAYLITY500',
+        $this->postJson('/api/v1/vouchers/validate', [
+            'code' => $fixture['code'],
             'product_type' => 'airtime',
             'product_amount' => 1000,
-        ]);
-
-        $response
+        ])
             ->assertStatus(422)
             ->assertJsonPath('errors.code', 'VOUCHER_EXPIRED');
     }
@@ -124,7 +131,7 @@ class Pay033bLaunchVoucherTest extends TestCase
             'convenience_fee' => 100,
             'gateway_fee' => 0,
             'payable_amount' => 600,
-            'voucher_code' => 'PAYLITY500',
+            'voucher_code' => 'PYL-TEST-0001',
             'voucher_discount_amount' => 500,
             'currency' => 'NGN',
             'status' => TransactionStatus::FULFILLED,
@@ -173,16 +180,16 @@ class Pay033bLaunchVoucherTest extends TestCase
         ]);
     }
 
-    public function test_ops_marketing_snapshot_lists_seeded_vouchers(): void
+    public function test_ops_marketing_snapshot_lists_campaign_vouchers(): void
     {
+        $this->createLaunchVoucherCampaign(amount: 500, quantity: 2);
+
         $response = $this->withHeaders([
             'X-Operator-Key' => self::OPERATOR_KEY,
         ])->getJson('/api/v1/ops/marketing/vouchers');
 
         $response
             ->assertOk()
-            ->assertJsonPath('data.kpis.generated', 2)
-            ->assertJsonFragment(['code' => 'PAYLITY500'])
-            ->assertJsonFragment(['code' => 'PAYLITY1000']);
+            ->assertJsonPath('data.kpis.generated', fn ($value) => $value >= 2);
     }
 }

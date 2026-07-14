@@ -298,6 +298,18 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         getDeviceId(),
       );
       const transaction = await initializeCheckout(payload);
+
+      if (
+        voucherApplied &&
+        transaction.payable_amount !== estimatedPricing.payableAmount
+      ) {
+        setTransactionInitialized(transaction);
+        setApiError("Checkout total was updated by the server. Please review the corrected amount before paying.");
+        setStep("review");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
       const paymentAction = resolveCheckoutPaymentAction(transaction);
 
       if (paymentAction === "redirect") {
@@ -354,7 +366,9 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     setTransactionInitialized,
     state.fields,
     state.verificationToken,
-    product,
+    voucherApplied,
+    voucherCode,
+    estimatedPricing.payableAmount,
   ]);
 
   const handleProceedFromReview = useCallback(() => {

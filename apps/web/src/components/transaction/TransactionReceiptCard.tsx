@@ -60,6 +60,8 @@ export type TransactionReceiptCardProps = {
   customerPhone: string;
   customerEmail?: string | null;
   productAmount: number;
+  voucherDiscountAmount?: number;
+  voucherCodeMasked?: string | null;
   convenienceFee: number;
   gatewayFee: number;
   payableAmount: number;
@@ -78,6 +80,8 @@ export function TransactionReceiptCard({
   customerPhone,
   customerEmail,
   productAmount,
+  voucherDiscountAmount = 0,
+  voucherCodeMasked,
   convenienceFee,
   gatewayFee,
   payableAmount,
@@ -143,6 +147,17 @@ export function TransactionReceiptCard({
             label="Product Amount"
             value={formatNaira(productAmount)}
           />
+          {voucherDiscountAmount > 0 ? (
+            <>
+              <ReceiptRow
+                label="Voucher Discount"
+                value={`-${formatNaira(voucherDiscountAmount)}`}
+              />
+              {voucherCodeMasked ? (
+                <ReceiptRow label="Voucher" value={voucherCodeMasked} />
+              ) : null}
+            </>
+          ) : null}
           <ReceiptRow
             label="Convenience Fee"
             value={formatNaira(convenienceFee)}

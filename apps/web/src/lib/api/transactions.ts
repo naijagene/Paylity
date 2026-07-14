@@ -21,6 +21,9 @@ export type TransactionReceipt = {
   phone_display?: string;
   customer_email?: string | null;
   product_amount: number;
+  voucher_discount_amount?: number;
+  voucher_code_masked?: string | null;
+  net_product_amount?: number;
   convenience_fee: number;
   gateway_fee: number;
   payable_amount: number;
@@ -43,6 +46,9 @@ export type TransactionDetail = {
   customer_email?: string | null;
   customer_name?: string | null;
   product_amount: number;
+  voucher_discount_amount?: number;
+  voucher_code_masked?: string | null;
+  net_product_amount?: number;
   convenience_fee: number;
   gateway_fee: number;
   payable_amount: number;

@@ -182,6 +182,7 @@ export function CheckoutSummaryCard({
         product={product}
         fields={fields}
         productAmount={productAmount}
+        voucherDiscountAmount={voucherDiscountAmount}
         convenienceFee={convenienceFee}
         gatewayFee={gatewayFee}
         payableAmount={payableAmount}

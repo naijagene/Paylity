@@ -1,21 +1,21 @@
 "use client";
 
 import { Button } from "@/components/Button";
-import { buildShareLinks, trackTransactionShare } from "@/lib/api/reviews";
+import { buildCampaignShareMessage, buildShareLinks, getCampaignLandingUrl, trackTransactionShare } from "@/lib/api/reviews";
 
 type ViralShareCardProps = {
   reference: string;
-  pageUrl: string;
 };
 
-export function ViralShareCard({ reference, pageUrl }: ViralShareCardProps) {
-  const links = buildShareLinks(reference, pageUrl);
+export function ViralShareCard({ reference }: ViralShareCardProps) {
+  const landingUrl = getCampaignLandingUrl();
+  const links = buildShareLinks(landingUrl);
 
   async function handleShare(channel: keyof typeof links | "copy_link") {
     await trackTransactionShare(reference, channel);
 
     if (channel === "copy_link") {
-      await navigator.clipboard.writeText(`${pageUrl}\n${links.whatsapp.replace("https://wa.me/?text=", "")}`);
+      await navigator.clipboard.writeText(`${buildCampaignShareMessage()}\n${landingUrl}`);
       return;
     }
 

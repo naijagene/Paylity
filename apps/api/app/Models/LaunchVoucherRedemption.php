@@ -7,11 +7,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LaunchVoucherRedemption extends Model
 {
-    public const STATUS_PENDING = 'pending';
+    public const STATUS_RESERVED = 'reserved';
 
-    public const STATUS_COMPLETED = 'completed';
+    public const STATUS_REDEEMED = 'redeemed';
+
+    public const STATUS_RELEASED = 'released';
+
+    public const STATUS_EXPIRED = 'expired';
 
     public const STATUS_CANCELLED = 'cancelled';
+
+    /** @deprecated Use STATUS_RESERVED */
+    public const STATUS_PENDING = self::STATUS_RESERVED;
+
+    /** @deprecated Use STATUS_REDEEMED */
+    public const STATUS_COMPLETED = self::STATUS_REDEEMED;
 
     protected $fillable = [
         'launch_voucher_id',
@@ -21,14 +31,18 @@ class LaunchVoucherRedemption extends Model
         'device_id',
         'status',
         'discount_amount',
+        'reserved_at',
         'redeemed_at',
+        'released_at',
     ];
 
     protected function casts(): array
     {
         return [
             'discount_amount' => 'integer',
+            'reserved_at' => 'datetime',
             'redeemed_at' => 'datetime',
+            'released_at' => 'datetime',
         ];
     }
 

@@ -34,6 +34,8 @@ export type CheckoutState = {
   otpReference: string | null;
   maskedPhone: string | null;
   otpResendAvailableAt: string | null;
+  voucherCode?: string;
+  voucherApplied?: boolean;
   voucherDiscountAmount?: number;
 };
 
