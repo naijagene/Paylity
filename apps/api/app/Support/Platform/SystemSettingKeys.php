@@ -56,8 +56,11 @@ final class SystemSettingKeys
     public const SCHEDULER_LAST_RUN_AT = 'scheduler_last_run_at';
     public const PREFLIGHT_LAST_RUN_AT = 'preflight_last_run_at';
     public const PREFLIGHT_LAST_STATUS = 'preflight_last_status';
+    public const PREFLIGHT_LAST_CHECKS = 'preflight_last_checks';
     public const BACKUP_LAST_RUN_AT = 'backup_last_run_at';
     public const BACKUP_LAST_CHECKSUM = 'backup_last_checksum';
     public const BACKUP_LAST_PATH = 'backup_last_path';
     public const BACKUP_LAST_VERIFIED_AT = 'backup_last_verified_at';
+    public const PRICING_AUDIT_LAST_RUN_AT = 'pricing_audit_last_run_at';
+    public const LAUNCH_CHECKLIST = 'launch_checklist';
 }

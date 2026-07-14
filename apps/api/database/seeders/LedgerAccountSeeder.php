@@ -23,6 +23,7 @@ class LedgerAccountSeeder extends Seeder
             [LedgerAccountCode::PAYSTACK_GATEWAY_FEE_EXPENSE, 'Paystack Gateway Fee Expense', 'expense', 'Actual Paystack processing fees.'],
             [LedgerAccountCode::VTPASS_PRODUCT_COST, 'VTPass Product Cost', 'expense', 'Provider product fulfillment cost.'],
             [LedgerAccountCode::RECONCILIATION_ADJUSTMENT_EXPENSE, 'Reconciliation Adjustment Expense', 'expense', 'Financial reconciliation adjustments.'],
+            [LedgerAccountCode::MARKETING_PROMOTION_EXPENSE, 'Marketing Promotion Expense', 'expense', 'Launch voucher subsidies and promotional discounts.'],
             [LedgerAccountCode::SUSPENSE, 'Suspense', 'control', 'Unallocated financial differences pending review.'],
             [LedgerAccountCode::SETTLEMENT_DIFFERENCE, 'Settlement Difference', 'control', 'Paystack settlement variance tracking.'],
         ];

@@ -25,5 +25,6 @@ class DatabaseSeeder extends Seeder
         $this->call(ProductCatalogSeeder::class);
         $this->call(PlatformSettingsSeeder::class);
         $this->call(LedgerAccountSeeder::class);
+        $this->call(LaunchVoucherSeeder::class);
     }
 }

@@ -685,16 +685,68 @@ export async function opsFinanceClose(dryRun = true) {
   });
 }
 
+export type OpsGoLiveCheck = {
+  name: string;
+  status: string;
+  message: string;
+  severity: string;
+};
+
+export type OpsGoLiveBlocker = {
+  code: string;
+  message: string;
+  severity: string;
+};
+
+export type OpsGoLiveChecklistItem = {
+  key: string;
+  label: string;
+  completed: boolean;
+  completed_at?: string | null;
+};
+
+export type OpsGoLiveScheduler = {
+  status: string;
+  last_run?: string | null;
+  last_run_at?: string | null;
+  seconds_since_last_run?: number | null;
+  age_seconds?: number | null;
+  next_expected_run?: string | null;
+};
+
 export type OpsGoLiveSnapshot = {
   refreshed_at: string;
   launch_status: {
     status: string;
     environment: string;
+    environment_badge: { label: string; variant: "success" | "processing" | "failed" | "info" };
     version: string;
     build: string;
     last_preflight_at?: string | null;
-    scheduler: { status: string; last_run_at?: string | null; age_seconds?: number | null };
+    scheduler: OpsGoLiveScheduler;
     backup: { last_run_at?: string | null; last_verified_at?: string | null };
+  };
+  preflight: {
+    status: string;
+    summary: { pass: number; warn: number; fail: number };
+    checks: OpsGoLiveCheck[];
+  };
+  blockers: OpsGoLiveBlocker[];
+  checklist: {
+    items: OpsGoLiveChecklistItem[];
+    completed_count: number;
+    total_count: number;
+    progress_pct: number;
+    ready_for_production: boolean;
+  };
+  timeline: {
+    last_backup?: string | null;
+    last_verify_backup?: string | null;
+    last_pricing_audit?: string | null;
+    last_preflight?: string | null;
+    last_financial_close?: string | null;
+    last_settlement?: string | null;
+    last_scheduler_heartbeat?: string | null;
   };
   launch_mode: {
     mode: string;
@@ -728,6 +780,11 @@ export async function fetchOpsGoLive() {
   return data;
 }
 
+export async function fetchOpsGoLiveHeartbeat() {
+  const { data } = await opsRequest<OpsGoLiveScheduler>("/ops/go-live/heartbeat");
+  return data;
+}
+
 export async function opsGoLivePreflight(strict = false) {
   return opsRequest(`/ops/go-live/preflight?strict=${strict ? "1" : "0"}`, { method: "POST" });
 }
@@ -742,4 +799,87 @@ export async function opsGoLiveVerifyBackup() {
 
 export async function opsGoLivePricingAudit(product = "airtime") {
   return opsRequest(`/ops/go-live/pricing-audit?product=${product}`);
+}
+
+export async function opsGoLiveUpdateChecklist(items: Record<string, boolean>) {
+  return opsRequest<OpsGoLiveSnapshot["checklist"]>("/ops/go-live/checklist", {
+    method: "PATCH",
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function opsGoLiveSetMode(
+  mode: "staging" | "soft_launch" | "live" | "maintenance",
+  confirmProduction = false,
+) {
+  return opsRequest("/ops/go-live/mode", {
+    method: "POST",
+    body: JSON.stringify({
+      mode,
+      confirm_production: confirmProduction,
+    }),
+  });
+}
+
+export async function opsGoLiveExportJson() {
+  const { data } = await opsRequest<Record<string, unknown>>("/ops/go-live/export/json");
+  return data;
+}
+
+export function getOpsGoLiveExportPdfUrl(): string {
+  return `${getOpsApiBaseUrl()}/ops/go-live/export/pdf`;
+}
+
+export type OpsMarketingSnapshot = {
+  refreshed_at: string;
+  kpis: {
+    generated: number;
+    redeemed: number;
+    remaining: number;
+    expired: number;
+    active: number;
+    review_rate_pct: number;
+    share_rate_pct: number;
+  };
+  reviews: { count: number; average_rating: number | null; distribution: Record<number, number> };
+  vouchers: Array<{
+    id: number;
+    name: string;
+    code: string;
+    amount: number;
+    max_redemptions: number;
+    redeemed_count: number;
+    remaining_redemptions: number;
+    active: boolean;
+  }>;
+};
+
+export async function fetchOpsMarketing() {
+  const { data } = await opsRequest<OpsMarketingSnapshot>("/ops/marketing/vouchers");
+  return data;
+}
+
+export async function opsMarketingCreateVoucher(payload: Record<string, unknown>) {
+  return opsRequest("/ops/marketing/vouchers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function opsMarketingSetVoucherActive(id: number, active: boolean) {
+  return opsRequest(`/ops/marketing/vouchers/${id}/active`, {
+    method: "POST",
+    body: JSON.stringify({ active }),
+  });
+}
+
+export async function opsMarketingExportUsage() {
+  const { data } = await opsRequest<Array<Record<string, unknown>>>("/ops/marketing/vouchers/export");
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "paylity-voucher-usage.json";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

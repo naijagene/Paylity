@@ -48,6 +48,23 @@ export function calculatePayableAmount(
   return productAmount + CONVENIENCE_FEE + gatewayFee;
 }
 
+export function calculatePricingWithVoucher(productAmount: number, voucherDiscountAmount = 0) {
+  const discount = Math.max(0, Math.min(voucherDiscountAmount, productAmount));
+  const netProductAmount = Math.max(0, productAmount - discount);
+  const preGatewayCharge = netProductAmount + CONVENIENCE_FEE;
+  const gatewayFee = calculateGatewayFee(netProductAmount, CONVENIENCE_FEE);
+
+  return {
+    productAmount,
+    voucherDiscountAmount: discount,
+    netProductAmount,
+    preGatewayCharge,
+    convenienceFee: CONVENIENCE_FEE,
+    gatewayFee,
+    payableAmount: preGatewayCharge + gatewayFee,
+  };
+}
+
 export function requiresOtpVerification(productAmount: number): boolean {
   return productAmount > GUEST_OTP_THRESHOLD && productAmount <= GUEST_HARD_LIMIT;
 }

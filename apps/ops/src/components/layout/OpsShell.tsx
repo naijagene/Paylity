@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/reconciliation", label: "Reconciliation" },
   { href: "/finance", label: "Finance" },
   { href: "/go-live", label: "Go Live" },
+  { href: "/marketing", label: "Marketing" },
   { href: "/platform", label: "Platform" },
   { href: "/monitoring", label: "Monitoring" },
   { href: "/reports", label: "Reports" },

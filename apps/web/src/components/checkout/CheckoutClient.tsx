@@ -27,7 +27,10 @@ import {
   resolveCheckoutPaymentAction,
 } from "@/lib/checkout/paystackRedirect";
 import { resolveProduct } from "@/lib/checkout/checkoutSchemas";
-import { validateCheckoutForm } from "@/lib/checkout/checkoutValidation";
+import { validateVoucher } from "@/lib/api/vouchers";
+import { getDeviceId } from "@/lib/checkout/deviceId";
+import { calculatePricingWithVoucher } from "@/lib/checkout/pricing";
+import { VoucherCodeInput } from "@/components/checkout/VoucherCodeInput";
 import { formatNaira } from "@/lib/checkout/formatNaira";
 import { useCheckoutState } from "@/hooks/useCheckoutState";
 import { usePlatformStatus } from "@/hooks/usePlatformStatus";
@@ -98,6 +101,11 @@ function CheckoutEngine({ product }: { product: ProductType }) {
 
   const [isVerifyingMeter, setIsVerifyingMeter] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [voucherCode, setVoucherCode] = useState("");
+  const [voucherDiscountAmount, setVoucherDiscountAmount] = useState(0);
+  const [voucherApplied, setVoucherApplied] = useState(false);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
+  const [voucherLoading, setVoucherLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [paymentRedirectError, setPaymentRedirectError] = useState<string | null>(null);
   const [redirectReference, setRedirectReference] = useState<string | null>(null);
@@ -158,19 +166,60 @@ function CheckoutEngine({ product }: { product: ProductType }) {
     return dataPlans.find((plan) => plan.variationCode === state.fields.dataPlan)?.name;
   }, [dataPlans, state.fields.dataPlan]);
 
+  const estimatedPricing = useMemo(
+    () => calculatePricingWithVoucher(productAmount, voucherApplied ? voucherDiscountAmount : 0),
+    [productAmount, voucherApplied, voucherDiscountAmount],
+  );
+
   const summaryPricing = state.transactionInitialized
     ? {
         productAmount: state.productAmount,
+        voucherDiscountAmount: state.voucherDiscountAmount ?? voucherDiscountAmount,
         convenienceFee: state.convenienceFee,
         gatewayFee: state.gatewayFee,
         payableAmount: state.payableAmount,
       }
     : {
         productAmount,
-        convenienceFee,
-        gatewayFee,
-        payableAmount,
+        voucherDiscountAmount: voucherApplied ? voucherDiscountAmount : 0,
+        convenienceFee: estimatedPricing.convenienceFee,
+        gatewayFee: estimatedPricing.gatewayFee,
+        payableAmount: estimatedPricing.payableAmount,
       };
+
+  const handleApplyVoucher = useCallback(async () => {
+    if (product !== "airtime" || productAmount <= 0 || !voucherCode.trim()) {
+      return;
+    }
+
+    setVoucherLoading(true);
+    setVoucherError(null);
+
+    try {
+      const result = await validateVoucher({
+        code: voucherCode.trim(),
+        product_type: product,
+        product_amount: productAmount,
+        network: state.fields.network,
+        customer_phone: state.fields.customerPhone,
+        customer_email: state.fields.customerEmail,
+      });
+      setVoucherDiscountAmount(result.discount_amount);
+      setVoucherApplied(true);
+    } catch (error) {
+      setVoucherApplied(false);
+      setVoucherDiscountAmount(0);
+      setVoucherError(error instanceof ApiError ? error.message : "Unable to apply voucher.");
+    } finally {
+      setVoucherLoading(false);
+    }
+  }, [product, productAmount, state.fields.customerEmail, state.fields.customerPhone, state.fields.network, voucherCode]);
+
+  const handleClearVoucher = useCallback(() => {
+    setVoucherApplied(false);
+    setVoucherDiscountAmount(0);
+    setVoucherError(null);
+  }, []);
 
   const scrollToFirstError = useCallback(() => {
     requestAnimationFrame(() => {
@@ -244,6 +293,8 @@ function CheckoutEngine({ product }: { product: ProductType }) {
         productAmount,
         catalog,
         state.verificationToken ?? verificationTokenOverride,
+        voucherApplied ? voucherCode.trim() : null,
+        getDeviceId(),
       );
       const transaction = await initializeCheckout(payload);
       const paymentAction = resolveCheckoutPaymentAction(transaction);
@@ -587,6 +638,21 @@ function CheckoutEngine({ product }: { product: ProductType }) {
                 onVerifyMeter={handleVerifyMeter}
                 onReduceProductAmount={handleReduceProductAmount}
               />
+              {product === "airtime" ? (
+                <div className="mt-4">
+                  <VoucherCodeInput
+                    value={voucherCode}
+                    applied={voucherApplied}
+                    discountAmount={voucherDiscountAmount}
+                    error={voucherError}
+                    loading={voucherLoading}
+                    disabled={state.transactionInitialized}
+                    onChange={setVoucherCode}
+                    onApply={() => void handleApplyVoucher()}
+                    onClear={handleClearVoucher}
+                  />
+                </div>
+              ) : null}
             </div>
           </>
         ) : state.step === "otp" ? (
@@ -605,6 +671,7 @@ function CheckoutEngine({ product }: { product: ProductType }) {
             product={product}
             fields={state.fields}
             productAmount={summaryPricing.productAmount}
+            voucherDiscountAmount={summaryPricing.voucherDiscountAmount}
             convenienceFee={summaryPricing.convenienceFee}
             gatewayFee={summaryPricing.gatewayFee}
             payableAmount={summaryPricing.payableAmount}

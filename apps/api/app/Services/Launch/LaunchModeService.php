@@ -139,6 +139,34 @@ class LaunchModeService
     /**
      * @return array<string, mixed>
      */
+    public function setMode(string $mode): array
+    {
+        $valid = [
+            self::MODE_STAGING,
+            self::MODE_SOFT_LAUNCH,
+            self::MODE_LIVE,
+            self::MODE_MAINTENANCE,
+        ];
+
+        if (! in_array($mode, $valid, true)) {
+            throw new \InvalidArgumentException("Invalid launch mode: {$mode}");
+        }
+
+        $this->settings->set(SystemSettingKeys::LAUNCH_MODE, $mode);
+
+        if (in_array($mode, [self::MODE_SOFT_LAUNCH, self::MODE_LIVE], true)) {
+            $startedAt = $this->settings->getString(SystemSettingKeys::LAUNCH_STARTED_AT);
+            if ($startedAt === '') {
+                $this->settings->set(SystemSettingKeys::LAUNCH_STARTED_AT, now()->toIso8601String());
+            }
+        }
+
+        return $this->snapshot();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     public function snapshot(): array
     {
         return [

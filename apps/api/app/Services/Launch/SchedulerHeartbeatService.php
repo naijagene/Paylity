@@ -17,6 +17,8 @@ class SchedulerHeartbeatService
 
     public const STATUS_UNKNOWN = 'unknown';
 
+    public const INTERVAL_SECONDS = 60;
+
     private const CACHE_KEY = 'paylity.scheduler.last_run_at';
 
     public function __construct(
@@ -45,17 +47,28 @@ class SchedulerHeartbeatService
     }
 
     /**
-     * @return array{status: string, last_run_at: string|null, age_seconds: int|null}
+     * @return array{
+     *     status: string,
+     *     last_run: string|null,
+     *     last_run_at: string|null,
+     *     seconds_since_last_run: int|null,
+     *     age_seconds: int|null,
+     *     next_expected_run: string|null
+     * }
      */
     public function snapshot(): array
     {
         $lastRun = $this->lastRunAt();
-        $ageSeconds = $lastRun?->diffInSeconds(now());
+        $secondsSince = $lastRun !== null ? (int) $lastRun->diffInSeconds(now()) : null;
+        $nextExpected = $lastRun?->copy()->addSeconds(self::INTERVAL_SECONDS)->toIso8601String();
 
         return [
-            'status' => $this->statusForAge($ageSeconds),
+            'status' => $this->statusForAge($secondsSince),
+            'last_run' => $lastRun?->toIso8601String(),
             'last_run_at' => $lastRun?->toIso8601String(),
-            'age_seconds' => $ageSeconds,
+            'seconds_since_last_run' => $secondsSince,
+            'age_seconds' => $secondsSince,
+            'next_expected_run' => $nextExpected,
         ];
     }
 

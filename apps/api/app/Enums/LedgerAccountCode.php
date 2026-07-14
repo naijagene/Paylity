@@ -28,6 +28,8 @@ final class LedgerAccountCode
 
     public const RECONCILIATION_ADJUSTMENT_EXPENSE = 'reconciliation_adjustment_expense';
 
+    public const MARKETING_PROMOTION_EXPENSE = 'marketing_promotion_expense';
+
     public const SUSPENSE = 'suspense';
 
     public const SETTLEMENT_DIFFERENCE = 'settlement_difference';
@@ -50,6 +52,7 @@ final class LedgerAccountCode
             self::PAYSTACK_GATEWAY_FEE_EXPENSE,
             self::VTPASS_PRODUCT_COST,
             self::RECONCILIATION_ADJUSTMENT_EXPENSE,
+            self::MARKETING_PROMOTION_EXPENSE,
             self::SUSPENSE,
             self::SETTLEMENT_DIFFERENCE,
         ];

@@ -11,6 +11,8 @@ export type InitializeCheckoutRequest = {
   product_amount: number;
   payload: Record<string, unknown>;
   verification_token?: string;
+  voucher_code?: string;
+  device_id?: string;
 };
 
 export type InitializeCheckoutResponse = {
@@ -20,6 +22,8 @@ export type InitializeCheckoutResponse = {
   convenience_fee: number;
   gateway_fee: number;
   payable_amount: number;
+  voucher_code?: string | null;
+  voucher_discount_amount?: number;
   currency: string;
   status: string;
   payment_provider?: string | null;
@@ -34,6 +38,8 @@ export function buildInitializeCheckoutPayload(
   productAmount: number,
   catalog?: ProductCatalog | null,
   verificationToken?: string | null,
+  voucherCode?: string | null,
+  deviceId?: string | null,
 ): InitializeCheckoutRequest {
   const recipientPhone = fields.useMyNumber
     ? fields.customerPhone
@@ -79,6 +85,14 @@ export function buildInitializeCheckoutPayload(
 
   if (verificationToken) {
     base.verification_token = verificationToken;
+  }
+
+  if (voucherCode) {
+    base.voucher_code = voucherCode;
+  }
+
+  if (deviceId) {
+    base.device_id = deviceId;
   }
 
   return base;

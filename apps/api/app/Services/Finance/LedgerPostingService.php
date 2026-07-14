@@ -87,6 +87,8 @@ class LedgerPostingService
         $productAmount = Money::nairaToKobo((int) $transaction->product_amount);
         $convenienceFee = Money::nairaToKobo((int) $transaction->convenience_fee);
         $gatewayFeeCharged = Money::nairaToKobo((int) $transaction->gateway_fee);
+        $voucherDiscount = Money::nairaToKobo((int) ($transaction->voucher_discount_amount ?? 0));
+        $collectedProductAmount = max(0, $productAmount - $voucherDiscount);
         $providerCost = Money::nairaToKobo($cost['provider_cost_naira']);
         $productMargin = max(0, $productAmount - $providerCost);
         $gatewayExpense = $gateway['actual_kobo'] ?? $gateway['expected_kobo'];
@@ -99,12 +101,19 @@ class LedgerPostingService
             $gatewayExpense,
         );
 
-        $lines = [
-            ['account' => LedgerAccountCode::CUSTOMER_FUNDS_PENDING, 'type' => 'debit', 'amount_kobo' => $productAmount],
-            ['account' => LedgerAccountCode::CUSTOMER_FUNDS_PENDING, 'type' => 'debit', 'amount_kobo' => $convenienceFee],
-            ['account' => LedgerAccountCode::VTPASS_PRODUCT_COST, 'type' => 'credit', 'amount_kobo' => $providerCost],
-            ['account' => LedgerAccountCode::CONVENIENCE_FEE_REVENUE, 'type' => 'credit', 'amount_kobo' => $convenienceFee],
-        ];
+        $lines = [];
+
+        if ($collectedProductAmount > 0) {
+            $lines[] = ['account' => LedgerAccountCode::CUSTOMER_FUNDS_PENDING, 'type' => 'debit', 'amount_kobo' => $collectedProductAmount];
+        }
+
+        if ($voucherDiscount > 0) {
+            $lines[] = ['account' => LedgerAccountCode::MARKETING_PROMOTION_EXPENSE, 'type' => 'debit', 'amount_kobo' => $voucherDiscount];
+        }
+
+        $lines[] = ['account' => LedgerAccountCode::CUSTOMER_FUNDS_PENDING, 'type' => 'debit', 'amount_kobo' => $convenienceFee];
+        $lines[] = ['account' => LedgerAccountCode::VTPASS_PRODUCT_COST, 'type' => 'credit', 'amount_kobo' => $providerCost];
+        $lines[] = ['account' => LedgerAccountCode::CONVENIENCE_FEE_REVENUE, 'type' => 'credit', 'amount_kobo' => $convenienceFee];
 
         if ($gatewayFeeCharged > 0) {
             $lines[] = ['account' => LedgerAccountCode::CUSTOMER_FUNDS_PENDING, 'type' => 'debit', 'amount_kobo' => $gatewayFeeCharged];
@@ -126,6 +135,7 @@ class LedgerPostingService
                 'provider_cost_status' => $cost['provider_cost_status'],
                 'product_margin_kobo' => $productMargin,
                 'gross_margin_kobo' => $grossMargin,
+                'voucher_discount_kobo' => $voucherDiscount,
             ],
         );
 

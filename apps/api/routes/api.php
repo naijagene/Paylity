@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\ElectricityMeterController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\LaunchVoucherController;
 use App\Http\Controllers\Api\V1\OtpController;
 use App\Http\Controllers\Api\V1\Ops\OpsAuthController;
 use App\Http\Controllers\Api\V1\Ops\OpsDashboardController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\V1\Ops\OpsNoteController;
 use App\Http\Controllers\Api\V1\Ops\OpsReliabilityController;
 use App\Http\Controllers\Api\V1\Ops\OpsFinanceController;
 use App\Http\Controllers\Api\V1\Ops\OpsGoLiveController;
+use App\Http\Controllers\Api\V1\Ops\OpsMarketingController;
 use App\Http\Controllers\Api\V1\Ops\OpsReconciliationController;
 use App\Http\Controllers\Api\V1\Ops\OpsReportsController;
 use App\Http\Controllers\Api\V1\Ops\OpsSummaryController;
@@ -25,6 +27,7 @@ use App\Http\Controllers\Api\V1\PlatformStatusController;
 use App\Http\Controllers\Api\V1\ReceiptController;
 use App\Http\Controllers\Api\V1\ReceiptVerificationController;
 use App\Http\Controllers\Api\V1\TransactionController;
+use App\Http\Controllers\Api\V1\TransactionReviewController;
 use App\Http\Controllers\Api\V1\TransactionHistoryController;
 
 Route::middleware('throttle:health')->group(function () {
@@ -39,6 +42,7 @@ Route::middleware('throttle:catalog')->group(function () {
 
 Route::middleware('throttle:checkout')->group(function () {
     Route::post('/checkout/initialize', [CheckoutController::class, 'initialize']);
+    Route::post('/vouchers/validate', [LaunchVoucherController::class, 'validateVoucher']);
 });
 
 Route::middleware('throttle:otp-request')->group(function () {
@@ -55,6 +59,8 @@ Route::middleware('throttle:transaction-lookup')->group(function () {
     Route::get('/transactions/{reference}', [TransactionController::class, 'show']);
     Route::get('/transactions/{reference}/receipt', [ReceiptController::class, 'show']);
     Route::get('/transactions/{reference}/receipt/download', [ReceiptController::class, 'download']);
+    Route::post('/transactions/{reference}/review', [TransactionReviewController::class, 'store']);
+    Route::post('/transactions/{reference}/share', [TransactionReviewController::class, 'trackShare']);
 });
 
 Route::middleware('throttle:receipt-verify')->group(function () {
@@ -96,10 +102,21 @@ Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function (
     Route::post('/finance/close', [OpsFinanceController::class, 'close']);
     Route::get('/finance/transactions/{reference}', [OpsFinanceController::class, 'transactionFinance']);
     Route::get('/go-live', [OpsGoLiveController::class, 'snapshot']);
+    Route::get('/go-live/heartbeat', [OpsGoLiveController::class, 'heartbeat']);
+    Route::get('/go-live/checklist', [OpsGoLiveController::class, 'checklist']);
+    Route::patch('/go-live/checklist', [OpsGoLiveController::class, 'updateChecklist']);
     Route::post('/go-live/preflight', [OpsGoLiveController::class, 'preflight']);
+    Route::post('/go-live/mode', [OpsGoLiveController::class, 'setMode']);
     Route::post('/go-live/backup', [OpsGoLiveController::class, 'backup']);
     Route::post('/go-live/backup/verify', [OpsGoLiveController::class, 'verifyBackup']);
     Route::get('/go-live/pricing-audit', [OpsGoLiveController::class, 'pricingAudit']);
+    Route::get('/go-live/export/json', [OpsGoLiveController::class, 'exportJson']);
+    Route::get('/go-live/export/pdf', [OpsGoLiveController::class, 'exportPdf']);
+    Route::get('/marketing/vouchers', [OpsMarketingController::class, 'snapshot']);
+    Route::post('/marketing/vouchers', [OpsMarketingController::class, 'store']);
+    Route::patch('/marketing/vouchers/{voucher}', [OpsMarketingController::class, 'update']);
+    Route::post('/marketing/vouchers/{voucher}/active', [OpsMarketingController::class, 'setActive']);
+    Route::get('/marketing/vouchers/export', [OpsMarketingController::class, 'exportUsage']);
     Route::post('/reconciliation/{reference}/reconcile-payment', [OpsReconciliationController::class, 'reconcilePayment']);
     Route::post('/reconciliation/{reference}/reconcile-fulfillment', [OpsReconciliationController::class, 'reconcileFulfillment']);
     Route::post('/reconciliation/{reference}/retry', [OpsReconciliationController::class, 'retry']);

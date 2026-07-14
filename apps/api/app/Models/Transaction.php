@@ -40,6 +40,9 @@ class Transaction extends Model
         'verified_phone',
         'receipt_verification_token',
         'fulfilled_at',
+        'launch_voucher_id',
+        'voucher_code',
+        'voucher_discount_amount',
     ];
 
     protected function casts(): array
@@ -49,6 +52,7 @@ class Transaction extends Model
             'convenience_fee' => 'integer',
             'gateway_fee' => 'integer',
             'payable_amount' => 'integer',
+            'voucher_discount_amount' => 'integer',
             'request_payload' => 'array',
             'response_payload' => 'array',
             'verified_phone' => 'boolean',

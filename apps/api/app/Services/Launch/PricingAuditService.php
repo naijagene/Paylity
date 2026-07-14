@@ -4,6 +4,8 @@ namespace App\Services\Launch;
 
 use App\Services\FeeService;
 use App\Services\Finance\PaystackGatewayFeeCalculator;
+use App\Services\Platform\SystemSettingsService;
+use App\Support\Platform\SystemSettingKeys;
 
 class PricingAuditService
 {
@@ -12,6 +14,7 @@ class PricingAuditService
     public function __construct(
         private readonly PaystackGatewayFeeCalculator $calculator,
         private readonly FeeService $feeService,
+        private readonly SystemSettingsService $settings,
     ) {
     }
 
@@ -32,11 +35,15 @@ class PricingAuditService
             ]);
         }
 
-        return [
+        $result = [
             'product' => $product,
             'amounts' => $rows,
             'negative_margin_count' => collect($rows)->where('negative_margin', true)->count(),
             'all_positive' => collect($rows)->every(fn (array $row) => ! $row['negative_margin']),
         ];
+
+        $this->settings->set(SystemSettingKeys::PRICING_AUDIT_LAST_RUN_AT, now()->toIso8601String());
+
+        return $result;
     }
 }

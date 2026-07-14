@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\FraudCheckException;
+use App\Exceptions\LaunchVoucherException;
 use App\Exceptions\OtpException;
 use App\Exceptions\PaystackConfigurationException;
 use App\Exceptions\PaystackException;
@@ -63,6 +64,12 @@ class CheckoutController extends Controller
                 status: 422,
             );
         } catch (OtpException $exception) {
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+                errors: ['code' => $exception->errorCode],
+                status: $exception->status,
+            );
+        } catch (LaunchVoucherException $exception) {
             return ApiResponse::error(
                 message: $exception->getMessage(),
                 errors: ['code' => $exception->errorCode],

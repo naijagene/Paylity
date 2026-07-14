@@ -34,6 +34,7 @@ export type CheckoutState = {
   otpReference: string | null;
   maskedPhone: string | null;
   otpResendAvailableAt: string | null;
+  voucherDiscountAmount?: number;
 };
 
 export type FieldErrors = Partial<

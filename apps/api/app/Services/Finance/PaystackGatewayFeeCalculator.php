@@ -48,6 +48,73 @@ class PaystackGatewayFeeCalculator
     }
 
     /**
+     * Audit voucher checkout pricing. Gateway fee is iteratively recovered against
+     * pre_gateway_charge (discounted product + convenience), not discounted product alone.
+     *
+     * @return array{
+     *     product_amount: int,
+     *     voucher_discount: int,
+     *     discounted_product_amount: int,
+     *     pre_gateway_charge: int,
+     *     convenience_fee: int,
+     *     gateway_fee: int,
+     *     payable_amount: int,
+     *     expected_paystack_charge_kobo: int,
+     *     estimated_paystack_fee_kobo: int,
+     *     estimated_gross_margin_kobo: int,
+     *     margin_percentage: float,
+     *     negative_margin: bool,
+     *     gateway_fee_if_product_only: int
+     * }
+     */
+    public function auditVoucherCheckout(
+        int $productAmountNaira,
+        int $voucherDiscountNaira,
+        int $convenienceFeeNaira,
+        ?int $providerCostNaira = null,
+    ): array {
+        $voucherDiscountNaira = max(0, min($voucherDiscountNaira, $productAmountNaira));
+        $discountedProductNaira = max(0, $productAmountNaira - $voucherDiscountNaira);
+        $preGatewayChargeNaira = $discountedProductNaira + $convenienceFeeNaira;
+        $gatewayFeeNaira = $this->feeNairaForCheckout($discountedProductNaira, $convenienceFeeNaira);
+        $payableNaira = $preGatewayChargeNaira + $gatewayFeeNaira;
+        $payableKobo = Money::nairaToKobo($payableNaira);
+        $estimatedPaystackFeeKobo = $this->feeKoboForPayable($payableKobo);
+
+        $providerCostNaira ??= $productAmountNaira;
+        $productKobo = Money::nairaToKobo($productAmountNaira);
+        $providerCostKobo = Money::nairaToKobo($providerCostNaira);
+        $convenienceKobo = Money::nairaToKobo($convenienceFeeNaira);
+        $gatewayRecoveryKobo = Money::nairaToKobo($gatewayFeeNaira);
+
+        $grossMarginKobo = $productKobo
+            - $providerCostKobo
+            + $convenienceKobo
+            + $gatewayRecoveryKobo
+            - $estimatedPaystackFeeKobo;
+
+        $marginPercentage = $payableKobo > 0
+            ? round(($grossMarginKobo / $payableKobo) * 100, 2)
+            : 0.0;
+
+        return [
+            'product_amount' => $productAmountNaira,
+            'voucher_discount' => $voucherDiscountNaira,
+            'discounted_product_amount' => $discountedProductNaira,
+            'pre_gateway_charge' => $preGatewayChargeNaira,
+            'convenience_fee' => $convenienceFeeNaira,
+            'gateway_fee' => $gatewayFeeNaira,
+            'payable_amount' => $payableNaira,
+            'expected_paystack_charge_kobo' => $payableKobo,
+            'estimated_paystack_fee_kobo' => $estimatedPaystackFeeKobo,
+            'estimated_gross_margin_kobo' => $grossMarginKobo,
+            'margin_percentage' => $marginPercentage,
+            'negative_margin' => $grossMarginKobo < 0,
+            'gateway_fee_if_product_only' => $this->feeNairaForCheckout($discountedProductNaira, 0),
+        ];
+    }
+
+    /**
      * @return array{
      *     product_amount: int,
      *     convenience_fee: int,

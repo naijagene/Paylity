@@ -9,6 +9,8 @@ use App\Exceptions\VTPassException;
 use App\Models\FulfillmentAttempt;
 use App\Models\Transaction;
 use App\Services\Finance\LedgerPostingService;
+use App\Services\Marketing\LaunchVoucherService;
+use App\Services\Marketing\MarketingEventService;
 use App\Services\Fulfillment\Adapters\AirtimeAdapter;
 use App\Services\Fulfillment\Adapters\DataAdapter;
 use App\Services\Fulfillment\Adapters\ElectricityAdapter;
@@ -29,6 +31,8 @@ class FulfillmentService
         private readonly TransactionNotificationService $transactionNotificationService,
         private readonly VtpassFulfillmentGuard $vtpassFulfillmentGuard,
         private readonly LedgerPostingService $ledgerPostingService,
+        private readonly LaunchVoucherService $launchVoucherService,
+        private readonly MarketingEventService $marketingEventService,
         AirtimeAdapter $airtimeAdapter,
         DataAdapter $dataAdapter,
         ElectricityAdapter $electricityAdapter,
@@ -308,6 +312,12 @@ class FulfillmentService
         $this->transactionNotificationService->sendReceipt($fresh);
 
         $this->ledgerPostingService->postFulfillmentRecognized($fresh, $attempt);
+        $this->launchVoucherService->completeRedemption($fresh);
+        $this->marketingEventService->track(
+            MarketingEventService::TYPE_FULFILLMENT_COMPLETED,
+            $fresh,
+            $fresh->launch_voucher_id,
+        );
 
         return $fresh;
     }

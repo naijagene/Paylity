@@ -8,11 +8,14 @@ use App\Models\ProviderVariation;
 use App\Enums\LedgerAccountCode;
 use App\Models\TransactionFinancial;
 use App\Services\Finance\FinancialLedgerService;
+use App\Services\Fulfillment\VtpassWalletBalanceService;
+use App\Services\Ops\OpsReliabilityService;
+use App\Services\Platform\FeatureFlagService;
+use App\Services\Platform\HealthCheckService;
 use App\Services\Platform\SystemSettingsService;
-use App\Support\CorsOriginResolver;
-use App\Support\Platform\PaylityEnvironmentValidator;
 use App\Support\Platform\SystemSettingKeys;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -24,23 +27,17 @@ class LaunchPreflightService
 
     public const STATUS_BLOCKED = 'BLOCKED';
 
-    /** @var list<string> */
-    private const WEAK_OPERATOR_KEYS = [
-        'dev-ops-key-123',
-        'test-operator-key',
-        'changeme',
-        'operator',
-        'secret',
-    ];
-
     public function __construct(
-        private readonly PaylityEnvironmentValidator $environmentValidator,
         private readonly PaystackModeInspector $paystackModeInspector,
         private readonly VtpassModeInspector $vtpassModeInspector,
         private readonly SchedulerHeartbeatService $schedulerHeartbeatService,
         private readonly PricingAuditService $pricingAuditService,
         private readonly DatabaseFingerprintService $databaseFingerprintService,
         private readonly FinancialLedgerService $financialLedgerService,
+        private readonly HealthCheckService $healthCheckService,
+        private readonly FeatureFlagService $featureFlagService,
+        private readonly OpsReliabilityService $opsReliabilityService,
+        private readonly VtpassWalletBalanceService $walletBalanceService,
         private readonly SystemSettingsService $settings,
     ) {
     }
@@ -54,20 +51,7 @@ class LaunchPreflightService
         bool $checkExternal = false,
         ?string $reference = null,
     ): array {
-        $checks = [];
-
-        foreach ($this->environmentValidator->validate() as $result) {
-            $checks[] = $this->normalizeCheck('application', $result['check'], $result['status'], $result['detail']);
-        }
-
-        $checks = array_merge($checks, $this->databaseChecks());
-        $checks = array_merge($checks, $this->paystackChecks($environment, $strict));
-        $checks = array_merge($checks, $this->vtpassChecks($environment, $strict));
-        $checks = array_merge($checks, $this->operationsChecks($strict));
-        $checks = array_merge($checks, $this->financeChecks($strict));
-        $checks = array_merge($checks, $this->catalogChecks());
-        $checks = array_merge($checks, $this->backupChecks($strict));
-        $checks = array_merge($checks, $this->pricingChecks($strict));
+        $checks = $this->standardChecks($environment, $strict);
 
         if ($reference) {
             $checks[] = $this->referenceCheck($reference);
@@ -78,6 +62,7 @@ class LaunchPreflightService
 
         $this->settings->set(SystemSettingKeys::PREFLIGHT_LAST_RUN_AT, now()->toIso8601String());
         $this->settings->set(SystemSettingKeys::PREFLIGHT_LAST_STATUS, $status);
+        $this->settings->set(SystemSettingKeys::PREFLIGHT_LAST_CHECKS, json_encode($checks) ?: '[]');
 
         return [
             'status' => $status,
@@ -99,235 +84,275 @@ class LaunchPreflightService
     /**
      * @return list<array<string, string>>
      */
-    private function databaseChecks(): array
+    private function standardChecks(string $environment, bool $strict): array
     {
+        $health = $this->healthCheckService->report();
+        $healthChecks = is_array($health['checks'] ?? null) ? $health['checks'] : [];
         $fingerprint = $this->databaseFingerprintService->fingerprint();
-        $checks = [
-            $this->normalizeCheck(
-                'database',
-                'connectivity',
-                $fingerprint['writable'] ? 'PASS' : 'FAIL',
-                $fingerprint['writable'] ? 'Database connection is writable.' : 'Database is not writable or unreachable.',
-            ),
-            $this->normalizeCheck(
-                'database',
-                'migration_status',
-                ($fingerprint['migration_status']['pending'] ?? 1) === 0 ? 'PASS' : 'FAIL',
-                sprintf(
-                    'Migrations ran: %d, pending: %d',
-                    $fingerprint['migration_status']['ran'] ?? 0,
-                    $fingerprint['migration_status']['pending'] ?? 0,
-                ),
-            ),
-        ];
-
-        foreach (['transactions', 'ledger_accounts', 'ledger_transactions', 'system_settings', 'feature_flags'] as $table) {
-            $checks[] = $this->normalizeCheck(
-                'database',
-                "table_{$table}",
-                Schema::hasTable($table) ? 'PASS' : 'FAIL',
-                Schema::hasTable($table) ? "Table {$table} exists." : "Required table {$table} is missing.",
-            );
-        }
-
-        if ($fingerprint['driver'] === 'sqlite' && ($fingerprint['transaction_count'] ?? 0) === 0) {
-            $checks[] = $this->normalizeCheck(
-                'database',
-                'sqlite_non_empty',
-                'WARN',
-                'SQLite database has zero transactions. Confirm this is intentional before launch.',
-            );
-        }
-
-        return $checks;
-    }
-
-    /**
-     * @return list<array<string, string>>
-     */
-    private function paystackChecks(string $environment, bool $strict): array
-    {
-        $mode = $this->paystackModeInspector->inspect();
-        $callback = (string) ($mode['callback_url'] ?? '');
-        $checks = [
-            $this->normalizeCheck(
-                'paystack',
-                'enabled',
-                ($mode['enabled'] ?? false) ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
-                ($mode['enabled'] ?? false) ? 'Paystack is enabled.' : 'Paystack is disabled.',
-            ),
-            $this->normalizeCheck(
-                'paystack',
-                'configuration_complete',
-                ($mode['configuration_complete'] ?? false) ? 'PASS' : 'FAIL',
-                ($mode['configuration_complete'] ?? false) ? 'Paystack configuration is complete.' : 'Paystack keys or callback URL are missing.',
-            ),
-            $this->normalizeCheck(
-                'paystack',
-                'mode',
-                $environment === 'production' && ($mode['mode'] ?? 'unknown') === 'test'
-                    ? ($strict ? 'FAIL' : 'WARN')
-                    : 'PASS',
-                'Detected Paystack mode: '.($mode['mode'] ?? 'unknown'),
-            ),
-            $this->normalizeCheck(
-                'paystack',
-                'callback_url',
-                $callback !== '' ? 'PASS' : 'FAIL',
-                $callback !== '' ? "Callback URL configured: {$callback}" : 'PAYSTACK_CALLBACK_URL is missing.',
-            ),
-            $this->normalizeCheck(
-                'paystack',
-                'webhook_route',
-                ($mode['webhook_route_exists'] ?? false) ? 'PASS' : 'FAIL',
-                '/api/v1/payments/paystack/webhook route must exist.',
-            ),
-        ];
-
-        if ($environment === 'production' && Str::contains($callback, ['localhost', 'staging.', '127.0.0.1'])) {
-            $checks[] = $this->normalizeCheck(
-                'paystack',
-                'production_callback',
-                $strict ? 'FAIL' : 'WARN',
-                'Production callback URL appears to reference staging or localhost.',
-            );
-        }
-
-        return $checks;
-    }
-
-    /**
-     * @return list<array<string, string>>
-     */
-    private function vtpassChecks(string $environment, bool $strict): array
-    {
-        $mode = $this->vtpassModeInspector->inspect();
-        $checks = [
-            $this->normalizeCheck(
-                'vtpass',
-                'enabled',
-                ($mode['enabled'] ?? false) ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
-                ($mode['enabled'] ?? false) ? 'VTPass is enabled.' : 'VTPass is disabled.',
-            ),
-            $this->normalizeCheck(
-                'vtpass',
-                'configuration_complete',
-                ($mode['configuration_complete'] ?? false) ? 'PASS' : 'FAIL',
-                ($mode['configuration_complete'] ?? false) ? 'VTPass credentials are configured.' : 'VTPass credentials are incomplete.',
-            ),
-            $this->normalizeCheck(
-                'vtpass',
-                'mode',
-                $environment === 'production' && ($mode['mode'] ?? 'sandbox') === 'sandbox'
-                    ? ($strict ? 'FAIL' : 'WARN')
-                    : 'PASS',
-                'Detected VTPass mode: '.($mode['mode'] ?? 'unknown').' ('.($mode['host'] ?? '').')',
-            ),
-            $this->normalizeCheck(
-                'vtpass',
-                'sandbox_tests',
-                ($mode['sandbox_tests_disabled'] ?? true) ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
-                ($mode['sandbox_tests_disabled'] ?? true) ? 'VTPASS_SANDBOX_TESTS is disabled.' : 'VTPASS_SANDBOX_TESTS=true should not be used in production.',
-            ),
-        ];
-
-        return $checks;
-    }
-
-    /**
-     * @return list<array<string, string>>
-     */
-    private function operationsChecks(bool $strict): array
-    {
-        $operatorKey = (string) config('services.operator.access_key');
-        $origins = CorsOriginResolver::allowedOrigins();
+        $paystack = $this->paystackModeInspector->inspect();
+        $vtpass = $this->vtpassModeInspector->inspect();
         $scheduler = $this->schedulerHeartbeatService->snapshot();
+        $wallet = $this->walletBalanceService->snapshot();
+        $reliability = $this->opsReliabilityService->snapshot();
+        $reconcile = is_array($reliability['reconciliation'] ?? null) ? $reliability['reconciliation'] : [];
+        $isProduction = $environment === 'production';
 
         $checks = [
-            $this->normalizeCheck(
-                'operations',
-                'operator_key_configured',
-                $operatorKey !== '' ? 'PASS' : 'FAIL',
-                $operatorKey !== '' ? 'Operator access key is configured.' : 'OPERATOR_ACCESS_KEY is missing.',
+            $this->namedCheck(
+                'Database',
+                ($healthChecks['database'] ?? 'failed') === 'ok' && ($fingerprint['writable'] ?? false) ? 'PASS' : 'FAIL',
+                ($healthChecks['database'] ?? 'failed') === 'ok'
+                    ? 'Database connection is healthy and writable.'
+                    : 'Database connectivity or write access failed.',
             ),
-            $this->normalizeCheck(
-                'operations',
-                'operator_key_strength',
-                $this->isWeakOperatorKey($operatorKey) ? ($strict ? 'FAIL' : 'WARN') : 'PASS',
-                $this->isWeakOperatorKey($operatorKey)
-                    ? 'Operator key matches a known development/default value.'
-                    : 'Operator key does not match known weak defaults.',
+            $this->namedCheck(
+                'Cache',
+                ($healthChecks['cache'] ?? 'failed') === 'ok' ? 'PASS' : 'FAIL',
+                ($healthChecks['cache'] ?? 'failed') === 'ok' ? 'Cache read/write probe succeeded.' : 'Cache probe failed.',
             ),
-            $this->normalizeCheck(
-                'operations',
-                'cors_origins',
-                $origins !== [] ? 'PASS' : 'WARN',
-                $origins !== [] ? 'CORS origins configured.' : 'No explicit CORS origins configured.',
+            $this->namedCheck(
+                'Routes',
+                $this->criticalRoutesRegistered() ? 'PASS' : 'FAIL',
+                $this->criticalRoutesRegistered()
+                    ? 'Core API routes are registered.'
+                    : 'One or more core API routes are missing.',
             ),
-            $this->normalizeCheck(
-                'operations',
-                'scheduler_heartbeat',
-                match ($scheduler['status']) {
+            $this->namedCheck(
+                'Queue',
+                $this->queueStatus($healthChecks['queue'] ?? null, $strict),
+                $this->queueMessage($healthChecks['queue'] ?? null),
+            ),
+            $this->namedCheck(
+                'Scheduler',
+                match ($scheduler['status'] ?? SchedulerHeartbeatService::STATUS_UNKNOWN) {
                     SchedulerHeartbeatService::STATUS_HEALTHY => 'PASS',
                     SchedulerHeartbeatService::STATUS_WARNING => 'WARN',
                     default => $strict ? 'FAIL' : 'WARN',
                 },
                 'Scheduler heartbeat status: '.($scheduler['status'] ?? 'unknown'),
             ),
+            $this->namedCheck(
+                'Storage',
+                $this->storageWritable() ? 'PASS' : 'FAIL',
+                $this->storageWritable() ? 'Application storage paths are writable.' : 'Storage paths are not writable.',
+            ),
+            $this->namedCheck(
+                'Permissions',
+                is_writable(storage_path('logs')) && is_writable(storage_path('app')) ? 'PASS' : 'FAIL',
+                'Log and app storage directories must be writable.',
+            ),
+            $this->namedCheck(
+                'HTTPS',
+                str_starts_with((string) config('app.url'), 'https://') ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
+                str_starts_with((string) config('app.url'), 'https://')
+                    ? 'APP_URL uses HTTPS.'
+                    : 'APP_URL is not configured with HTTPS.',
+            ),
+            $this->namedCheck(
+                'APP_DEBUG',
+                ! ((bool) config('app.debug')) || ! $isProduction ? 'PASS' : 'FAIL',
+                (bool) config('app.debug')
+                    ? 'APP_DEBUG=true (must be false in production).'
+                    : 'APP_DEBUG=false.',
+            ),
+            $this->namedCheck(
+                'APP_ENV',
+                in_array((string) config('app.env'), ['production', 'staging'], true) ? 'PASS' : 'WARN',
+                'APP_ENV='.(string) config('app.env'),
+            ),
+            $this->namedCheck(
+                'Paystack Mode',
+                $isProduction && ($paystack['mode'] ?? '') === 'test' ? ($strict ? 'FAIL' : 'WARN') : 'PASS',
+                'Detected Paystack mode: '.($paystack['mode'] ?? 'unknown'),
+            ),
+            $this->namedCheck(
+                'VTPass Mode',
+                $isProduction && ($vtpass['mode'] ?? 'sandbox') === 'sandbox' ? ($strict ? 'FAIL' : 'WARN') : 'PASS',
+                'Detected VTPass mode: '.($vtpass['mode'] ?? 'unknown'),
+            ),
+            $this->namedCheck(
+                'Wallet Balance',
+                match ($wallet['health'] ?? 'unknown') {
+                    'healthy', 'unknown' => 'PASS',
+                    'warning' => 'WARN',
+                    default => $strict ? 'FAIL' : 'WARN',
+                },
+                'Wallet health: '.($wallet['health'] ?? 'unknown').', balance: '.($wallet['balance'] ?? '—'),
+            ),
+            $this->namedCheck(
+                'Callback URL',
+                ($paystack['callback_url'] ?? '') !== '' ? 'PASS' : 'FAIL',
+                ($paystack['callback_url'] ?? '') !== ''
+                    ? 'Callback URL configured.'
+                    : 'PAYSTACK_CALLBACK_URL is missing.',
+            ),
+            $this->namedCheck(
+                'Webhook URL',
+                ($paystack['webhook_route_exists'] ?? false) ? 'PASS' : 'FAIL',
+                ($paystack['webhook_route_exists'] ?? false)
+                    ? 'Paystack webhook route is registered.'
+                    : 'Paystack webhook route is missing.',
+            ),
+            $this->namedCheck(
+                'Ledger',
+                $this->ledgerHealthy() ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
+                $this->ledgerHealthy()
+                    ? 'Ledger accounts are seeded and balanced.'
+                    : 'Ledger accounts missing or imbalanced entries detected.',
+            ),
+            $this->namedCheck(
+                'Settlement',
+                abs((int) $this->financialLedgerService->accountBalance(LedgerAccountCode::SETTLEMENT_DIFFERENCE)['balance_kobo']) === 0
+                    ? 'PASS'
+                    : 'WARN',
+                'Settlement difference balance kobo: '.((int) $this->financialLedgerService->accountBalance(LedgerAccountCode::SETTLEMENT_DIFFERENCE)['balance_kobo']),
+            ),
+            $this->namedCheck(
+                'Finance',
+                $this->financeHealthy($strict),
+                $this->financeMessage(),
+            ),
+            $this->namedCheck(
+                'Reconciliation',
+                (($reconcile['stale_payment_pending'] ?? 0) + ($reconcile['paid_unfulfilled'] ?? 0) + ($reconcile['stale_fulfillment_pending'] ?? 0)) === 0 ? 'PASS' : 'WARN',
+                sprintf(
+                    'Stale payment pending: %d, paid unfulfilled: %d, stale fulfillment: %d.',
+                    (int) ($reconcile['stale_payment_pending'] ?? 0),
+                    (int) ($reconcile['paid_unfulfilled'] ?? 0),
+                    (int) ($reconcile['stale_fulfillment_pending'] ?? 0),
+                ),
+            ),
+            $this->namedCheck(
+                'Catalog',
+                $this->catalogHealthy() ? 'PASS' : 'FAIL',
+                $this->catalogHealthy()
+                    ? 'Catalog has active airtime, data, and electricity products.'
+                    : 'Catalog is missing one or more required active products.',
+            ),
+            $this->namedCheck(
+                'Feature Flags',
+                $this->featureFlagsHealthy() ? 'PASS' : 'WARN',
+                $this->featureFlagsHealthy()
+                    ? 'Core feature flags are configured.'
+                    : 'One or more feature flags need review before launch.',
+            ),
         ];
 
-        if (in_array('*', $origins, true)) {
-            $checks[] = $this->normalizeCheck('operations', 'cors_wildcard', $strict ? 'FAIL' : 'WARN', 'Wildcard CORS origin is not allowed for production.');
+        $audit = $this->pricingAuditService->audit();
+        if (! ($audit['all_positive'] ?? false)) {
+            $checks[] = $this->namedCheck(
+                'Pricing Audit',
+                $strict ? 'FAIL' : 'WARN',
+                'Negative margin launch amounts: '.($audit['negative_margin_count'] ?? 0),
+            );
+        }
+
+        $lastRun = $this->settings->getString(SystemSettingKeys::BACKUP_LAST_RUN_AT);
+        if ($lastRun === '') {
+            $checks[] = $this->namedCheck(
+                'Backup',
+                $strict ? 'FAIL' : 'WARN',
+                'No database backup recorded.',
+            );
         }
 
         return $checks;
     }
 
-    /**
-     * @return list<array<string, string>>
-     */
-    private function financeChecks(bool $strict): array
+    private function criticalRoutesRegistered(): bool
     {
-        $ledgerAccounts = Schema::hasTable('ledger_accounts') ? LedgerAccount::query()->count() : 0;
+        $hasWebhook = collect(Route::getRoutes())->contains(
+            fn ($route) => in_array('POST', $route->methods(), true)
+                && str_contains($route->uri(), 'payments/paystack/webhook'),
+        );
+        $hasGoLive = collect(Route::getRoutes())->contains(
+            fn ($route) => in_array('GET', $route->methods(), true)
+                && str_contains($route->uri(), 'ops/go-live'),
+        );
+
+        return $hasWebhook && $hasGoLive;
+    }
+
+    private function storageWritable(): bool
+    {
+        return is_writable(storage_path()) && is_writable(storage_path('app'));
+    }
+
+    /**
+     * @param  string|array<string, mixed>|null  $queue
+     */
+    private function queueStatus(string|array|null $queue, bool $strict): string
+    {
+        if (is_string($queue)) {
+            return match ($queue) {
+                'ok' => 'PASS',
+                'degraded' => $strict ? 'FAIL' : 'WARN',
+                default => 'FAIL',
+            };
+        }
+
+        if (! is_array($queue)) {
+            return 'WARN';
+        }
+
+        return match ($queue['status'] ?? 'failed') {
+            'ok' => 'PASS',
+            'degraded' => $strict ? 'FAIL' : 'WARN',
+            default => 'FAIL',
+        };
+    }
+
+    /**
+     * @param  string|array<string, mixed>|null  $queue
+     */
+    private function queueMessage(string|array|null $queue): string
+    {
+        if (is_string($queue)) {
+            return "Queue health: {$queue}";
+        }
+
+        if (! is_array($queue)) {
+            return 'Queue status unavailable.';
+        }
+
+        return sprintf(
+            'Queue connection=%s, pending=%d, failed=%d',
+            $queue['connection'] ?? 'unknown',
+            (int) ($queue['pending_jobs'] ?? 0),
+            (int) ($queue['failed_jobs'] ?? 0),
+        );
+    }
+
+    private function ledgerHealthy(): bool
+    {
+        $accounts = Schema::hasTable('ledger_accounts') ? LedgerAccount::query()->count() : 0;
+
+        return $accounts > 0 && count($this->financialLedgerService->imbalanceTransactions()) === 0;
+    }
+
+    private function financeHealthy(bool $strict): string
+    {
         $negativeMargins = Schema::hasTable('transaction_financials')
             ? TransactionFinancial::query()->where('gross_margin_kobo', '<', 0)->count()
             : 0;
 
-        $clearing = $this->financialLedgerService->accountBalance(LedgerAccountCode::PAYSTACK_CLEARING);
-        $difference = $this->financialLedgerService->accountBalance(LedgerAccountCode::SETTLEMENT_DIFFERENCE);
+        if ($negativeMargins > 0) {
+            return $strict ? 'FAIL' : 'WARN';
+        }
 
-        return [
-            $this->normalizeCheck(
-                'finance',
-                'ledger_accounts_seeded',
-                $ledgerAccounts > 0 ? 'PASS' : 'FAIL',
-                $ledgerAccounts > 0 ? "Ledger accounts present ({$ledgerAccounts})." : 'Ledger accounts are not seeded.',
-            ),
-            $this->normalizeCheck(
-                'finance',
-                'negative_margin_count',
-                $negativeMargins === 0 ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
-                "Transactions with negative gross margin: {$negativeMargins}",
-            ),
-            $this->normalizeCheck(
-                'finance',
-                'settlement_difference',
-                abs((int) ($difference['balance_kobo'] ?? 0)) === 0 ? 'PASS' : 'WARN',
-                'Settlement difference balance kobo: '.((int) ($difference['balance_kobo'] ?? 0)),
-            ),
-            $this->normalizeCheck(
-                'finance',
-                'paystack_clearing',
-                'PASS',
-                'Paystack clearing balance kobo: '.((int) ($clearing['balance_kobo'] ?? 0)),
-            ),
-        ];
+        return 'PASS';
     }
 
-    /**
-     * @return list<array<string, string>>
-     */
-    private function catalogChecks(): array
+    private function financeMessage(): string
+    {
+        $negativeMargins = Schema::hasTable('transaction_financials')
+            ? TransactionFinancial::query()->where('gross_margin_kobo', '<', 0)->count()
+            : 0;
+
+        return "Transactions with negative gross margin: {$negativeMargins}";
+    }
+
+    private function catalogHealthy(): bool
     {
         $airtimeNetworks = Schema::hasTable('provider_services')
             ? ProviderService::query()->where('category_key', 'airtime')->where('is_active', true)->count()
@@ -339,53 +364,14 @@ class LaunchPreflightService
             ? ProviderService::query()->where('category_key', 'electricity')->where('is_active', true)->count()
             : 0;
 
-        return [
-            $this->normalizeCheck('catalog', 'airtime_networks', $airtimeNetworks > 0 ? 'PASS' : 'FAIL', "Active airtime networks: {$airtimeNetworks}"),
-            $this->normalizeCheck('catalog', 'data_products', $dataProducts > 0 ? 'PASS' : 'FAIL', "Active data products: {$dataProducts}"),
-            $this->normalizeCheck('catalog', 'electricity_providers', $electricityProviders > 0 ? 'PASS' : 'FAIL', "Active electricity providers: {$electricityProviders}"),
-        ];
+        return $airtimeNetworks > 0 && $dataProducts > 0 && $electricityProviders > 0;
     }
 
-    /**
-     * @return list<array<string, string>>
-     */
-    private function backupChecks(bool $strict): array
+    private function featureFlagsHealthy(): bool
     {
-        $lastRun = $this->settings->getString(SystemSettingKeys::BACKUP_LAST_RUN_AT);
-        $verifiedAt = $this->settings->getString(SystemSettingKeys::BACKUP_LAST_VERIFIED_AT);
-        $ageHours = $lastRun !== '' ? now()->diffInHours(\Carbon\Carbon::parse($lastRun)) : null;
+        $flags = $this->featureFlagService->all();
 
-        return [
-            $this->normalizeCheck(
-                'backup',
-                'latest_backup',
-                $lastRun !== '' && ($ageHours !== null && $ageHours <= 24) ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
-                $lastRun !== '' ? "Latest backup at {$lastRun}" : 'No database backup recorded.',
-            ),
-            $this->normalizeCheck(
-                'backup',
-                'verified_backup',
-                $verifiedAt !== '' ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
-                $verifiedAt !== '' ? "Latest verified backup at {$verifiedAt}" : 'No verified backup on record.',
-            ),
-        ];
-    }
-
-    /**
-     * @return list<array<string, string>>
-     */
-    private function pricingChecks(bool $strict): array
-    {
-        $audit = $this->pricingAuditService->audit();
-
-        return [
-            $this->normalizeCheck(
-                'pricing',
-                'launch_amounts_positive_margin',
-                ($audit['all_positive'] ?? false) ? 'PASS' : ($strict ? 'FAIL' : 'WARN'),
-                'Negative margin launch amounts: '.($audit['negative_margin_count'] ?? 0),
-            ),
-        ];
+        return $flags !== [];
     }
 
     /**
@@ -396,9 +382,8 @@ class LaunchPreflightService
         $exists = Schema::hasTable('transactions')
             && DB::table('transactions')->where('reference', $reference)->exists();
 
-        return $this->normalizeCheck(
-            'smoke',
-            'reference_exists',
+        return $this->namedCheck(
+            'Smoke Reference',
             $exists ? 'PASS' : 'WARN',
             $exists ? "Reference {$reference} exists in database." : "Reference {$reference} was not found.",
         );
@@ -437,24 +422,48 @@ class LaunchPreflightService
     }
 
     /**
-     * @return array{category: string, check: string, status: string, detail: string}
+     * @return array{name: string, status: string, message: string, severity: string, category: string, check: string, detail: string}
      */
-    private function normalizeCheck(string $category, string $check, string $status, string $detail): array
+    private function namedCheck(string $name, string $status, string $message): array
     {
+        return $this->normalizeCheck(
+            category: Str::slug($name, '_'),
+            check: Str::slug($name, '_'),
+            status: $status,
+            detail: $message,
+            name: $name,
+        );
+    }
+
+    /**
+     * @return array{name: string, status: string, message: string, severity: string, category: string, check: string, detail: string}
+     */
+    private function normalizeCheck(
+        string $category,
+        string $check,
+        string $status,
+        string $detail,
+        ?string $name = null,
+    ): array {
+        $displayName = $name ?? Str::title(str_replace('_', ' ', $check));
+
         return [
+            'name' => $displayName,
+            'status' => $status,
+            'message' => $detail,
+            'severity' => $this->severityForStatus($status),
             'category' => $category,
             'check' => $check,
-            'status' => $status,
             'detail' => $detail,
         ];
     }
 
-    private function isWeakOperatorKey(string $key): bool
+    private function severityForStatus(string $status): string
     {
-        if ($key === '' || strlen($key) < 16) {
-            return true;
-        }
-
-        return in_array(strtolower($key), self::WEAK_OPERATOR_KEYS, true);
+        return match ($status) {
+            'FAIL' => 'critical',
+            'WARN' => 'warning',
+            default => 'info',
+        };
     }
 }

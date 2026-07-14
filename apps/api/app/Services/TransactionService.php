@@ -12,6 +12,8 @@ use App\Models\Transaction;
 use App\Services\Catalog\ProductCatalogService;
 use App\Services\Fulfillment\FulfillmentPayloadExtractor;
 use App\Services\Launch\LaunchModeService;
+use App\Services\Marketing\LaunchVoucherService;
+use App\Services\Marketing\MarketingEventService;
 use App\Services\Otp\OtpService;
 use App\Services\Payments\PaystackService;
 use App\Services\Platform\PurchasePolicyContext;
@@ -39,6 +41,8 @@ class TransactionService
         private readonly PurchasePolicyService $purchasePolicyService,
         private readonly OtpService $otpService,
         private readonly LaunchModeService $launchModeService,
+        private readonly LaunchVoucherService $launchVoucherService,
+        private readonly MarketingEventService $marketingEventService,
     ) {
     }
 
@@ -57,7 +61,33 @@ class TransactionService
         $productType = $input['product_type'];
         $productAmount = (int) $input['product_amount'];
         $customerPhone = (string) $input['customer_phone'];
-        $feeQuote = $this->feeService->quote($productType, $productAmount);
+        $voucherCode = trim((string) ($input['voucher_code'] ?? ''));
+        $deviceId = trim((string) ($input['device_id'] ?? ''));
+        $voucherDiscountAmount = 0;
+        $launchVoucherId = null;
+
+        if ($voucherCode !== '') {
+            if ($productType !== 'airtime') {
+                throw new FraudCheckException(
+                    'Launch vouchers are currently available for airtime only.',
+                    'VOUCHER_AIRTIME_ONLY',
+                );
+            }
+
+            $validation = $this->launchVoucherService->validateForCheckout([
+                'code' => $voucherCode,
+                'product_type' => $productType,
+                'product_amount' => $productAmount,
+                'network' => (string) data_get($input, 'payload.network', ''),
+                'customer_phone' => $customerPhone,
+                'customer_email' => (string) ($input['customer_email'] ?? ''),
+                'device_id' => $deviceId,
+            ]);
+
+            $voucherDiscountAmount = (int) $validation['discount_amount'];
+        }
+
+        $feeQuote = $this->feeService->quote($productType, $productAmount, $voucherDiscountAmount);
         $convenienceFee = $feeQuote['convenience_fee'];
         $gatewayFee = $feeQuote['gateway_fee'];
         $payableAmount = $feeQuote['payable_amount'];
@@ -107,7 +137,7 @@ class TransactionService
             payload: (array) ($input['payload'] ?? []),
         );
 
-        $transaction = DB::transaction(function () use ($input, $productAmount, $convenienceFee, $gatewayFee, $payableAmount, $ipAddress, $userAgent, $productType, $validatedPayload, $verifiedPhone) {
+        $transaction = DB::transaction(function () use ($input, $productAmount, $convenienceFee, $gatewayFee, $payableAmount, $ipAddress, $userAgent, $productType, $validatedPayload, $verifiedPhone, $voucherCode, $voucherDiscountAmount, $deviceId, &$launchVoucherId) {
             $reference = $this->referenceGenerator->generate();
 
             while (Transaction::query()->where('reference', $reference)->exists()) {
@@ -124,6 +154,8 @@ class TransactionService
                 'convenience_fee' => $convenienceFee,
                 'gateway_fee' => $gatewayFee,
                 'payable_amount' => $payableAmount,
+                'voucher_code' => $voucherCode !== '' ? strtoupper($voucherCode) : null,
+                'voucher_discount_amount' => $voucherDiscountAmount,
                 'currency' => 'NGN',
                 'status' => TransactionStatus::CREATED,
                 'request_payload' => $validatedPayload,
@@ -132,13 +164,27 @@ class TransactionService
                 'verified_phone' => $verifiedPhone,
             ]);
 
+            if ($voucherCode !== '') {
+                $reservation = $this->launchVoucherService->reserveForTransaction(
+                    $transaction,
+                    $voucherCode,
+                    $deviceId !== '' ? $deviceId : null,
+                    $voucherDiscountAmount,
+                );
+                $launchVoucherId = $reservation['voucher']->id;
+                $transaction->update([
+                    'launch_voucher_id' => $launchVoucherId,
+                    'voucher_discount_amount' => $reservation['discount_amount'],
+                ]);
+            }
+
             $this->transactionEventService->record(
-                $transaction,
+                $transaction->fresh(),
                 TransactionEventService::TYPE_CREATED,
                 'Transaction created.',
             );
 
-            return $transaction;
+            return $transaction->fresh();
         });
 
         if ($this->paystackService->isEnabled()) {
@@ -190,6 +236,8 @@ class TransactionService
             'convenience_fee' => $transaction->convenience_fee,
             'gateway_fee' => $transaction->gateway_fee,
             'payable_amount' => $transaction->payable_amount,
+            'voucher_code' => $transaction->voucher_code,
+            'voucher_discount_amount' => (int) ($transaction->voucher_discount_amount ?? 0),
             'currency' => $transaction->currency,
             'status' => $transaction->status,
             'payment_provider' => $transaction->payment_provider,
@@ -220,6 +268,8 @@ class TransactionService
             'convenience_fee' => $transaction->convenience_fee,
             'gateway_fee' => $transaction->gateway_fee,
             'payable_amount' => $transaction->payable_amount,
+            'voucher_code' => $transaction->voucher_code,
+            'voucher_discount_amount' => (int) ($transaction->voucher_discount_amount ?? 0),
             'currency' => $transaction->currency,
             'status' => $transaction->status,
             'payment_provider' => $transaction->payment_provider,

@@ -22,6 +22,7 @@ type CheckoutSummaryCardProps = {
   product: ProductType;
   fields: CheckoutFields;
   productAmount: number;
+  voucherDiscountAmount?: number;
   convenienceFee: number;
   gatewayFee: number;
   payableAmount: number;
@@ -75,6 +76,7 @@ export function CheckoutSummaryCard({
   product,
   fields,
   productAmount,
+  voucherDiscountAmount = 0,
   convenienceFee,
   gatewayFee,
   payableAmount,
@@ -135,6 +137,15 @@ export function CheckoutSummaryCard({
               {formatNaira(productAmount)}
             </dd>
           </div>
+
+          {voucherDiscountAmount > 0 ? (
+            <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-4">
+              <dt className="text-sm text-foreground/60">Voucher Discount</dt>
+              <dd className="text-right text-sm font-semibold text-success">
+                -{formatNaira(voucherDiscountAmount)}
+              </dd>
+            </div>
+          ) : null}
 
           <div className="flex items-start justify-between gap-4 border-b border-dark/5 pb-4">
             <dt className="text-sm text-foreground/60">Convenience Fee</dt>

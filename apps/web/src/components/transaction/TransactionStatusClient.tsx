@@ -37,6 +37,9 @@ import {
 import {
   updateTransactionSessionStatus,
 } from "@/lib/transaction/session";
+import { ReviewPromptCard } from "@/components/transaction/ReviewPromptCard";
+import { ViralShareCard } from "@/components/transaction/ViralShareCard";
+import { submitTransactionReview } from "@/lib/api/reviews";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { BackHomeLink } from "@/components/transaction/BackHomeLink";
 
@@ -60,6 +63,7 @@ export function TransactionStatusClient() {
     isValidReference ? { kind: "loading" } : { kind: "invalid_reference" },
   );
   const [isCheckingDelivery, setIsCheckingDelivery] = useState(false);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [pollExhausted, setPollExhausted] = useState(false);
   const [pollingGeneration, setPollingGeneration] = useState(0);
   const pollAttemptsRef = useRef(0);
@@ -451,6 +455,25 @@ export function TransactionStatusClient() {
             animated
           />
         </section>
+
+        {transaction.status === "fulfilled" ? (
+          <>
+            {!reviewSubmitted ? (
+              <ReviewPromptCard
+                reference={transaction.reference}
+                onSubmit={async (rating, comment) => {
+                  await submitTransactionReview(transaction.reference, rating, comment);
+                  setReviewSubmitted(true);
+                }}
+              />
+            ) : (
+              <ViralShareCard
+                reference={transaction.reference}
+                pageUrl={typeof window !== "undefined" ? window.location.href : ""}
+              />
+            )}
+          </>
+        ) : null}
 
         <div className="space-y-3 print:hidden">
           <Button href="/transactions" variant="outline" className="w-full">

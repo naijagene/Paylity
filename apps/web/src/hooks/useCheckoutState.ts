@@ -294,6 +294,7 @@ export function useCheckoutState(
         convenienceFee: transaction.convenience_fee,
         gatewayFee: transaction.gateway_fee,
         payableAmount: transaction.payable_amount,
+        voucherDiscountAmount: transaction.voucher_discount_amount ?? 0,
       }));
     },
     [product],
