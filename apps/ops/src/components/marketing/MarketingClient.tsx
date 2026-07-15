@@ -3,8 +3,10 @@
 import { useCallback, useState } from "react";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { AlertCard } from "@/components/ui/AlertCard";
 import { KpiCard, SectionCard } from "@/components/ui/OpsCards";
 import {
+  buildOpsMarketingCampaignPayload,
   fetchOpsMarketing,
   getOpsMarketingExportCsvUrl,
   opsMarketingCreateCampaign,
@@ -13,6 +15,7 @@ import {
   opsMarketingSetVoucherActive,
   type OpsMarketingCampaign,
 } from "@/lib/api/ops";
+import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import { usePolling } from "@/lib/hooks/usePolling";
 
 type DistributionMode = "unique_codes" | "shared_code";
@@ -58,25 +61,33 @@ export function MarketingClient() {
     setError(null);
 
     try {
-      const result = await opsMarketingCreateCampaign({
+      const payload = buildOpsMarketingCampaignPayload({
         name: campaignName,
         amount,
-        distribution_mode: distributionMode,
-        quantity: distributionMode === "unique_codes" ? quantity : undefined,
-        max_redemptions: distributionMode === "shared_code" ? maxRedemptions : undefined,
-        network: network || null,
-        expires_at: expiresAt || null,
+        distributionMode,
+        quantity,
+        maxRedemptions,
+        network,
+        expiresAt,
         active,
-        one_per_phone: onePerPhone,
-        one_per_email: onePerEmail,
-        one_per_device: onePerDevice,
-        reservation_timeout_minutes: reservationTimeoutMinutes,
+        onePerPhone,
+        onePerEmail,
+        onePerDevice,
+        reservationTimeoutMinutes,
       });
+
+      const result = await opsMarketingCreateCampaign(payload);
       setGeneratedCodes(result.codes);
       setSharedMessage(result.shared_message ?? null);
       await snapshot.refresh();
     } catch (campaignError) {
-      setError(campaignError instanceof Error ? campaignError.message : "Unable to create campaign.");
+      if (campaignError instanceof ApiOfflineError) {
+        setError("Network unavailable. Check the API server and try again.");
+      } else if (campaignError instanceof ApiError) {
+        setError(campaignError.message);
+      } else {
+        setError("Unable to create campaign.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -237,7 +248,13 @@ export function MarketingClient() {
               will still apply.
             </p>
           ) : null}
-          {error ? <p className="mt-3 text-sm text-error">{error}</p> : null}
+          {error ? (
+            <AlertCard
+              severity="critical"
+              title="Unable to create campaign"
+              message={<p className="whitespace-pre-line">{error}</p>}
+            />
+          ) : null}
           <Button type="button" className="mt-4" onClick={() => void handleCreateCampaign()} disabled={submitting}>
             {submitting ? "Generating..." : distributionMode === "shared_code" ? "Generate Shared Code" : "Generate Codes"}
           </Button>

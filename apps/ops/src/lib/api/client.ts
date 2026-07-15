@@ -11,6 +11,42 @@ export type ApiErrorResponse = {
   errors?: Record<string, unknown>;
 };
 
+export function formatLaravelValidationErrors(errors: Record<string, unknown> | undefined): string {
+  if (!errors) {
+    return "";
+  }
+
+  const messages: string[] = [];
+
+  for (const [field, value] of Object.entries(errors)) {
+    if (field === "code") {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string" && item.trim() !== "") {
+          messages.push(item.trim());
+        }
+      }
+      continue;
+    }
+
+    if (typeof value === "string" && value.trim() !== "") {
+      messages.push(value.trim());
+    }
+  }
+
+  return messages.join("\n");
+}
+
+export function resolveApiErrorMessage(
+  message: string,
+  errors: Record<string, unknown> = {},
+): string {
+  return formatLaravelValidationErrors(errors) || message;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -77,7 +113,7 @@ export async function apiRequest<T>(
 
     if (!body.success) {
       throw new ApiError(
-        body.message || "Request failed.",
+        resolveApiErrorMessage(body.message || "Request failed.", body.errors ?? {}),
         body.errors ?? {},
         response.status,
       );

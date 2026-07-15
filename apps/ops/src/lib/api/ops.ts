@@ -1,4 +1,4 @@
-import { ApiError, ApiOfflineError } from "@/lib/api/client";
+import { ApiError, ApiOfflineError, resolveApiErrorMessage } from "@/lib/api/client";
 import type { OpsDashboardSnapshot, OpsVtpassWalletBalance } from "@/lib/utils/dashboard";
 import { isOperatorAuthError } from "@/lib/ops/operatorAuth";
 import { handleOperatorAuthFailure } from "@/lib/ops/operatorAuth";
@@ -83,8 +83,12 @@ export async function opsRequest<T>(
     }
 
     if (!body.success) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("Ops API error response", body);
+      }
+
       const apiError = new ApiError(
-        body.message || "Request failed.",
+        resolveApiErrorMessage(body.message || "Request failed.", body.errors ?? {}),
         body.errors ?? {},
         response.status,
       );
@@ -897,7 +901,7 @@ export async function fetchOpsMarketing(search?: string) {
   return data;
 }
 
-export async function opsMarketingCreateCampaign(payload: {
+export type OpsMarketingCreateCampaignPayload = {
   name: string;
   amount: 500 | 1000;
   distribution_mode: "unique_codes" | "shared_code";
@@ -910,17 +914,86 @@ export async function opsMarketingCreateCampaign(payload: {
   one_per_email?: boolean;
   one_per_device?: boolean;
   reservation_timeout_minutes?: number;
-}) {
-  const { data } = await opsRequest<{
-    campaign: OpsMarketingCampaign;
-    codes: string[];
-    shared_message?: string | null;
-  }>("/ops/marketing/campaigns", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+};
 
-  return data;
+export function formatExpiresAtForBackend(value: string | null | undefined): string | null {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString();
+}
+
+export function buildOpsMarketingCampaignPayload(input: {
+  name: string;
+  amount: 500 | 1000;
+  distributionMode: "unique_codes" | "shared_code";
+  quantity?: number;
+  maxRedemptions?: number;
+  network?: string;
+  expiresAt?: string;
+  active?: boolean;
+  onePerPhone?: boolean;
+  onePerEmail?: boolean;
+  onePerDevice?: boolean;
+  reservationTimeoutMinutes?: number;
+}): OpsMarketingCreateCampaignPayload {
+  const payload: OpsMarketingCreateCampaignPayload = {
+    name: input.name.trim(),
+    amount: input.amount,
+    distribution_mode: input.distributionMode,
+    network: input.network?.trim() ? input.network.trim() : null,
+    expires_at: formatExpiresAtForBackend(input.expiresAt),
+    active: input.active ?? true,
+    one_per_phone: input.onePerPhone ?? true,
+    one_per_email: input.onePerEmail ?? true,
+    one_per_device: input.onePerDevice ?? true,
+    reservation_timeout_minutes: input.reservationTimeoutMinutes ?? 30,
+  };
+
+  if (input.distributionMode === "unique_codes") {
+    payload.quantity = input.quantity ?? 1;
+  } else {
+    payload.max_redemptions = input.maxRedemptions;
+  }
+
+  return payload;
+}
+
+export async function opsMarketingCreateCampaign(payload: OpsMarketingCreateCampaignPayload) {
+  if (process.env.NODE_ENV === "development") {
+    console.log("Campaign Payload", payload);
+  }
+
+  try {
+    const { data } = await opsRequest<{
+      campaign: OpsMarketingCampaign;
+      codes: string[];
+      shared_message?: string | null;
+    }>("/ops/marketing/campaigns", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    return data;
+  } catch (error) {
+    if (process.env.NODE_ENV === "development" && error instanceof ApiError) {
+      console.error("Campaign create failed", {
+        payload,
+        message: error.message,
+        errors: error.errors,
+        status: error.status,
+      });
+    }
+
+    throw error;
+  }
 }
 
 export async function opsMarketingSetVoucherActive(id: number, active: boolean) {
