@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api\V1\Ops;
 use App\Http\Controllers\Controller;
 use App\Models\LaunchVoucher;
 use App\Models\LaunchVoucherCampaign;
+use App\Models\LaunchVoucherRedemption;
 use App\Services\Ops\OpsMarketingService;
+use App\Services\Ops\OpsVoucherDashboardService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,14 +17,132 @@ class OpsMarketingController extends Controller
 {
     public function __construct(
         private readonly OpsMarketingService $opsMarketingService,
+        private readonly OpsVoucherDashboardService $opsVoucherDashboardService,
     ) {
     }
 
     public function snapshot(Request $request): JsonResponse
     {
+        $snapshot = $this->opsMarketingService->snapshot($request->query('search'));
+        $dashboard = $this->opsVoucherDashboardService->dashboardMetrics();
+
+        $snapshot['kpis'] = array_merge($snapshot['kpis'], $dashboard['kpis']);
+        $snapshot['refreshed_at'] = $dashboard['refreshed_at'];
+
         return ApiResponse::success(
-            data: $this->opsMarketingService->snapshot($request->query('search')),
+            data: $snapshot,
             message: 'Marketing snapshot loaded.',
+        );
+    }
+
+    public function dashboard(): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->opsVoucherDashboardService->dashboardMetrics(),
+            message: 'Voucher dashboard metrics loaded.',
+        );
+    }
+
+    public function showCampaign(LaunchVoucherCampaign $campaign): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->opsVoucherDashboardService->campaignDetail($campaign),
+            message: 'Campaign detail loaded.',
+        );
+    }
+
+    public function redemptionLog(Request $request): JsonResponse
+    {
+        $paginator = $this->opsVoucherDashboardService->redemptionLog([
+            'search' => $request->query('search'),
+            'status' => $request->query('status'),
+            'campaign_id' => $request->query('campaign_id'),
+            'date_from' => $request->query('date_from'),
+            'date_to' => $request->query('date_to'),
+            'sort_by' => $request->query('sort_by'),
+            'sort_dir' => $request->query('sort_dir'),
+            'per_page' => $request->query('per_page', 25),
+        ]);
+
+        $items = collect($paginator->items())
+            ->map(fn (LaunchVoucherRedemption $redemption) => $this->opsVoucherDashboardService->presentRedemption($redemption))
+            ->values()
+            ->all();
+
+        return ApiResponse::success(
+            data: $items,
+            message: 'Voucher redemption log loaded.',
+            meta: [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        );
+    }
+
+    public function abuseMonitoring(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->opsVoucherDashboardService->abuseMonitoring([
+                'days' => $request->query('days', 14),
+                'limit' => $request->query('limit', 50),
+            ]),
+            message: 'Voucher abuse monitoring loaded.',
+        );
+    }
+
+    public function analytics(): JsonResponse
+    {
+        return ApiResponse::success(
+            data: $this->opsVoucherDashboardService->analytics(),
+            message: 'Voucher analytics loaded.',
+        );
+    }
+
+    public function customerLookup(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'q' => ['required', 'string', 'min:3', 'max:255'],
+        ]);
+
+        return ApiResponse::success(
+            data: $this->opsVoucherDashboardService->customerLookup($validated['q']),
+            message: 'Customer voucher lookup completed.',
+        );
+    }
+
+    public function extendExpiry(Request $request, LaunchVoucherCampaign $campaign): JsonResponse
+    {
+        $validated = $request->validate([
+            'expires_at' => ['required', 'date', 'after:now'],
+        ]);
+
+        return ApiResponse::success(
+            data: $this->opsVoucherDashboardService->extendExpiry($campaign, \Illuminate\Support\Carbon::parse($validated['expires_at'])),
+            message: 'Campaign expiry extended.',
+        );
+    }
+
+    public function increaseCapacity(Request $request, LaunchVoucherCampaign $campaign): JsonResponse
+    {
+        $validated = $request->validate([
+            'max_redemptions' => ['required', 'integer', 'min:1', 'max:10000'],
+        ]);
+
+        try {
+            $detail = $this->opsVoucherDashboardService->increaseCapacity($campaign, (int) $validated['max_redemptions']);
+        } catch (\InvalidArgumentException $exception) {
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+                errors: ['code' => 'CAMPAIGN_CAPACITY_INVALID'],
+                status: 422,
+            );
+        }
+
+        return ApiResponse::success(
+            data: $detail,
+            message: 'Campaign capacity updated.',
         );
     }
 

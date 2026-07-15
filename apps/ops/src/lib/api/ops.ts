@@ -857,6 +857,8 @@ export type OpsMarketingCampaign = {
   shared_code?: boolean;
   shared_code_value?: string | null;
   shared_message?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
 };
 
 export type OpsMarketingSnapshot = {
@@ -872,6 +874,15 @@ export type OpsMarketingSnapshot = {
     blocked_attempts?: number;
     review_rate_pct: number;
     share_rate_pct: number;
+    total_campaigns?: number;
+    active_campaigns?: number;
+    expired_campaigns?: number;
+    shared_campaigns?: number;
+    unique_campaigns?: number;
+    generated_codes?: number;
+    successful_redemptions?: number;
+    remaining_capacity?: number;
+    expired_reservations?: number;
   };
   reviews: { count: number; average_rating: number | null; distribution: Record<number, number> };
   campaigns?: OpsMarketingCampaign[];
@@ -1025,4 +1036,156 @@ export async function opsMarketingExportUsage(campaignId?: number) {
 export function getOpsMarketingExportCsvUrl(campaignId?: number): string {
   const query = campaignId ? `?campaign_id=${campaignId}` : "";
   return `${getOpsApiBaseUrl()}/ops/marketing/vouchers/export.csv${query}`;
+}
+
+export type OpsVoucherRedemptionLogItem = {
+  id: number;
+  campaign_id?: number | null;
+  campaign_name?: string | null;
+  distribution_mode?: string | null;
+  voucher_code?: string | null;
+  voucher_name?: string | null;
+  reference?: string | null;
+  transaction_status?: string | null;
+  status: string;
+  discount_amount: number;
+  customer_phone?: string | null;
+  customer_phone_normalized?: string | null;
+  customer_email?: string | null;
+  device_id?: string | null;
+  reserved_at?: string | null;
+  redeemed_at?: string | null;
+  released_at?: string | null;
+  created_at?: string | null;
+};
+
+export type OpsVoucherAbuseSummary = {
+  window_days: number;
+  summary: {
+    phone_blocked: number;
+    device_blocked: number;
+    email_blocked: number;
+    invalid_voucher: number;
+    expired_voucher: number;
+    capacity_exceeded: number;
+    reservation_expired: number;
+  };
+  blocked_trend: Array<{ date: string; total: number }>;
+  recent_events: Array<{
+    id: number;
+    event_type: string;
+    voucher_code?: string | null;
+    reference?: string | null;
+    metadata?: Record<string, unknown> | null;
+    actor?: string | null;
+    occurred_at?: string | null;
+  }>;
+};
+
+export type OpsVoucherAnalytics = {
+  daily_redemptions: Array<{ date: string; total: number }>;
+  campaign_usage: Array<{
+    id: number;
+    name: string;
+    distribution_mode: string;
+    redeemed_count: number;
+    capacity: number | null;
+  }>;
+  network_distribution: Array<{ label: string; value: number }>;
+  blocked_trend: Array<{ date: string; total: number }>;
+};
+
+export type OpsVoucherCampaignDetail = {
+  campaign: OpsMarketingCampaign;
+  capacity: Record<string, number | null>;
+  statistics: {
+    reserved: number;
+    redeemed: number;
+    released: number;
+    expired: number;
+    cancelled: number;
+    used_capacity: number;
+    total_capacity: number;
+    progress_pct: number;
+  };
+  restrictions: {
+    one_per_phone: boolean;
+    one_per_email: boolean;
+    one_per_device: boolean;
+    reservation_timeout_minutes: number;
+  };
+  vouchers: OpsMarketingSnapshot["vouchers"];
+};
+
+export type OpsVoucherCustomerLookup = {
+  query: string;
+  redemptions: OpsVoucherRedemptionLogItem[];
+  transactions: Array<{
+    reference: string;
+    status: string;
+    customer_phone: string;
+    product_amount: number;
+    payable_amount: number;
+    voucher_code?: string | null;
+    voucher_discount_amount?: number | null;
+    created_at?: string | null;
+  }>;
+};
+
+export async function fetchOpsVoucherRedemptions(params: {
+  search?: string;
+  status?: string;
+  campaign_id?: number;
+  sort_by?: string;
+  sort_dir?: "asc" | "desc";
+  per_page?: number;
+  page?: number;
+}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") {
+      query.set(key, String(value));
+    }
+  });
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const { data, meta } = await opsRequest<OpsVoucherRedemptionLogItem[]>(`/ops/marketing/redemptions${suffix}`);
+  return { data, meta };
+}
+
+export async function fetchOpsVoucherAbuse(days = 14) {
+  const { data } = await opsRequest<OpsVoucherAbuseSummary>(`/ops/marketing/abuse?days=${days}`);
+  return data;
+}
+
+export async function fetchOpsVoucherAnalytics() {
+  const { data } = await opsRequest<OpsVoucherAnalytics>("/ops/marketing/analytics");
+  return data;
+}
+
+export async function fetchOpsVoucherCampaignDetail(campaignId: number) {
+  const { data } = await opsRequest<OpsVoucherCampaignDetail>(`/ops/marketing/campaigns/${campaignId}`);
+  return data;
+}
+
+export async function fetchOpsVoucherCustomerLookup(query: string) {
+  const { data } = await opsRequest<OpsVoucherCustomerLookup>(
+    `/ops/marketing/customer-lookup?q=${encodeURIComponent(query)}`,
+  );
+  return data;
+}
+
+export async function opsMarketingExtendExpiry(campaignId: number, expiresAt: string) {
+  const { data } = await opsRequest<OpsVoucherCampaignDetail>(`/ops/marketing/campaigns/${campaignId}/expiry`, {
+    method: "PATCH",
+    body: JSON.stringify({ expires_at: expiresAt }),
+  });
+  return data;
+}
+
+export async function opsMarketingIncreaseCapacity(campaignId: number, maxRedemptions: number) {
+  const { data } = await opsRequest<OpsVoucherCampaignDetail>(`/ops/marketing/campaigns/${campaignId}/capacity`, {
+    method: "PATCH",
+    body: JSON.stringify({ max_redemptions: maxRedemptions }),
+  });
+  return data;
 }

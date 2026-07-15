@@ -113,7 +113,15 @@ Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function (
     Route::get('/go-live/export/json', [OpsGoLiveController::class, 'exportJson']);
     Route::get('/go-live/export/pdf', [OpsGoLiveController::class, 'exportPdf']);
     Route::get('/marketing/vouchers', [OpsMarketingController::class, 'snapshot']);
+    Route::get('/marketing/dashboard', [OpsMarketingController::class, 'dashboard']);
+    Route::get('/marketing/campaigns/{campaign}', [OpsMarketingController::class, 'showCampaign']);
+    Route::get('/marketing/redemptions', [OpsMarketingController::class, 'redemptionLog']);
+    Route::get('/marketing/abuse', [OpsMarketingController::class, 'abuseMonitoring']);
+    Route::get('/marketing/analytics', [OpsMarketingController::class, 'analytics']);
+    Route::get('/marketing/customer-lookup', [OpsMarketingController::class, 'customerLookup']);
     Route::post('/marketing/campaigns', [OpsMarketingController::class, 'storeCampaign']);
+    Route::patch('/marketing/campaigns/{campaign}/expiry', [OpsMarketingController::class, 'extendExpiry']);
+    Route::patch('/marketing/campaigns/{campaign}/capacity', [OpsMarketingController::class, 'increaseCapacity']);
     Route::post('/marketing/vouchers/{voucher}/active', [OpsMarketingController::class, 'setActive']);
     Route::post('/marketing/vouchers/{voucher}/regenerate', [OpsMarketingController::class, 'regenerateCode']);
     Route::post('/marketing/campaigns/{campaign}/active', [OpsMarketingController::class, 'setCampaignActive']);

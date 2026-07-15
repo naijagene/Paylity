@@ -1,430 +1,597 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { PageContainer } from "@/components/PageContainer";
+import { SimpleBarChart } from "@/components/dashboard/SimpleBarChart";
 import { AlertCard } from "@/components/ui/AlertCard";
 import { KpiCard, SectionCard } from "@/components/ui/OpsCards";
+import { StatusBadge } from "@/components/transaction/StatusBadge";
+import { CreateCampaignForm } from "@/components/marketing/CreateCampaignForm";
 import {
-  buildOpsMarketingCampaignPayload,
   fetchOpsMarketing,
+  fetchOpsVoucherAbuse,
+  fetchOpsVoucherAnalytics,
+  fetchOpsVoucherCustomerLookup,
+  fetchOpsVoucherRedemptions,
   getOpsMarketingExportCsvUrl,
-  opsMarketingCreateCampaign,
   opsMarketingExportUsage,
   opsMarketingSetCampaignActive,
-  opsMarketingSetVoucherActive,
   type OpsMarketingCampaign,
+  type OpsMarketingSnapshot,
+  type OpsVoucherAbuseSummary,
+  type OpsVoucherAnalytics,
+  type OpsVoucherCustomerLookup,
+  type OpsVoucherRedemptionLogItem,
 } from "@/lib/api/ops";
-import { ApiError, ApiOfflineError } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/client";
 import { usePolling } from "@/lib/hooks/usePolling";
 
-type DistributionMode = "unique_codes" | "shared_code";
+type DashboardTab = "overview" | "campaigns" | "redemptions" | "abuse" | "analytics" | "lookup" | "create";
 
-const NETWORK_OPTIONS = [
-  { value: "", label: "All networks" },
-  { value: "MTN", label: "MTN" },
-  { value: "Airtel", label: "Airtel" },
-  { value: "Glo", label: "Glo" },
-  { value: "9mobile", label: "9mobile" },
-] as const;
+const TABS: Array<{ id: DashboardTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "campaigns", label: "Campaigns" },
+  { id: "redemptions", label: "Redemption Log" },
+  { id: "abuse", label: "Abuse Monitoring" },
+  { id: "analytics", label: "Analytics" },
+  { id: "lookup", label: "Customer Lookup" },
+  { id: "create", label: "Create Campaign" },
+];
 
-const QUANTITY_OPTIONS = [1, 5, 10, 25, 50, 100];
-
-function distributionLabel(mode: DistributionMode): string {
+function distributionLabel(mode: string): string {
   return mode === "shared_code" ? "Shared campaign code" : "Unique one-time codes";
 }
 
-export function MarketingClient() {
-  const [campaignName, setCampaignName] = useState("Soft Launch Airtime");
-  const [amount, setAmount] = useState<500 | 1000>(500);
-  const [distributionMode, setDistributionMode] = useState<DistributionMode>("unique_codes");
-  const [quantity, setQuantity] = useState(5);
-  const [maxRedemptions, setMaxRedemptions] = useState(5);
-  const [network, setNetwork] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
-  const [onePerPhone, setOnePerPhone] = useState(true);
-  const [onePerEmail, setOnePerEmail] = useState(true);
-  const [onePerDevice, setOnePerDevice] = useState(true);
-  const [reservationTimeoutMinutes, setReservationTimeoutMinutes] = useState(30);
-  const [active, setActive] = useState(true);
-  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
-  const [sharedMessage, setSharedMessage] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function formatDate(value?: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString();
+}
 
-  const loadSnapshot = useCallback(async () => fetchOpsMarketing(), []);
+export function MarketingClient() {
+  const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
+  const [search, setSearch] = useState("");
+  const [redemptionSearch, setRedemptionSearch] = useState("");
+  const [redemptionStatus, setRedemptionStatus] = useState("");
+  const [redemptionSort, setRedemptionSort] = useState("id");
+  const [redemptions, setRedemptions] = useState<OpsVoucherRedemptionLogItem[]>([]);
+  const [redemptionMeta, setRedemptionMeta] = useState<Record<string, unknown> | null>(null);
+  const [abuse, setAbuse] = useState<OpsVoucherAbuseSummary | null>(null);
+  const [analytics, setAnalytics] = useState<OpsVoucherAnalytics | null>(null);
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupResult, setLookupResult] = useState<OpsVoucherCustomerLookup | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
+  const [panelLoading, setPanelLoading] = useState(false);
+
+  const loadSnapshot = useCallback(async () => fetchOpsMarketing(search || undefined), [search]);
   const snapshot = usePolling({ fetcher: loadSnapshot, intervalMs: 60000 });
   const data = snapshot.data;
 
-  async function handleCreateCampaign() {
-    setSubmitting(true);
-    setError(null);
-
+  async function loadRedemptions() {
+    setPanelLoading(true);
+    setPanelError(null);
     try {
-      const payload = buildOpsMarketingCampaignPayload({
-        name: campaignName,
-        amount,
-        distributionMode,
-        quantity,
-        maxRedemptions,
-        network,
-        expiresAt,
-        active,
-        onePerPhone,
-        onePerEmail,
-        onePerDevice,
-        reservationTimeoutMinutes,
+      const result = await fetchOpsVoucherRedemptions({
+        search: redemptionSearch || undefined,
+        status: redemptionStatus || undefined,
+        sort_by: redemptionSort,
+        sort_dir: "desc",
+        per_page: 25,
       });
-
-      const result = await opsMarketingCreateCampaign(payload);
-      setGeneratedCodes(result.codes);
-      setSharedMessage(result.shared_message ?? null);
-      await snapshot.refresh();
-    } catch (campaignError) {
-      if (campaignError instanceof ApiOfflineError) {
-        setError("Network unavailable. Check the API server and try again.");
-      } else if (campaignError instanceof ApiError) {
-        setError(campaignError.message);
-      } else {
-        setError("Unable to create campaign.");
-      }
+      setRedemptions(result.data);
+      setRedemptionMeta(result.meta ?? null);
+    } catch (error) {
+      setPanelError(error instanceof ApiError ? error.message : "Unable to load redemption log.");
     } finally {
-      setSubmitting(false);
+      setPanelLoading(false);
     }
   }
 
-  async function copyText(value: string) {
-    await navigator.clipboard.writeText(value);
+  async function loadAbuse() {
+    setPanelLoading(true);
+    setPanelError(null);
+    try {
+      setAbuse(await fetchOpsVoucherAbuse());
+    } catch (error) {
+      setPanelError(error instanceof ApiError ? error.message : "Unable to load abuse monitoring.");
+    } finally {
+      setPanelLoading(false);
+    }
   }
+
+  async function loadAnalytics() {
+    setPanelLoading(true);
+    setPanelError(null);
+    try {
+      setAnalytics(await fetchOpsVoucherAnalytics());
+    } catch (error) {
+      setPanelError(error instanceof ApiError ? error.message : "Unable to load analytics.");
+    } finally {
+      setPanelLoading(false);
+    }
+  }
+
+  async function runLookup() {
+    if (lookupQuery.trim().length < 3) {
+      setPanelError("Enter at least 3 characters to search.");
+      return;
+    }
+
+    setPanelLoading(true);
+    setPanelError(null);
+    try {
+      setLookupResult(await fetchOpsVoucherCustomerLookup(lookupQuery.trim()));
+    } catch (error) {
+      setPanelError(error instanceof ApiError ? error.message : "Unable to complete customer lookup.");
+    } finally {
+      setPanelLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "redemptions") void loadRedemptions();
+    if (activeTab === "abuse") void loadAbuse();
+    if (activeTab === "analytics") void loadAnalytics();
+  }, [activeTab]);
+
+  const overviewKpis = useMemo(() => buildOverviewKpis(data), [data]);
 
   return (
     <PageContainer className="py-8" narrow={false}>
       <div className="mx-auto w-full max-w-7xl space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-extrabold text-dark">Launch Vouchers</h1>
+            <h1 className="font-display text-3xl font-extrabold text-dark">Voucher Operations</h1>
             <p className="mt-2 text-sm text-muted">
-              Generate secure one-time codes or shareable campaign codes with anti-abuse controls.
+              Monitor campaigns, redemption capacity, abuse signals, and customer voucher history.
             </p>
+            {data?.refreshed_at ? (
+              <p className="mt-1 text-xs text-muted">Last refreshed {formatDate(data.refreshed_at)}</p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
+            <input
+              className="rounded-xl border border-border px-3 py-2 text-sm"
+              placeholder="Search campaigns or codes"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
             <Button type="button" variant="outline" onClick={() => void snapshot.refresh()}>
               Refresh
             </Button>
             <Button type="button" variant="outline" onClick={() => void opsMarketingExportUsage()}>
-              Export Usage
+              Export JSON
             </Button>
           </div>
         </header>
 
-        <SectionCard title="Create Voucher Campaign">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm">
-              <span className="font-semibold text-dark">Campaign name</span>
-              <input
-                className="mt-2 w-full rounded-xl border border-border px-3 py-2"
-                value={campaignName}
-                onChange={(event) => setCampaignName(event.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-semibold text-dark">Airtime value</span>
-              <select
-                className="mt-2 w-full rounded-xl border border-border px-3 py-2"
-                value={amount}
-                onChange={(event) => setAmount(Number(event.target.value) as 500 | 1000)}
-              >
-                <option value={500}>₦500</option>
-                <option value={1000}>₦1,000</option>
-              </select>
-            </label>
-            <label className="block text-sm md:col-span-2">
-              <span className="font-semibold text-dark">Distribution mode</span>
-              <div className="mt-2 flex flex-wrap gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="distribution_mode"
-                    checked={distributionMode === "unique_codes"}
-                    onChange={() => setDistributionMode("unique_codes")}
-                  />
-                  <span>Unique one-time codes</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="distribution_mode"
-                    checked={distributionMode === "shared_code"}
-                    onChange={() => setDistributionMode("shared_code")}
-                  />
-                  <span>Shared campaign code</span>
-                </label>
-              </div>
-            </label>
-            {distributionMode === "unique_codes" ? (
-              <label className="block text-sm">
-                <span className="font-semibold text-dark">Number of codes</span>
-                <select
-                  className="mt-2 w-full rounded-xl border border-border px-3 py-2"
-                  value={quantity}
-                  onChange={(event) => setQuantity(Number(event.target.value))}
-                >
-                  {QUANTITY_OPTIONS.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <label className="block text-sm">
-                <span className="font-semibold text-dark">Maximum successful redemptions</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={10000}
-                  className="mt-2 w-full rounded-xl border border-border px-3 py-2"
-                  value={maxRedemptions}
-                  onChange={(event) => setMaxRedemptions(Number(event.target.value))}
-                />
-              </label>
-            )}
-            <label className="block text-sm">
-              <span className="font-semibold text-dark">Network</span>
-              <select
-                className="mt-2 w-full rounded-xl border border-border px-3 py-2"
-                value={network}
-                onChange={(event) => setNetwork(event.target.value)}
-              >
-                {NETWORK_OPTIONS.map((option) => (
-                  <option key={option.label} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="font-semibold text-dark">Expiry date/time</span>
-              <input
-                type="datetime-local"
-                className="mt-2 w-full rounded-xl border border-border px-3 py-2"
-                value={expiresAt}
-                onChange={(event) => setExpiresAt(event.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-semibold text-dark">Reservation timeout (minutes)</span>
-              <input
-                type="number"
-                min={5}
-                max={1440}
-                className="mt-2 w-full rounded-xl border border-border px-3 py-2"
-                value={reservationTimeoutMinutes}
-                onChange={(event) => setReservationTimeoutMinutes(Number(event.target.value))}
-              />
-            </label>
-            <div className="space-y-2 text-sm md:col-span-2">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={onePerPhone} onChange={(event) => setOnePerPhone(event.target.checked)} />
-                <span>One redemption per phone</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={onePerEmail} onChange={(event) => setOnePerEmail(event.target.checked)} />
-                <span>One redemption per email</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={onePerDevice} onChange={(event) => setOnePerDevice(event.target.checked)} />
-                <span>One redemption per device</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />
-                <span>Active</span>
-              </label>
-            </div>
-          </div>
-          {distributionMode === "shared_code" ? (
-            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              This code may be forwarded publicly. Campaign-level phone, device, email, quantity, and expiry controls
-              will still apply.
-            </p>
-          ) : null}
-          {error ? (
-            <AlertCard
-              severity="critical"
-              title="Unable to create campaign"
-              message={<p className="whitespace-pre-line">{error}</p>}
-            />
-          ) : null}
-          <Button type="button" className="mt-4" onClick={() => void handleCreateCampaign()} disabled={submitting}>
-            {submitting ? "Generating..." : distributionMode === "shared_code" ? "Generate Shared Code" : "Generate Codes"}
-          </Button>
-          {generatedCodes.length > 0 ? (
-            <div className="mt-4 rounded-xl border border-border bg-muted/20 p-4">
-              <p className="text-sm font-semibold text-dark">
-                {distributionMode === "shared_code" ? "Shared campaign code" : "Newly generated codes"}
-              </p>
-              <div className="mt-3 space-y-2 font-mono text-sm">
-                {generatedCodes.map((code) => (
-                  <div key={code} className="flex items-center justify-between gap-3">
-                    <span>{code}</span>
-                    <Button type="button" variant="outline" onClick={() => void copyText(code)}>
-                      Copy code
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              {sharedMessage ? (
-                <div className="mt-4 rounded-xl border border-border bg-white p-3 text-sm text-muted">
-                  <p className="font-semibold text-dark">Campaign message</p>
-                  <p className="mt-2">{sharedMessage}</p>
-                  <Button type="button" variant="outline" className="mt-3" onClick={() => void copyText(sharedMessage)}>
-                    Copy campaign message
-                  </Button>
-                </div>
-              ) : null}
-              {distributionMode === "unique_codes" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-3"
-                  onClick={() => void copyText(generatedCodes.join("\n"))}
-                >
-                  Copy all
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-        </SectionCard>
+        <div className="flex flex-wrap gap-2">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab.id ? "bg-success text-white" : "border border-border bg-card text-muted hover:text-dark"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-        {data ? (
-          <>
-            <SectionCard title="Marketing KPIs">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <KpiCard label="Generated" value={String(data.kpis.generated)} />
-                <KpiCard label="Unused" value={String(data.kpis.unused ?? 0)} />
-                <KpiCard label="Reserved" value={String(data.kpis.reserved ?? 0)} />
-                <KpiCard label="Redeemed" value={String(data.kpis.redeemed)} />
-                <KpiCard label="Blocked" value={String(data.kpis.blocked_attempts ?? 0)} />
-                <KpiCard label="Review Rate" value={`${data.kpis.review_rate_pct}%`} />
-                <KpiCard label="Share Rate" value={`${data.kpis.share_rate_pct}%`} />
-                <KpiCard label="Avg Rating" value={data.reviews.average_rating?.toFixed(1) ?? "—"} />
-              </div>
-            </SectionCard>
-
-            <SectionCard title="Campaigns">
-              <div className="space-y-3">
-                {(data.campaigns ?? []).map((campaign) => (
-                  <CampaignRow
-                    key={campaign.id}
-                    campaign={campaign}
-                    onToggleActive={(nextActive) =>
-                      void opsMarketingSetCampaignActive(campaign.id, nextActive).then(() => snapshot.refresh())
-                    }
-                  />
-                ))}
-              </div>
-            </SectionCard>
-
-            <SectionCard title="Voucher Codes">
-              <div className="space-y-3">
-                {data.vouchers.map((voucher) => (
-                  <div key={voucher.id} className="rounded-xl border border-border px-4 py-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-dark">{voucher.name}</p>
-                        <p className="text-sm text-muted">
-                          {voucher.code} · ₦{voucher.amount.toLocaleString("en-NG")} · {voucher.status} ·{" "}
-                          {voucher.redeemed_count}/{voucher.max_redemptions}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={voucher.immutable}
-                        onClick={() =>
-                          void opsMarketingSetVoucherActive(voucher.id, !voucher.active).then(() =>
-                            snapshot.refresh(),
-                          )
-                        }
-                      >
-                        {voucher.active ? "Deactivate" : "Enable"}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          </>
+        {snapshot.loading && !data ? <p className="text-sm text-muted">Loading voucher operations data…</p> : null}
+        {snapshot.error ? (
+          <AlertCard
+            severity="critical"
+            message={typeof snapshot.error === "string" ? snapshot.error : "Unable to load dashboard."}
+          />
         ) : null}
+        {panelError ? <AlertCard severity="critical" message={panelError} /> : null}
+
+        {activeTab === "overview" && data ? <OverviewPanel kpis={overviewKpis} data={data} /> : null}
+        {activeTab === "campaigns" && data ? (
+          <CampaignsPanel campaigns={data.campaigns ?? []} onToggleActive={() => void snapshot.refresh()} />
+        ) : null}
+        {activeTab === "redemptions" ? (
+          <RedemptionsPanel
+            rows={redemptions}
+            meta={redemptionMeta}
+            loading={panelLoading}
+            search={redemptionSearch}
+            status={redemptionStatus}
+            sortBy={redemptionSort}
+            onSearchChange={setRedemptionSearch}
+            onStatusChange={setRedemptionStatus}
+            onSortChange={setRedemptionSort}
+            onApply={() => void loadRedemptions()}
+          />
+        ) : null}
+        {activeTab === "abuse" ? <AbusePanel abuse={abuse} loading={panelLoading} /> : null}
+        {activeTab === "analytics" ? <AnalyticsPanel analytics={analytics} loading={panelLoading} /> : null}
+        {activeTab === "lookup" ? (
+          <LookupPanel
+            query={lookupQuery}
+            result={lookupResult}
+            loading={panelLoading}
+            onQueryChange={setLookupQuery}
+            onSearch={() => void runLookup()}
+          />
+        ) : null}
+        {activeTab === "create" ? <CreateCampaignForm onCreated={() => void snapshot.refresh()} /> : null}
       </div>
     </PageContainer>
   );
 }
 
-function CampaignRow({
-  campaign,
+function buildOverviewKpis(data: OpsMarketingSnapshot | null) {
+  const kpis = data?.kpis;
+  return [
+    { label: "Total Campaigns", value: String(kpis?.total_campaigns ?? 0) },
+    { label: "Active Campaigns", value: String(kpis?.active_campaigns ?? kpis?.active ?? 0) },
+    { label: "Expired Campaigns", value: String(kpis?.expired_campaigns ?? kpis?.expired ?? 0) },
+    { label: "Shared Campaigns", value: String(kpis?.shared_campaigns ?? 0) },
+    { label: "Unique Campaigns", value: String(kpis?.unique_campaigns ?? 0) },
+    { label: "Generated Codes", value: String(kpis?.generated_codes ?? kpis?.generated ?? 0) },
+    { label: "Successful Redemptions", value: String(kpis?.successful_redemptions ?? kpis?.redeemed ?? 0) },
+    { label: "Remaining Capacity", value: String(kpis?.remaining_capacity ?? kpis?.remaining ?? 0) },
+    { label: "Blocked Attempts", value: String(kpis?.blocked_attempts ?? 0) },
+    { label: "Expired Reservations", value: String(kpis?.expired_reservations ?? 0) },
+  ];
+}
+
+function OverviewPanel({ kpis, data }: { kpis: Array<{ label: string; value: string }>; data: OpsMarketingSnapshot }) {
+  return (
+    <>
+      <SectionCard title="Dashboard KPIs">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          {kpis.map((kpi) => (
+            <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} />
+          ))}
+        </div>
+      </SectionCard>
+      <SectionCard title="Engagement">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <KpiCard label="Review Rate" value={`${data.kpis.review_rate_pct}%`} />
+          <KpiCard label="Share Rate" value={`${data.kpis.share_rate_pct}%`} />
+          <KpiCard label="Reviews" value={String(data.reviews.count)} />
+          <KpiCard label="Avg Rating" value={data.reviews.average_rating?.toFixed(1) ?? "—"} />
+        </div>
+      </SectionCard>
+    </>
+  );
+}
+
+function CampaignsPanel({
+  campaigns,
   onToggleActive,
 }: {
-  campaign: OpsMarketingCampaign;
-  onToggleActive: (active: boolean) => void;
+  campaigns: OpsMarketingCampaign[];
+  onToggleActive: () => void;
 }) {
-  const sharedCode = campaign.shared_code_value ?? null;
-  const sharedMessage = campaign.shared_message ?? null;
-
   return (
-    <div className="rounded-xl border border-border px-4 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <p className="font-semibold text-dark">{campaign.name}</p>
-          <p className="text-sm text-muted">
-            ₦{campaign.amount.toLocaleString("en-NG")} · {distributionLabel(campaign.distribution_mode)} ·{" "}
-            {campaign.generated_count} code{campaign.generated_count === 1 ? "" : "s"}
-            {campaign.distribution_mode === "shared_code" && campaign.max_redemptions
-              ? ` · max ${campaign.max_redemptions}`
-              : ""}
-          </p>
-          <div className="grid gap-1 text-sm text-muted sm:grid-cols-2">
-            <span>Unused/available: {campaign.unused_count ?? 0}</span>
-            <span>Reserved: {campaign.reserved_count ?? 0}</span>
-            <span>Redeemed: {campaign.redeemed_count}</span>
-            <span>Released: {campaign.released_count ?? 0}</span>
-            <span>Expired reservations: {campaign.expired_reservations ?? 0}</span>
-            <span>Remaining capacity: {campaign.remaining_capacity ?? 0}</span>
-            <span>One per phone: {campaign.one_per_phone ? "Yes" : "No"}</span>
-            <span>One per device: {campaign.one_per_device ? "Yes" : "No"}</span>
-            <span>One per email: {campaign.one_per_email ? "Yes" : "No"}</span>
-            <span>Expiry: {campaign.expires_at ? new Date(campaign.expires_at).toLocaleString() : "None"}</span>
-            <span>Status: {campaign.active ? "Active" : "Inactive"}</span>
-          </div>
-          {sharedCode ? (
-            <div className="flex flex-wrap gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => void navigator.clipboard.writeText(sharedCode)}>
-                Copy shared code
-              </Button>
-              {sharedMessage ? (
-                <Button type="button" variant="outline" onClick={() => void navigator.clipboard.writeText(sharedMessage)}>
-                  Copy campaign message
-                </Button>
-              ) : null}
-              <Button type="button" variant="outline" onClick={() => void opsMarketingExportUsage(campaign.id)}>
-                Export history (JSON)
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  window.open(getOpsMarketingExportCsvUrl(campaign.id), "_blank");
-                }}
-              >
-                Export CSV
-              </Button>
-            </div>
-          ) : null}
-        </div>
-        <Button type="button" variant="outline" onClick={() => onToggleActive(!campaign.active)}>
-          {campaign.active ? "Deactivate immediately" : "Activate"}
+    <SectionCard title="Campaigns">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-border text-muted">
+              <th className="px-2 py-2">Campaign</th>
+              <th className="px-2 py-2">Mode</th>
+              <th className="px-2 py-2">Capacity</th>
+              <th className="px-2 py-2">Redeemed</th>
+              <th className="px-2 py-2">Remaining</th>
+              <th className="px-2 py-2">Status</th>
+              <th className="px-2 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {campaigns.map((campaign) => (
+              <tr key={campaign.id} className="border-b border-border/60">
+                <td className="px-2 py-3">
+                  <Link href={`/marketing/campaigns/${campaign.id}`} className="font-semibold text-success hover:underline">
+                    {campaign.name}
+                  </Link>
+                  <p className="text-xs text-muted">₦{campaign.amount.toLocaleString("en-NG")}</p>
+                </td>
+                <td className="px-2 py-3">{distributionLabel(campaign.distribution_mode)}</td>
+                <td className="px-2 py-3">
+                  {campaign.distribution_mode === "shared_code"
+                    ? campaign.max_redemptions ?? 0
+                    : campaign.generated_count}
+                </td>
+                <td className="px-2 py-3">{campaign.redeemed_count}</td>
+                <td className="px-2 py-3">{campaign.remaining_capacity ?? 0}</td>
+                <td className="px-2 py-3">
+                  <StatusBadge variant={campaign.active ? "success" : "failed"} label={campaign.active ? "Active" : "Paused"} />
+                </td>
+                <td className="px-2 py-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="!px-2 !py-1 text-xs"
+                      onClick={() => void opsMarketingSetCampaignActive(campaign.id, !campaign.active).then(onToggleActive)}
+                    >
+                      {campaign.active ? "Pause" : "Resume"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="!px-2 !py-1 text-xs"
+                      onClick={() => void opsMarketingExportUsage(campaign.id)}
+                    >
+                      Export JSON
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="!px-2 !py-1 text-xs"
+                      onClick={() => window.open(getOpsMarketingExportCsvUrl(campaign.id), "_blank")}
+                    >
+                      Export CSV
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </SectionCard>
+  );
+}
+
+function RedemptionsPanel({
+  rows,
+  meta,
+  loading,
+  search,
+  status,
+  sortBy,
+  onSearchChange,
+  onStatusChange,
+  onSortChange,
+  onApply,
+}: {
+  rows: OpsVoucherRedemptionLogItem[];
+  meta: Record<string, unknown> | null;
+  loading: boolean;
+  search: string;
+  status: string;
+  sortBy: string;
+  onSearchChange: (value: string) => void;
+  onStatusChange: (value: string) => void;
+  onSortChange: (value: string) => void;
+  onApply: () => void;
+}) {
+  return (
+    <SectionCard title="Redemption Log">
+      <div className="mb-4 grid gap-3 md:grid-cols-4">
+        <input className="rounded-xl border border-border px-3 py-2 text-sm" placeholder="Phone, code, or reference" value={search} onChange={(e) => onSearchChange(e.target.value)} />
+        <select className="rounded-xl border border-border px-3 py-2 text-sm" value={status} onChange={(e) => onStatusChange(e.target.value)}>
+          <option value="">All statuses</option>
+          <option value="reserved">Reserved</option>
+          <option value="redeemed">Redeemed</option>
+          <option value="released">Released</option>
+          <option value="expired">Expired</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select className="rounded-xl border border-border px-3 py-2 text-sm" value={sortBy} onChange={(e) => onSortChange(e.target.value)}>
+          <option value="id">Newest</option>
+          <option value="reserved_at">Reserved at</option>
+          <option value="redeemed_at">Redeemed at</option>
+          <option value="status">Status</option>
+        </select>
+        <Button type="button" onClick={onApply} disabled={loading}>
+          {loading ? "Loading…" : "Apply Filters"}
         </Button>
       </div>
-    </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-border text-muted">
+              <th className="px-2 py-2">Voucher</th>
+              <th className="px-2 py-2">Campaign</th>
+              <th className="px-2 py-2">Phone</th>
+              <th className="px-2 py-2">Reference</th>
+              <th className="px-2 py-2">Status</th>
+              <th className="px-2 py-2">Reserved</th>
+              <th className="px-2 py-2">Redeemed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-b border-border/60">
+                <td className="px-2 py-3 font-mono text-xs">{row.voucher_code}</td>
+                <td className="px-2 py-3">{row.campaign_name}</td>
+                <td className="px-2 py-3">{row.customer_phone}</td>
+                <td className="px-2 py-3">
+                  {row.reference ? (
+                    <Link href={`/transactions/${row.reference}`} className="text-success hover:underline">
+                      {row.reference}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-2 py-3">
+                  <StatusBadge
+                    variant={row.status === "redeemed" ? "success" : row.status === "reserved" ? "processing" : "info"}
+                    label={row.status}
+                  />
+                </td>
+                <td className="px-2 py-3">{formatDate(row.reserved_at)}</td>
+                <td className="px-2 py-3">{formatDate(row.redeemed_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {meta ? <p className="mt-3 text-xs text-muted">Showing {rows.length} of {String(meta.total ?? rows.length)} redemptions</p> : null}
+    </SectionCard>
+  );
+}
+
+function AbusePanel({ abuse, loading }: { abuse: OpsVoucherAbuseSummary | null; loading: boolean }) {
+  if (loading && !abuse) return <p className="text-sm text-muted">Loading abuse monitoring…</p>;
+  if (!abuse) return null;
+
+  const summary = [
+    { label: "Phone blocked", value: abuse.summary.phone_blocked },
+    { label: "Device blocked", value: abuse.summary.device_blocked },
+    { label: "Email blocked", value: abuse.summary.email_blocked },
+    { label: "Invalid voucher", value: abuse.summary.invalid_voucher },
+    { label: "Expired voucher", value: abuse.summary.expired_voucher },
+    { label: "Capacity exceeded", value: abuse.summary.capacity_exceeded },
+    { label: "Reservation expired", value: abuse.summary.reservation_expired },
+  ];
+
+  return (
+    <>
+      <SectionCard title={`Abuse Summary (${abuse.window_days} days)`}>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {summary.map((item) => (
+            <KpiCard key={item.label} label={item.label} value={String(item.value)} />
+          ))}
+        </div>
+      </SectionCard>
+      <SectionCard title="Blocked Attempt Trends">
+        <SimpleBarChart
+          items={abuse.blocked_trend.map((point) => ({ label: point.date, value: point.total }))}
+        />
+      </SectionCard>
+      <SectionCard title="Recent Abuse Events">
+        <div className="space-y-2">
+          {abuse.recent_events.map((event) => (
+            <div key={event.id} className="rounded-xl border border-border px-3 py-2 text-sm">
+              <p className="font-semibold text-dark">{event.event_type}</p>
+              <p className="text-muted">
+                {event.voucher_code ?? "—"} · {formatDate(event.occurred_at)} · {event.actor ?? "system"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+    </>
+  );
+}
+
+function AnalyticsPanel({ analytics, loading }: { analytics: OpsVoucherAnalytics | null; loading: boolean }) {
+  if (loading && !analytics) return <p className="text-sm text-muted">Loading analytics…</p>;
+  if (!analytics) return null;
+
+  return (
+    <>
+      <SectionCard title="Daily Redemptions">
+        <SimpleBarChart items={analytics.daily_redemptions.map((point) => ({ label: point.date, value: point.total }))} />
+      </SectionCard>
+      <SectionCard title="Campaign Usage">
+        <SimpleBarChart
+          items={analytics.campaign_usage.map((campaign) => ({
+            label: campaign.name,
+            value: campaign.redeemed_count,
+          }))}
+        />
+      </SectionCard>
+      <SectionCard title="Network Distribution">
+        <SimpleBarChart items={analytics.network_distribution.map((item) => ({ label: item.label, value: item.value }))} />
+      </SectionCard>
+      <SectionCard title="Blocked Attempt Trends">
+        <SimpleBarChart items={analytics.blocked_trend.map((point) => ({ label: point.date, value: point.total }))} />
+      </SectionCard>
+    </>
+  );
+}
+
+function LookupPanel({
+  query,
+  result,
+  loading,
+  onQueryChange,
+  onSearch,
+}: {
+  query: string;
+  result: OpsVoucherCustomerLookup | null;
+  loading: boolean;
+  onQueryChange: (value: string) => void;
+  onSearch: () => void;
+}) {
+  return (
+    <>
+      <SectionCard title="Customer Lookup">
+        <div className="flex flex-wrap gap-3">
+          <input
+            className="min-w-[280px] flex-1 rounded-xl border border-border px-3 py-2 text-sm"
+            placeholder="Phone, voucher code, or transaction reference"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
+          <Button type="button" onClick={onSearch} disabled={loading}>
+            {loading ? "Searching…" : "Search"}
+          </Button>
+        </div>
+      </SectionCard>
+      {result ? (
+        <>
+          <SectionCard title="Redemption History">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted">
+                    <th className="px-2 py-2">Voucher</th>
+                    <th className="px-2 py-2">Campaign</th>
+                    <th className="px-2 py-2">Phone</th>
+                    <th className="px-2 py-2">Status</th>
+                    <th className="px-2 py-2">Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.redemptions.map((row) => (
+                    <tr key={row.id} className="border-b border-border/60">
+                      <td className="px-2 py-3 font-mono text-xs">{row.voucher_code}</td>
+                      <td className="px-2 py-3">{row.campaign_name}</td>
+                      <td className="px-2 py-3">{row.customer_phone}</td>
+                      <td className="px-2 py-3">{row.status}</td>
+                      <td className="px-2 py-3">{row.reference ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+          <SectionCard title="Transaction History">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted">
+                    <th className="px-2 py-2">Reference</th>
+                    <th className="px-2 py-2">Status</th>
+                    <th className="px-2 py-2">Phone</th>
+                    <th className="px-2 py-2">Voucher</th>
+                    <th className="px-2 py-2">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.transactions.map((transaction) => (
+                    <tr key={transaction.reference} className="border-b border-border/60">
+                      <td className="px-2 py-3">
+                        <Link href={`/transactions/${transaction.reference}`} className="text-success hover:underline">
+                          {transaction.reference}
+                        </Link>
+                      </td>
+                      <td className="px-2 py-3">{transaction.status}</td>
+                      <td className="px-2 py-3">{transaction.customer_phone}</td>
+                      <td className="px-2 py-3">{transaction.voucher_code ?? "—"}</td>
+                      <td className="px-2 py-3">{formatDate(transaction.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        </>
+      ) : null}
+    </>
   );
 }

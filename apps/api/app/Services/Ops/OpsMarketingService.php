@@ -233,6 +233,22 @@ class OpsMarketingService
     /**
      * @return array<string, mixed>
      */
+    public function presentCampaignPublic(LaunchVoucherCampaign $campaign): array
+    {
+        return $this->presentCampaign($campaign);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function presentVoucherPublic(LaunchVoucher $voucher): array
+    {
+        return $this->presentVoucher($voucher);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function presentCampaign(LaunchVoucherCampaign $campaign): array
     {
         $vouchers = $campaign->relationLoaded('vouchers') ? $campaign->vouchers : $campaign->vouchers()->get();

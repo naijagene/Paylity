@@ -295,7 +295,7 @@ class LaunchVoucherService
         }
 
         if ($voucher->isExpired()) {
-            throw new LaunchVoucherException('This voucher has expired.', 'VOUCHER_EXPIRED');
+            $this->reject($voucher, 'This voucher has expired.', 'VOUCHER_EXPIRED');
         }
 
         if ($voucher->product_type !== $productType) {
@@ -342,19 +342,23 @@ class LaunchVoucherService
         }
 
         if (! $campaign?->isSharedCode() && $voucher->remainingRedemptions() <= 0) {
-            throw new LaunchVoucherException('This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
+            $this->reject($voucher, 'This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
         }
 
         if ($reserve) {
             if ($campaign) {
-                $this->campaignCapacityService->assertCapacityAvailable($campaign);
+                try {
+                    $this->campaignCapacityService->assertCapacityAvailable($campaign);
+                } catch (LaunchVoucherException $exception) {
+                    $this->reject($voucher, $exception->getMessage(), $exception->errorCode);
+                }
             } elseif ($voucher->remainingRedemptions() <= 0) {
-                throw new LaunchVoucherException('This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
+                $this->reject($voucher, 'This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
             }
         } elseif ($campaign && $this->campaignCapacityService->remainingCapacity($campaign) <= 0) {
-            throw new LaunchVoucherException('This voucher campaign has no remaining capacity.', 'VOUCHER_CAMPAIGN_EXHAUSTED');
+            $this->reject($voucher, 'This voucher campaign has no remaining capacity.', 'VOUCHER_CAMPAIGN_EXHAUSTED');
         } elseif (! $campaign && $voucher->remainingRedemptions() <= 0) {
-            throw new LaunchVoucherException('This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
+            $this->reject($voucher, 'This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
         }
     }
 
@@ -458,6 +462,20 @@ class LaunchVoucherService
                 'reason' => $reason,
             ],
         );
+    }
+
+    private function reject(LaunchVoucher $voucher, string $message, string $code): void
+    {
+        $this->marketingEventService->track(
+            MarketingEventService::TYPE_VOUCHER_REJECTED,
+            launchVoucherId: $voucher->id,
+            metadata: [
+                'campaign_id' => $voucher->campaign_id,
+                'code' => $code,
+            ],
+        );
+
+        throw new LaunchVoucherException($message, $code);
     }
 
     /**

@@ -17,6 +17,8 @@ class MarketingEventService
 
     public const TYPE_VOUCHER_BLOCKED = 'voucher.blocked';
 
+    public const TYPE_VOUCHER_REJECTED = 'voucher.rejected';
+
     public const TYPE_VOUCHER_GENERATED = 'voucher.generated';
 
     public const TYPE_PAYMENT_COMPLETED = 'payment.completed';
