@@ -10,6 +10,7 @@ use App\Models\LaunchVoucherRedemption;
 use App\Models\Transaction;
 use App\Services\FeeService;
 use App\Support\Marketing\LaunchVoucherCodeGenerator;
+use App\Support\Marketing\VoucherIdentityNormalizer;
 use Illuminate\Support\Facades\DB;
 
 class LaunchVoucherService
@@ -18,6 +19,7 @@ class LaunchVoucherService
         private readonly FeeService $feeService,
         private readonly MarketingEventService $marketingEventService,
         private readonly LaunchVoucherCodeGenerator $codeGenerator,
+        private readonly LaunchVoucherCampaignCapacityService $campaignCapacityService,
     ) {
     }
 
@@ -27,36 +29,8 @@ class LaunchVoucherService
     public function validateForCheckout(array $input, bool $trackEvent = true): array
     {
         $voucher = $this->resolveVoucher((string) ($input['code'] ?? ''));
-        $productType = (string) ($input['product_type'] ?? '');
-        $productAmount = (int) ($input['product_amount'] ?? 0);
-        $network = (string) ($input['network'] ?? '');
-        $phone = (string) ($input['customer_phone'] ?? '');
-        $email = (string) ($input['customer_email'] ?? '');
-        $deviceId = (string) ($input['device_id'] ?? '');
 
-        $this->assertEligibility($voucher, $productType, $productAmount, $network, $phone, $email, $deviceId, reserve: false);
-
-        $discountAmount = min($voucher->amount, $productAmount);
-        $quote = $this->feeService->quote($productType, $productAmount, $discountAmount);
-
-        if ($quote['payable_amount'] <= 0) {
-            throw new LaunchVoucherException('Checkout total must be greater than zero.', 'VOUCHER_ZERO_PAYABLE');
-        }
-
-        if ($trackEvent) {
-            $this->marketingEventService->track(
-                MarketingEventService::TYPE_VOUCHER_VALIDATED,
-                launchVoucherId: $voucher->id,
-                metadata: [
-                    'campaign_id' => $voucher->campaign_id,
-                    'product_type' => $productType,
-                    'product_amount' => $productAmount,
-                    'discount_amount' => $discountAmount,
-                ],
-            );
-        }
-
-        return $this->presentQuote($voucher, $productAmount, $discountAmount, $quote);
+        return $this->evaluateEligibility($voucher, $input, reserve: false, trackEvent: $trackEvent);
     }
 
     /**
@@ -79,32 +53,36 @@ class LaunchVoucherService
                 throw new LaunchVoucherException('Voucher code is invalid.', 'VOUCHER_NOT_FOUND');
             }
 
-            $network = (string) data_get($transaction->request_payload, 'network', '');
+            $input = [
+                'code' => $code,
+                'product_type' => $transaction->product_type,
+                'product_amount' => (int) $transaction->product_amount,
+                'network' => (string) data_get($transaction->request_payload, 'network', ''),
+                'customer_phone' => (string) $transaction->customer_phone,
+                'customer_email' => (string) ($transaction->customer_email ?? ''),
+                'device_id' => (string) ($deviceId ?? ''),
+            ];
 
-            $this->assertEligibility(
-                $voucher,
-                $transaction->product_type,
-                (int) $transaction->product_amount,
-                $network,
+            $evaluation = $this->evaluateEligibility($voucher, $input, reserve: true, trackEvent: false);
+            $quote = $evaluation;
+            $discountAmount = (int) $evaluation['discount_amount'];
+
+            $identity = $this->normalizeIdentity(
                 (string) $transaction->customer_phone,
                 (string) ($transaction->customer_email ?? ''),
                 (string) ($deviceId ?? ''),
-                reserve: true,
             );
-
-            $discountAmount = min($voucher->amount, (int) $transaction->product_amount);
-            $quote = $this->feeService->quote($transaction->product_type, (int) $transaction->product_amount, $discountAmount);
-
-            if ($quote['payable_amount'] <= 0) {
-                throw new LaunchVoucherException('Checkout total must be greater than zero.', 'VOUCHER_ZERO_PAYABLE');
-            }
 
             $redemption = LaunchVoucherRedemption::query()->create([
                 'launch_voucher_id' => $voucher->id,
+                'campaign_id' => $voucher->campaign_id,
                 'transaction_id' => $transaction->id,
                 'customer_phone' => $transaction->customer_phone,
+                'customer_phone_normalized' => $identity['phone_normalized'],
                 'customer_email' => $transaction->customer_email,
+                'customer_email_hash' => $identity['email_hash'],
                 'device_id' => $deviceId,
+                'device_id_hash' => $identity['device_hash'],
                 'status' => LaunchVoucherRedemption::STATUS_RESERVED,
                 'discount_amount' => $discountAmount,
                 'reserved_at' => now(),
@@ -124,7 +102,13 @@ class LaunchVoucherService
                 'voucher' => $voucher->fresh(),
                 'discount_amount' => $discountAmount,
                 'redemption' => $redemption,
-                'quote' => $quote,
+                'quote' => [
+                    'convenience_fee' => $evaluation['convenience_fee'],
+                    'gateway_fee' => $evaluation['gateway_fee'],
+                    'payable_amount' => $evaluation['payable_amount'],
+                    'net_product_amount' => $evaluation['net_product_amount'],
+                    'pre_gateway_charge' => $evaluation['pre_gateway_charge'],
+                ],
             ];
         });
     }
@@ -150,6 +134,10 @@ class LaunchVoucherService
 
             if (! $redemption) {
                 return;
+            }
+
+            if ($voucher->campaign_id) {
+                LaunchVoucherCampaign::query()->lockForUpdate()->find($voucher->campaign_id);
             }
 
             if ($voucher->redeemed_count >= $voucher->max_redemptions) {
@@ -221,6 +209,55 @@ class LaunchVoucherService
         return $this->codeGenerator->mask($code);
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private function evaluateEligibility(
+        LaunchVoucher $voucher,
+        array $input,
+        bool $reserve,
+        bool $trackEvent,
+    ): array {
+        $productType = (string) ($input['product_type'] ?? '');
+        $productAmount = (int) ($input['product_amount'] ?? 0);
+        $network = (string) ($input['network'] ?? '');
+        $phone = (string) ($input['customer_phone'] ?? '');
+        $email = (string) ($input['customer_email'] ?? '');
+        $deviceId = (string) ($input['device_id'] ?? '');
+
+        $campaign = null;
+        if ($voucher->campaign_id) {
+            $campaign = $reserve
+                ? LaunchVoucherCampaign::query()->lockForUpdate()->find($voucher->campaign_id)
+                : LaunchVoucherCampaign::query()->find($voucher->campaign_id);
+        }
+
+        $this->assertEligibility($voucher, $campaign, $productType, $productAmount, $network, $phone, $email, $deviceId, $reserve);
+
+        $discountAmount = min($voucher->amount, $productAmount);
+        $quote = $this->feeService->quote($productType, $productAmount, $discountAmount);
+
+        if ($quote['payable_amount'] <= 0) {
+            throw new LaunchVoucherException('Checkout total must be greater than zero.', 'VOUCHER_ZERO_PAYABLE');
+        }
+
+        if ($trackEvent) {
+            $this->marketingEventService->track(
+                MarketingEventService::TYPE_VOUCHER_VALIDATED,
+                launchVoucherId: $voucher->id,
+                metadata: [
+                    'campaign_id' => $voucher->campaign_id,
+                    'product_type' => $productType,
+                    'product_amount' => $productAmount,
+                    'discount_amount' => $discountAmount,
+                ],
+            );
+        }
+
+        return $this->presentQuote($voucher, $productAmount, $discountAmount, $quote);
+    }
+
     private function resolveVoucher(string $code): LaunchVoucher
     {
         $normalized = $this->codeGenerator->normalize($code);
@@ -240,6 +277,7 @@ class LaunchVoucherService
 
     private function assertEligibility(
         LaunchVoucher $voucher,
+        ?LaunchVoucherCampaign $campaign,
         string $productType,
         int $productAmount,
         string $network,
@@ -252,20 +290,12 @@ class LaunchVoucherService
             throw new LaunchVoucherException('This voucher is not active.', 'VOUCHER_INACTIVE');
         }
 
-        if ($voucher->campaign && ! $voucher->campaign->active) {
+        if ($campaign && ! $campaign->active) {
             throw new LaunchVoucherException('This voucher campaign is not active.', 'VOUCHER_INACTIVE');
         }
 
         if ($voucher->isExpired()) {
             throw new LaunchVoucherException('This voucher has expired.', 'VOUCHER_EXPIRED');
-        }
-
-        if ($voucher->remainingRedemptions() <= 0) {
-            throw new LaunchVoucherException('This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
-        }
-
-        if ($this->isCodeAlreadyConsumed($voucher)) {
-            throw new LaunchVoucherException('This voucher code has already been used.', 'VOUCHER_CODE_USED');
         }
 
         if ($voucher->product_type !== $productType) {
@@ -280,7 +310,7 @@ class LaunchVoucherService
             throw new LaunchVoucherException('This voucher amount is not supported.', 'VOUCHER_AMOUNT_UNSUPPORTED');
         }
 
-        $allowedNetwork = $voucher->network ?? $voucher->campaign?->network;
+        $allowedNetwork = $voucher->network ?? $campaign?->network;
         if ($allowedNetwork && $network !== '' && strtoupper($network) !== strtoupper((string) $allowedNetwork)) {
             throw new LaunchVoucherException('This voucher is not valid for the selected network.', 'VOUCHER_NETWORK_MISMATCH');
         }
@@ -289,28 +319,51 @@ class LaunchVoucherService
             throw new LaunchVoucherException('Enter a product amount before applying a voucher.', 'VOUCHER_AMOUNT_REQUIRED');
         }
 
-        if ($voucher->one_per_phone && $phone !== '' && $this->hasRestrictionConflict($voucher, 'customer_phone', $phone)) {
+        $identity = $this->normalizeIdentity($phone, $email, $deviceId);
+        $restrictions = $this->restrictionSettings($voucher, $campaign);
+
+        if ($restrictions['one_per_phone'] && $identity['phone_normalized'] !== '' && $this->hasCampaignIdentityConflict($voucher, 'customer_phone_normalized', $identity['phone_normalized'])) {
             $this->trackBlocked($voucher, 'phone');
             throw new LaunchVoucherException('This voucher has already been used for this phone number.', 'VOUCHER_PHONE_USED');
         }
 
-        if ($voucher->one_per_email && $email !== '' && $this->hasRestrictionConflict($voucher, 'customer_email', $email)) {
+        if ($restrictions['one_per_email'] && $identity['email_hash'] !== null && $this->hasCampaignIdentityConflict($voucher, 'customer_email_hash', $identity['email_hash'])) {
             $this->trackBlocked($voucher, 'email');
             throw new LaunchVoucherException('This voucher has already been used for this email address.', 'VOUCHER_EMAIL_USED');
         }
 
-        if ($voucher->one_per_device && $deviceId !== '' && $this->hasRestrictionConflict($voucher, 'device_id', $deviceId)) {
+        if ($restrictions['one_per_device'] && $identity['device_hash'] !== null && $this->hasCampaignIdentityConflict($voucher, 'device_id_hash', $identity['device_hash'], $deviceId)) {
             $this->trackBlocked($voucher, 'device');
             throw new LaunchVoucherException('This voucher has already been used on this device.', 'VOUCHER_DEVICE_USED');
         }
 
-        if ($reserve && $this->hasActiveReservationForCode($voucher)) {
-            throw new LaunchVoucherException('This voucher code is currently reserved.', 'VOUCHER_CODE_USED');
+        if ($this->isUniqueCodeConsumed($voucher)) {
+            throw new LaunchVoucherException('This voucher code has already been used.', 'VOUCHER_CODE_USED');
+        }
+
+        if (! $campaign?->isSharedCode() && $voucher->remainingRedemptions() <= 0) {
+            throw new LaunchVoucherException('This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
+        }
+
+        if ($reserve) {
+            if ($campaign) {
+                $this->campaignCapacityService->assertCapacityAvailable($campaign);
+            } elseif ($voucher->remainingRedemptions() <= 0) {
+                throw new LaunchVoucherException('This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
+            }
+        } elseif ($campaign && $this->campaignCapacityService->remainingCapacity($campaign) <= 0) {
+            throw new LaunchVoucherException('This voucher campaign has no remaining capacity.', 'VOUCHER_CAMPAIGN_EXHAUSTED');
+        } elseif (! $campaign && $voucher->remainingRedemptions() <= 0) {
+            throw new LaunchVoucherException('This voucher has no remaining redemptions.', 'VOUCHER_EXHAUSTED');
         }
     }
 
-    private function isCodeAlreadyConsumed(LaunchVoucher $voucher): bool
+    private function isUniqueCodeConsumed(LaunchVoucher $voucher): bool
     {
+        if ($voucher->campaign?->isSharedCode()) {
+            return false;
+        }
+
         if ($voucher->max_redemptions !== 1) {
             return false;
         }
@@ -320,13 +373,6 @@ class LaunchVoucherService
                 LaunchVoucherRedemption::STATUS_RESERVED,
                 LaunchVoucherRedemption::STATUS_REDEEMED,
             ])
-            ->exists();
-    }
-
-    private function hasActiveReservationForCode(LaunchVoucher $voucher): bool
-    {
-        return $voucher->redemptions()
-            ->where('status', LaunchVoucherRedemption::STATUS_RESERVED)
             ->whereHas('transaction', function ($query): void {
                 $query->whereNotIn('status', [
                     TransactionStatus::PAYMENT_FAILED,
@@ -337,42 +383,69 @@ class LaunchVoucherService
             ->exists();
     }
 
-    private function hasRestrictionConflict(LaunchVoucher $voucher, string $column, string $value): bool
+    private function hasCampaignIdentityConflict(LaunchVoucher $voucher, string $column, string $value, ?string $rawDeviceId = null): bool
     {
-        $activeStatuses = [
-            LaunchVoucherRedemption::STATUS_RESERVED,
-            LaunchVoucherRedemption::STATUS_REDEEMED,
-        ];
-
-        $voucherIds = $this->restrictionVoucherIds($voucher);
-
-        return LaunchVoucherRedemption::query()
-            ->whereIn('launch_voucher_id', $voucherIds)
-            ->where($column, $value)
-            ->whereIn('status', $activeStatuses)
-            ->whereHas('transaction', function ($query): void {
-                $query->whereNotIn('status', [
+        $query = LaunchVoucherRedemption::query()
+            ->whereIn('status', [
+                LaunchVoucherRedemption::STATUS_RESERVED,
+                LaunchVoucherRedemption::STATUS_REDEEMED,
+            ])
+            ->whereHas('transaction', function ($inner): void {
+                $inner->whereNotIn('status', [
                     TransactionStatus::PAYMENT_FAILED,
                     TransactionStatus::FAILED,
                     TransactionStatus::CANCELLED,
                 ]);
-            })
-            ->exists();
+            });
+
+        if ($voucher->campaign_id) {
+            $query->where('campaign_id', $voucher->campaign_id);
+        } else {
+            $query->where('launch_voucher_id', $voucher->id);
+        }
+
+        if ($column === 'customer_phone_normalized') {
+            $query->where(function ($inner) use ($value): void {
+                $inner->where('customer_phone_normalized', $value)
+                    ->orWhere('customer_phone', $value);
+            });
+        } elseif ($column === 'device_id_hash') {
+            $query->where(function ($inner) use ($value, $rawDeviceId): void {
+                $inner->where('device_id_hash', $value);
+
+                if ($rawDeviceId !== null && $rawDeviceId !== '') {
+                    $inner->orWhere('device_id', $rawDeviceId);
+                }
+            });
+        } else {
+            $query->where($column, $value);
+        }
+
+        return $query->exists();
     }
 
     /**
-     * @return list<int>
+     * @return array{one_per_phone: bool, one_per_email: bool, one_per_device: bool}
      */
-    private function restrictionVoucherIds(LaunchVoucher $voucher): array
+    private function restrictionSettings(LaunchVoucher $voucher, ?LaunchVoucherCampaign $campaign): array
     {
-        if ($voucher->campaign_id) {
-            return LaunchVoucher::query()
-                ->where('campaign_id', $voucher->campaign_id)
-                ->pluck('id')
-                ->all();
-        }
+        return [
+            'one_per_phone' => (bool) ($campaign?->one_per_phone ?? $voucher->one_per_phone),
+            'one_per_email' => (bool) ($campaign?->one_per_email ?? $voucher->one_per_email),
+            'one_per_device' => (bool) ($campaign?->one_per_device ?? $voucher->one_per_device),
+        ];
+    }
 
-        return [$voucher->id];
+    /**
+     * @return array{phone_normalized: string, email_hash: ?string, device_hash: ?string}
+     */
+    private function normalizeIdentity(string $phone, string $email, string $deviceId): array
+    {
+        return [
+            'phone_normalized' => VoucherIdentityNormalizer::normalizePhone($phone),
+            'email_hash' => VoucherIdentityNormalizer::hashEmail($email),
+            'device_hash' => VoucherIdentityNormalizer::hashDevice($deviceId),
+        ];
     }
 
     private function trackBlocked(LaunchVoucher $voucher, string $reason): void

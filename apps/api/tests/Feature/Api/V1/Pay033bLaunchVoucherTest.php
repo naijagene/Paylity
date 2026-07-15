@@ -7,6 +7,7 @@ use App\Enums\TransactionStatus;
 use App\Models\LaunchVoucher;
 use App\Models\LaunchVoucherRedemption;
 use App\Models\Transaction;
+use App\Support\Marketing\VoucherIdentityNormalizer;
 use App\Services\Finance\FinancialLedgerService;
 use App\Services\Finance\LedgerPostingService;
 use App\Services\Marketing\MarketingEventService;
@@ -82,8 +83,10 @@ class Pay033bLaunchVoucherTest extends TestCase
 
         LaunchVoucherRedemption::query()->create([
             'launch_voucher_id' => $voucher->id,
+            'campaign_id' => $voucher->campaign_id,
             'transaction_id' => $transaction->id,
             'customer_phone' => '08031234567',
+            'customer_phone_normalized' => VoucherIdentityNormalizer::normalizePhone('08031234567'),
             'status' => LaunchVoucherRedemption::STATUS_REDEEMED,
             'discount_amount' => 500,
             'reserved_at' => now(),

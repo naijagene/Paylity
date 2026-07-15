@@ -7,6 +7,7 @@ use App\Models\LaunchVoucherCampaign;
 use App\Models\LaunchVoucherRedemption;
 use App\Models\MarketingEvent;
 use App\Models\TransactionReview;
+use App\Services\Marketing\LaunchVoucherCampaignCapacityService;
 use App\Services\Marketing\MarketingEventService;
 use App\Services\Marketing\TransactionReviewService;
 use App\Support\Marketing\LaunchVoucherCodeGenerator;
@@ -18,6 +19,7 @@ class OpsMarketingService
         private readonly TransactionReviewService $transactionReviewService,
         private readonly LaunchVoucherCodeGenerator $codeGenerator,
         private readonly MarketingEventService $marketingEventService,
+        private readonly LaunchVoucherCampaignCapacityService $campaignCapacityService,
     ) {
     }
 
@@ -79,25 +81,33 @@ class OpsMarketingService
      */
     public function createCampaign(array $input, ?string $operator = null): array
     {
-        $quantity = (int) ($input['quantity'] ?? 1);
-        $sharedCode = (bool) ($input['shared_code'] ?? false);
+        $distributionMode = (string) ($input['distribution_mode'] ?? LaunchVoucherCampaign::DISTRIBUTION_UNIQUE_CODES);
+        $quantity = $distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE
+            ? 1
+            : (int) ($input['quantity'] ?? 1);
+        $maxRedemptions = $distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE
+            ? (int) ($input['max_redemptions'] ?? 0)
+            : null;
 
-        if ($sharedCode && $quantity !== 1) {
-            throw new \InvalidArgumentException('Shared campaign codes must generate exactly one code.');
+        if ($distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE && $maxRedemptions < 1) {
+            throw new \InvalidArgumentException('Shared campaigns require maximum successful redemptions.');
         }
 
-        return DB::transaction(function () use ($input, $operator, $quantity, $sharedCode): array {
+        return DB::transaction(function () use ($input, $operator, $quantity, $distributionMode, $maxRedemptions): array {
             $campaign = LaunchVoucherCampaign::query()->create([
                 'name' => (string) $input['name'],
                 'amount' => (int) $input['amount'],
                 'network' => $input['network'] ?? null,
+                'distribution_mode' => $distributionMode,
                 'generated_count' => $quantity,
+                'max_redemptions' => $maxRedemptions,
                 'expires_at' => $input['expires_at'] ?? null,
                 'active' => (bool) ($input['active'] ?? true),
                 'one_per_phone' => (bool) ($input['one_per_phone'] ?? true),
-                'one_per_email' => (bool) ($input['one_per_email'] ?? false),
+                'one_per_email' => (bool) ($input['one_per_email'] ?? true),
                 'one_per_device' => (bool) ($input['one_per_device'] ?? true),
-                'shared_code' => $sharedCode,
+                'reservation_timeout_minutes' => (int) ($input['reservation_timeout_minutes'] ?? 30),
+                'shared_code' => $distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE,
                 'created_by' => $operator,
             ]);
 
@@ -113,7 +123,9 @@ class OpsMarketingService
                     'product_type' => 'airtime',
                     'amount' => $campaign->amount,
                     'network' => $campaign->network,
-                    'max_redemptions' => $sharedCode ? (int) ($input['max_redemptions'] ?? 1) : 1,
+                    'max_redemptions' => $distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE
+                        ? $maxRedemptions
+                        : 1,
                     'expires_at' => $campaign->expires_at,
                     'active' => $campaign->active,
                     'one_per_phone' => $campaign->one_per_phone,
@@ -135,8 +147,20 @@ class OpsMarketingService
             return [
                 'campaign' => $this->presentCampaign($campaign->fresh('vouchers')),
                 'codes' => $codes,
+                'shared_message' => $distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE
+                    ? $this->buildSharedCampaignMessage($campaign, $codes[0])
+                    : null,
             ];
         });
+    }
+
+    public function buildSharedCampaignMessage(LaunchVoucherCampaign $campaign, string $code): string
+    {
+        return sprintf(
+            'Get ₦%s free airtime on PAYLITY with voucher code %s. You only pay the service charges. Try PAYLITY for fast airtime, data, and electricity payments.',
+            number_format($campaign->amount),
+            $code,
+        );
     }
 
     /**
@@ -189,18 +213,18 @@ class OpsMarketingService
     {
         return LaunchVoucherRedemption::query()
             ->with(['voucher:id,code,name,campaign_id', 'transaction:id,reference,status,customer_phone'])
-            ->when($campaignId, fn ($query) => $query->whereHas('voucher', fn ($inner) => $inner->where('campaign_id', $campaignId)))
+            ->when($campaignId, fn ($query) => $query->where('campaign_id', $campaignId))
             ->orderByDesc('id')
             ->get()
             ->map(fn (LaunchVoucherRedemption $redemption) => [
                 'voucher_code' => $redemption->voucher?->code,
                 'voucher_name' => $redemption->voucher?->name,
-                'campaign_id' => $redemption->voucher?->campaign_id,
+                'campaign_id' => $redemption->campaign_id,
                 'reference' => $redemption->transaction?->reference,
                 'status' => $redemption->status,
                 'discount_amount' => $redemption->discount_amount,
                 'customer_phone' => $redemption->customer_phone,
-                'device_id' => $redemption->device_id,
+                'customer_phone_normalized' => $redemption->customer_phone_normalized,
                 'reserved_at' => $redemption->reserved_at?->toIso8601String(),
                 'redeemed_at' => $redemption->redeemed_at?->toIso8601String(),
                 'released_at' => $redemption->released_at?->toIso8601String(),
@@ -214,23 +238,36 @@ class OpsMarketingService
     private function presentCampaign(LaunchVoucherCampaign $campaign): array
     {
         $vouchers = $campaign->relationLoaded('vouchers') ? $campaign->vouchers : $campaign->vouchers()->get();
+        $capacity = $this->campaignCapacityService->snapshot($campaign);
+        $sharedCode = $vouchers->first()?->code;
 
         return [
             'id' => $campaign->id,
             'name' => $campaign->name,
             'amount' => $campaign->amount,
             'network' => $campaign->network,
+            'distribution_mode' => $campaign->distribution_mode,
             'generated_count' => $campaign->generated_count,
+            'max_redemptions' => $campaign->max_redemptions,
             'redeemed_count' => $campaign->redeemed_count,
             'expires_at' => $campaign->expires_at?->toIso8601String(),
             'active' => $campaign->active,
             'one_per_phone' => $campaign->one_per_phone,
             'one_per_email' => $campaign->one_per_email,
             'one_per_device' => $campaign->one_per_device,
-            'shared_code' => $campaign->shared_code,
+            'reservation_timeout_minutes' => $campaign->reservation_timeout_minutes,
+            'shared_code' => $campaign->isSharedCode(),
+            'shared_code_value' => $campaign->isSharedCode() ? $sharedCode : null,
+            'shared_message' => $campaign->isSharedCode() && $sharedCode
+                ? $this->buildSharedCampaignMessage($campaign, $sharedCode)
+                : null,
             'created_by' => $campaign->created_by,
             'created_at' => $campaign->created_at?->toIso8601String(),
-            'unused_count' => $vouchers->filter(fn (LaunchVoucher $voucher) => $voucher->active && ! $voucher->hasReservationOrRedemption())->count(),
+            'unused_count' => $capacity['unused_codes'],
+            'reserved_count' => $capacity['reserved'],
+            'released_count' => $capacity['released'],
+            'expired_reservations' => $capacity['expired'],
+            'remaining_capacity' => $capacity['remaining_capacity'],
         ];
     }
 
@@ -254,6 +291,7 @@ class OpsMarketingService
             'id' => $voucher->id,
             'campaign_id' => $voucher->campaign_id,
             'campaign_name' => $voucher->campaign?->name,
+            'distribution_mode' => $voucher->campaign?->distribution_mode,
             'name' => $voucher->name,
             'code' => $voucher->code,
             'code_suffix' => substr((string) $voucher->code_normalized, -4),

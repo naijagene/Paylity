@@ -47,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(20)
             ->onOneServer();
         $schedule->command('paylity:cleanup-otp')->dailyAt('02:30')->onOneServer();
+        $schedule->command('paylity:cleanup-voucher-reservations')->everyFiveMinutes()->onOneServer();
         $schedule->command('paylity:cleanup-webhooks')->weeklyOn(0, '03:00')->onOneServer();
     })
     ->withMiddleware(function (Middleware $middleware): void {

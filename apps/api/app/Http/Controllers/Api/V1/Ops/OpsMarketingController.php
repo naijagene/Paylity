@@ -31,15 +31,17 @@ class OpsMarketingController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'amount' => ['required', 'integer', 'in:500,1000'],
-            'quantity' => ['required', 'integer', 'in:1,5,10,25,50,100'],
+            'distribution_mode' => ['required', 'string', 'in:unique_codes,shared_code'],
+            'quantity' => ['nullable', 'integer', 'in:1,5,10,25,50,100'],
+            'max_redemptions' => ['nullable', 'integer', 'min:1', 'max:10000'],
             'network' => ['nullable', 'string', 'max:32'],
             'expires_at' => ['nullable', 'date'],
             'active' => ['sometimes', 'boolean'],
             'one_per_phone' => ['sometimes', 'boolean'],
             'one_per_email' => ['sometimes', 'boolean'],
             'one_per_device' => ['sometimes', 'boolean'],
+            'reservation_timeout_minutes' => ['sometimes', 'integer', 'min:5', 'max:1440'],
             'shared_code' => ['sometimes', 'boolean'],
-            'max_redemptions' => ['nullable', 'integer', 'min:1'],
         ]);
 
         return ApiResponse::success(

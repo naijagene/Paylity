@@ -25,10 +25,14 @@ class LaunchVoucherRedemption extends Model
 
     protected $fillable = [
         'launch_voucher_id',
+        'campaign_id',
         'transaction_id',
         'customer_phone',
+        'customer_phone_normalized',
         'customer_email',
+        'customer_email_hash',
         'device_id',
+        'device_id_hash',
         'status',
         'discount_amount',
         'reserved_at',
@@ -49,6 +53,11 @@ class LaunchVoucherRedemption extends Model
     public function voucher(): BelongsTo
     {
         return $this->belongsTo(LaunchVoucher::class, 'launch_voucher_id');
+    }
+
+    public function campaign(): BelongsTo
+    {
+        return $this->belongsTo(LaunchVoucherCampaign::class, 'campaign_id');
     }
 
     public function transaction(): BelongsTo

@@ -830,6 +830,31 @@ export function getOpsGoLiveExportPdfUrl(): string {
   return `${getOpsApiBaseUrl()}/ops/go-live/export/pdf`;
 }
 
+export type OpsMarketingCampaign = {
+  id: number;
+  name: string;
+  amount: number;
+  network?: string | null;
+  distribution_mode: "unique_codes" | "shared_code";
+  generated_count: number;
+  max_redemptions?: number | null;
+  redeemed_count: number;
+  unused_count?: number;
+  reserved_count?: number;
+  released_count?: number;
+  expired_reservations?: number;
+  remaining_capacity?: number;
+  expires_at?: string | null;
+  active: boolean;
+  one_per_phone: boolean;
+  one_per_email: boolean;
+  one_per_device: boolean;
+  reservation_timeout_minutes?: number;
+  shared_code?: boolean;
+  shared_code_value?: string | null;
+  shared_message?: string | null;
+};
+
 export type OpsMarketingSnapshot = {
   refreshed_at: string;
   kpis: {
@@ -845,17 +870,12 @@ export type OpsMarketingSnapshot = {
     share_rate_pct: number;
   };
   reviews: { count: number; average_rating: number | null; distribution: Record<number, number> };
-  campaigns?: Array<{
-    id: number;
-    name: string;
-    amount: number;
-    generated_count: number;
-    redeemed_count: number;
-    unused_count?: number;
-    active: boolean;
-  }>;
+  campaigns?: OpsMarketingCampaign[];
   vouchers: Array<{
     id: number;
+    campaign_id?: number;
+    campaign_name?: string;
+    distribution_mode?: "unique_codes" | "shared_code";
     name: string;
     code: string;
     amount: number;
@@ -865,6 +885,9 @@ export type OpsMarketingSnapshot = {
     active: boolean;
     status?: string;
     immutable?: boolean;
+    one_per_phone?: boolean;
+    one_per_email?: boolean;
+    one_per_device?: boolean;
   }>;
 };
 
@@ -877,19 +900,21 @@ export async function fetchOpsMarketing(search?: string) {
 export async function opsMarketingCreateCampaign(payload: {
   name: string;
   amount: 500 | 1000;
-  quantity: number;
+  distribution_mode: "unique_codes" | "shared_code";
+  quantity?: number;
+  max_redemptions?: number;
   network?: string | null;
   expires_at?: string | null;
   active?: boolean;
   one_per_phone?: boolean;
   one_per_email?: boolean;
   one_per_device?: boolean;
-  shared_code?: boolean;
-  max_redemptions?: number;
+  reservation_timeout_minutes?: number;
 }) {
   const { data } = await opsRequest<{
-    campaign: NonNullable<OpsMarketingSnapshot["campaigns"]>[number];
+    campaign: OpsMarketingCampaign;
     codes: string[];
+    shared_message?: string | null;
   }>("/ops/marketing/campaigns", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -912,13 +937,19 @@ export async function opsMarketingSetCampaignActive(id: number, active: boolean)
   });
 }
 
-export async function opsMarketingExportUsage() {
-  const { data } = await opsRequest<Array<Record<string, unknown>>>("/ops/marketing/vouchers/export");
+export async function opsMarketingExportUsage(campaignId?: number) {
+  const query = campaignId ? `?campaign_id=${campaignId}` : "";
+  const { data } = await opsRequest<Array<Record<string, unknown>>>(`/ops/marketing/vouchers/export${query}`);
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "paylity-voucher-usage.json";
+  anchor.download = campaignId ? `paylity-voucher-usage-${campaignId}.json` : "paylity-voucher-usage.json";
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export function getOpsMarketingExportCsvUrl(campaignId?: number): string {
+  const query = campaignId ? `?campaign_id=${campaignId}` : "";
+  return `${getOpsApiBaseUrl()}/ops/marketing/vouchers/export.csv${query}`;
 }

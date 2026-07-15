@@ -234,9 +234,12 @@ class Pay033bVoucherPricingAuditTest extends TestCase
 
         LaunchVoucherRedemption::query()->create([
             'launch_voucher_id' => $voucher->id,
+            'campaign_id' => $voucher->campaign_id,
             'transaction_id' => $transaction->id,
             'customer_phone' => '08037770001',
+            'customer_phone_normalized' => \App\Support\Marketing\VoucherIdentityNormalizer::normalizePhone('08037770001'),
             'device_id' => 'shared-device-audit',
+            'device_id_hash' => \App\Support\Marketing\VoucherIdentityNormalizer::hashDevice('shared-device-audit'),
             'status' => LaunchVoucherRedemption::STATUS_REDEEMED,
             'discount_amount' => 500,
             'reserved_at' => now(),

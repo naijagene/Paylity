@@ -8,8 +8,16 @@ final class PhoneNormalizer
     {
         $digits = preg_replace('/\D/', '', $phone) ?? '';
 
-        if (str_starts_with($digits, '234') && strlen($digits) >= 13) {
-            return '0'.substr($digits, 3);
+        if (str_starts_with($digits, '234') && strlen($digits) >= 12) {
+            $national = substr($digits, 3);
+
+            if (strlen($national) === 10) {
+                return '0'.$national;
+            }
+
+            if (strlen($national) === 11 && str_starts_with($national, '0')) {
+                return $national;
+            }
         }
 
         if (str_starts_with($digits, '0') && strlen($digits) === 11) {

@@ -78,6 +78,7 @@ class Pay033bVoucherLifecycleTest extends TestCase
             ->postJson('/api/v1/ops/marketing/campaigns', [
                 'name' => 'Staging Launch',
                 'amount' => 500,
+                'distribution_mode' => 'unique_codes',
                 'quantity' => 5,
                 'one_per_phone' => true,
                 'one_per_device' => true,
@@ -204,9 +205,12 @@ class Pay033bVoucherLifecycleTest extends TestCase
 
         LaunchVoucherRedemption::query()->create([
             'launch_voucher_id' => $fixture['vouchers'][0]->id,
+            'campaign_id' => $fixture['campaign']->id,
             'transaction_id' => $transaction->id,
             'customer_phone' => '08035556666',
+            'customer_phone_normalized' => \App\Support\Marketing\VoucherIdentityNormalizer::normalizePhone('08035556666'),
             'device_id' => 'device-phone-1',
+            'device_id_hash' => \App\Support\Marketing\VoucherIdentityNormalizer::hashDevice('device-phone-1'),
             'status' => LaunchVoucherRedemption::STATUS_REDEEMED,
             'discount_amount' => 500,
             'reserved_at' => now(),
