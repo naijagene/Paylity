@@ -15,6 +15,7 @@ vendor/
 **/.next/
 dist/
 build/
+apps/ops/.next/
 
 # Logs/cache
 *.log
