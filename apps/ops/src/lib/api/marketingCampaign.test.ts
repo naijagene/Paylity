@@ -65,22 +65,28 @@ describe("buildOpsMarketingCampaignPayload", () => {
     });
   });
 
-  it("includes max_redemptions for shared campaigns", () => {
-    expect(
-      buildOpsMarketingCampaignPayload({
-        name: "Shared Launch",
-        amount: 1000,
-        distributionMode: "shared_code",
-        maxRedemptions: 25,
-      }),
-    ).toMatchObject({
-      name: "Shared Launch",
+  it("does not include quantity for shared campaigns", () => {
+    const payload = buildOpsMarketingCampaignPayload({
+      name: "Airtime Launch Promo",
       amount: 1000,
-      distribution_mode: "shared_code",
-      max_redemptions: 25,
-      network: null,
-      expires_at: null,
+      distributionMode: "shared_code",
+      maxRedemptions: 2,
     });
+
+    expect(payload).not.toHaveProperty("quantity");
+    expect(payload.max_redemptions).toBe(2);
+  });
+
+  it("includes quantity only for unique campaigns", () => {
+    const payload = buildOpsMarketingCampaignPayload({
+      name: "Unique Launch",
+      amount: 500,
+      distributionMode: "unique_codes",
+      quantity: 5,
+    });
+
+    expect(payload.quantity).toBe(5);
+    expect(payload).not.toHaveProperty("max_redemptions");
   });
 });
 

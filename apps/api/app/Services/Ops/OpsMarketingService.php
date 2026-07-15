@@ -82,15 +82,13 @@ class OpsMarketingService
     public function createCampaign(array $input, ?string $operator = null): array
     {
         $distributionMode = (string) ($input['distribution_mode'] ?? LaunchVoucherCampaign::DISTRIBUTION_UNIQUE_CODES);
-        $quantity = $distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE
-            ? 1
-            : (int) ($input['quantity'] ?? 1);
-        $maxRedemptions = $distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE
-            ? (int) ($input['max_redemptions'] ?? 0)
-            : null;
 
-        if ($distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE && $maxRedemptions < 1) {
-            throw new \InvalidArgumentException('Shared campaigns require maximum successful redemptions.');
+        if ($distributionMode === LaunchVoucherCampaign::DISTRIBUTION_SHARED_CODE) {
+            $quantity = 1;
+            $maxRedemptions = (int) $input['max_redemptions'];
+        } else {
+            $quantity = (int) $input['quantity'];
+            $maxRedemptions = null;
         }
 
         return DB::transaction(function () use ($input, $operator, $quantity, $distributionMode, $maxRedemptions): array {
