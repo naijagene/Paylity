@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/transaction/StatusBadge";
 import {
   fetchOpsVoucherCampaignDetail,
   formatExpiresAtForBackend,
-  getOpsMarketingExportCsvUrl,
+  downloadVoucherCsv,
   opsMarketingExportUsage,
   opsMarketingExtendExpiry,
   opsMarketingIncreaseCapacity,
@@ -31,6 +31,8 @@ export function CampaignDetailClient({ campaignId }: { campaignId: number }) {
   const [newExpiry, setNewExpiry] = useState("");
   const [newCapacity, setNewCapacity] = useState<number | "">("");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [csvDownloading, setCsvDownloading] = useState(false);
+  const [csvError, setCsvError] = useState<string | null>(null);
 
   const loadDetail = useCallback(async () => {
     setLoading(true);
@@ -43,6 +45,19 @@ export function CampaignDetailClient({ campaignId }: { campaignId: number }) {
       setLoading(false);
     }
   }, [campaignId]);
+
+  async function handleDownloadCsv() {
+    setCsvError(null);
+    setCsvDownloading(true);
+
+    try {
+      await downloadVoucherCsv(campaignId);
+    } catch (downloadError) {
+      setCsvError(downloadError instanceof ApiError ? downloadError.message : "Unable to download voucher CSV.");
+    } finally {
+      setCsvDownloading(false);
+    }
+  }
 
   useEffect(() => {
     void loadDetail();
@@ -72,6 +87,7 @@ export function CampaignDetailClient({ campaignId }: { campaignId: number }) {
         </header>
 
         {actionMessage ? <AlertCard severity="success" message={actionMessage} /> : null}
+        {csvError ? <AlertCard severity="critical" title="CSV export failed" message={csvError} /> : null}
 
         <SectionCard title="Capacity Progress">
           <div className="mb-3 flex items-center justify-between text-sm">
@@ -134,7 +150,9 @@ export function CampaignDetailClient({ campaignId }: { campaignId: number }) {
               {campaign.active ? "Pause campaign" : "Resume campaign"}
             </Button>
             <Button type="button" variant="outline" onClick={() => void opsMarketingExportUsage(campaignId)}>Export JSON</Button>
-            <Button type="button" variant="outline" onClick={() => window.open(getOpsMarketingExportCsvUrl(campaignId), "_blank")}>Export CSV</Button>
+            <Button type="button" variant="outline" disabled={csvDownloading} onClick={() => void handleDownloadCsv()}>
+              {csvDownloading ? "Downloading…" : "Export CSV"}
+            </Button>
           </div>
         </SectionCard>
 

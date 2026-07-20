@@ -74,6 +74,21 @@ vi.mock("@/lib/hooks/usePolling", () => ({
         settlement_difference_kobo: 0,
       },
       pricing_audit_summary: { negative_margin_count: 0, all_positive: true },
+      payment_certification: {
+        paystack_mode: "test",
+        vtpass_mode: "sandbox",
+        environment: "staging",
+        launch_mode: "staging",
+        preflight_verdict: "UNKNOWN",
+        daily_usage: {
+          transaction_count: 0,
+          gross_collection_naira: 0,
+          transaction_limit_daily: 100,
+          revenue_limit_daily: 200000,
+        },
+        active_run: null,
+        last_certified: null,
+      },
     },
     loading: false,
     error: null,
@@ -93,5 +108,7 @@ describe("GoLiveClient", () => {
     expect(screen.getByText("Launch Timeline")).toBeInTheDocument();
     expect(screen.getByText("No launch blockers detected.")).toBeInTheDocument();
     expect(screen.getByText("Production Mode")).toBeInTheDocument();
+    expect(screen.getByText("Live Payment Certification")).toBeInTheDocument();
+    expect(screen.getByText("Create Certification Session")).toBeInTheDocument();
   });
 });

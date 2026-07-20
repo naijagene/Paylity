@@ -53,6 +53,11 @@ final class SystemSettingKeys
     public const LAUNCH_SUPPORT_PHONE = 'launch_support_phone';
     public const LAUNCH_SUPPORT_EMAIL = 'launch_support_email';
     public const LAUNCH_INCIDENT_MESSAGE = 'launch_incident_message';
+    public const LAUNCH_MAX_TRANSACTION_AMOUNT = 'launch_max_transaction_amount';
+    public const LAUNCH_ALLOWED_NETWORKS = 'launch_allowed_networks';
+    public const STAGING_ALLOW_LIVE_PAYMENTS = 'staging_allow_live_payments';
+    public const PAYMENT_LIVE_PREFLIGHT_LAST_RUN_AT = 'payment_live_preflight_last_run_at';
+    public const PAYMENT_LIVE_PREFLIGHT_LAST_STATUS = 'payment_live_preflight_last_status';
     public const SCHEDULER_LAST_RUN_AT = 'scheduler_last_run_at';
     public const PREFLIGHT_LAST_RUN_AT = 'preflight_last_run_at';
     public const PREFLIGHT_LAST_STATUS = 'preflight_last_status';

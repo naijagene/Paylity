@@ -295,6 +295,24 @@ class PlatformSettingsSeeder extends Seeder
                 'type' => 'string',
                 'description' => 'Checkout message when launch_mode=maintenance.',
             ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_MAX_TRANSACTION_AMOUNT,
+                'value' => '5000',
+                'type' => 'integer',
+                'description' => 'Maximum product amount in naira during soft launch (0 disables).',
+            ],
+            [
+                'key' => SystemSettingKeys::LAUNCH_ALLOWED_NETWORKS,
+                'value' => '',
+                'type' => 'string',
+                'description' => 'Optional comma-separated networks allowed during soft launch.',
+            ],
+            [
+                'key' => SystemSettingKeys::STAGING_ALLOW_LIVE_PAYMENTS,
+                'value' => '0',
+                'type' => 'boolean',
+                'description' => 'Allow live Paystack credentials in staging when true.',
+            ],
         ];
 
         foreach ($settings as $setting) {

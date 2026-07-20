@@ -17,8 +17,15 @@ import {
   opsGoLiveSetMode,
   opsGoLiveUpdateChecklist,
   opsGoLiveVerifyBackup,
+  opsPaymentCertificationCreate,
+  opsPaymentCertificationExport,
+  opsPaymentCertificationFinalize,
+  opsPaymentCertificationLinkReference,
+  opsPaymentCertificationPreflight,
+  opsPaymentCertificationRefresh,
   type OpsGoLiveCheck,
   type OpsGoLiveSnapshot,
+  type OpsPaymentCertificationRun,
 } from "@/lib/api/ops";
 import { getOperatorKey } from "@/lib/ops/operatorKey";
 import { usePolling } from "@/lib/hooks/usePolling";
@@ -56,6 +63,10 @@ export function GoLiveClient() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmProduction, setConfirmProduction] = useState(false);
+  const [confirmMaintenance, setConfirmMaintenance] = useState(false);
+  const [confirmCertification, setConfirmCertification] = useState(false);
+  const [confirmFinalizeCertification, setConfirmFinalizeCertification] = useState(false);
+  const [linkReference, setLinkReference] = useState("");
 
   const loadSnapshot = useCallback(async () => fetchOpsGoLive(), []);
   const snapshot = usePolling({ fetcher: loadSnapshot, intervalMs: POLL_INTERVAL_MS });
@@ -133,7 +144,9 @@ export function GoLiveClient() {
           </div>
           <GoLiveActions
             confirmProduction={confirmProduction}
+            confirmMaintenance={confirmMaintenance}
             onConfirmProductionChange={setConfirmProduction}
+            onConfirmMaintenanceChange={setConfirmMaintenance}
             onRefresh={() => void snapshot.refresh()}
             onPreflight={(strict) => void runAction(strict ? "Strict preflight" : "Preflight", () => opsGoLivePreflight(strict))}
             onPricingAudit={() => void runAction("Pricing audit", () => opsGoLivePricingAudit())}
@@ -143,7 +156,11 @@ export function GoLiveClient() {
             onExportPdf={() => void runAction("Export PDF", async () => exportPdfReport())}
             onSetMode={(mode) =>
               void runAction(`${mode} mode`, () =>
-                opsGoLiveSetMode(mode, mode === "live" ? confirmProduction : false),
+                opsGoLiveSetMode(
+                  mode,
+                  mode === "live" ? confirmProduction : false,
+                  mode === "maintenance" ? confirmMaintenance : false,
+                ),
               )
             }
           />
@@ -154,7 +171,21 @@ export function GoLiveClient() {
         {actionMessage ? <AlertCard severity="success" message={actionMessage} /> : null}
         {snapshot.loading && !data ? <p className="text-sm text-muted">Loading go-live snapshot…</p> : null}
 
-        {data ? <GoLiveSections data={data} onToggleChecklistItem={toggleChecklistItem} /> : null}
+        {data ? (
+          <>
+            <GoLiveSections data={data} onToggleChecklistItem={toggleChecklistItem} />
+            <LivePaymentCertificationSection
+              data={data}
+              confirmCertification={confirmCertification}
+              confirmFinalizeCertification={confirmFinalizeCertification}
+              linkReference={linkReference}
+              onConfirmCertificationChange={setConfirmCertification}
+              onConfirmFinalizeChange={setConfirmFinalizeCertification}
+              onLinkReferenceChange={setLinkReference}
+              onAction={(label, action) => void runAction(label, action)}
+            />
+          </>
+        ) : null}
       </div>
     </PageContainer>
   );
@@ -162,7 +193,9 @@ export function GoLiveClient() {
 
 function GoLiveActions({
   confirmProduction,
+  confirmMaintenance,
   onConfirmProductionChange,
+  onConfirmMaintenanceChange,
   onRefresh,
   onPreflight,
   onPricingAudit,
@@ -173,7 +206,9 @@ function GoLiveActions({
   onSetMode,
 }: {
   confirmProduction: boolean;
+  confirmMaintenance: boolean;
   onConfirmProductionChange: (value: boolean) => void;
+  onConfirmMaintenanceChange: (value: boolean) => void;
   onRefresh: () => void;
   onPreflight: (strict: boolean) => void;
   onPricingAudit: () => void;
@@ -184,6 +219,7 @@ function GoLiveActions({
   onSetMode: (mode: "staging" | "soft_launch" | "live" | "maintenance") => void;
 }) {
   const [showProductionDialog, setShowProductionDialog] = useState(false);
+  const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
 
   return (
     <div className="space-y-3">
@@ -214,7 +250,7 @@ function GoLiveActions({
         </Button>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" onClick={() => onSetMode("maintenance")}>
+        <Button type="button" variant="secondary" onClick={() => setShowMaintenanceDialog(true)}>
           Maintenance Mode
         </Button>
         <Button type="button" variant="secondary" onClick={() => onSetMode("soft_launch")}>
@@ -224,6 +260,41 @@ function GoLiveActions({
           Production Mode
         </Button>
       </div>
+      {showMaintenanceDialog ? (
+        <AlertCard
+          severity="warning"
+          title="Confirm maintenance mode"
+          message={
+            <div className="space-y-3">
+              <p>I understand this blocks new checkout initialization while preserving payment recovery.</p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={confirmMaintenance}
+                  onChange={(event) => onConfirmMaintenanceChange(event.target.checked)}
+                />
+                Confirm maintenance mode
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!confirmMaintenance}
+                  onClick={() => {
+                    onSetMode("maintenance");
+                    setShowMaintenanceDialog(false);
+                  }}
+                >
+                  Enter Maintenance Mode
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowMaintenanceDialog(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          }
+        />
+      ) : null}
       {showProductionDialog ? (
         <AlertCard
           severity="warning"
@@ -453,6 +524,256 @@ function TimelineItem({ label, value }: { label: string; value?: string | null }
     <div className="rounded-xl border border-border px-3 py-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1 text-sm font-semibold text-dark">{formatTimestamp(value)}</p>
+    </div>
+  );
+}
+
+function LivePaymentCertificationSection({
+  data,
+  confirmCertification,
+  confirmFinalizeCertification,
+  linkReference,
+  onConfirmCertificationChange,
+  onConfirmFinalizeChange,
+  onLinkReferenceChange,
+  onAction,
+}: {
+  data: OpsGoLiveSnapshot;
+  confirmCertification: boolean;
+  confirmFinalizeCertification: boolean;
+  linkReference: string;
+  onConfirmCertificationChange: (value: boolean) => void;
+  onConfirmFinalizeChange: (value: boolean) => void;
+  onLinkReferenceChange: (value: string) => void;
+  onAction: (label: string, action: () => Promise<unknown>) => void;
+}) {
+  const certification = data.payment_certification;
+  const activeRun = certification?.active_run ?? null;
+  const lastCertified = certification?.last_certified ?? null;
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
+
+  if (!certification) {
+    return null;
+  }
+
+  return (
+    <SectionCard title="Live Payment Certification">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Paystack Mode" value={certification.paystack_mode} />
+        <KpiCard label="VTPass Mode" value={certification.vtpass_mode} />
+        <KpiCard label="Preflight Verdict" value={certification.preflight_verdict} />
+        <KpiCard label="Launch Mode" value={certification.launch_mode} />
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-border px-4 py-3 text-sm">
+          <p className="font-semibold text-dark">Daily Usage</p>
+          <p className="mt-2 text-muted">
+            Transactions: {certification.daily_usage.transaction_count} /{" "}
+            {certification.daily_usage.transaction_limit_daily || "∞"}
+          </p>
+          <p className="text-muted">
+            Revenue: ₦{certification.daily_usage.gross_collection_naira.toLocaleString()} / ₦
+            {certification.daily_usage.revenue_limit_daily.toLocaleString() || "∞"}
+          </p>
+          <p className="mt-2 text-muted">
+            Last backup: {formatTimestamp(data.launch_status.backup.last_run_at)}
+          </p>
+          <p className="text-muted">
+            Scheduler: {data.launch_status.scheduler.status}
+          </p>
+        </div>
+
+        <CertificationRunSummary run={activeRun ?? lastCertified} title={activeRun ? "Active Certification Run" : "Last Certified Transaction"} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button type="button" variant="outline" onClick={() => onAction("Live payment preflight", () => opsPaymentCertificationPreflight(false))}>
+          Run Live Payment Preflight
+        </Button>
+        <Button type="button" variant="outline" onClick={() => setShowCreateDialog(true)}>
+          Create Certification Session
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!activeRun}
+          onClick={() =>
+            activeRun &&
+            onAction("Link transaction reference", () =>
+              opsPaymentCertificationLinkReference(activeRun.id, linkReference.trim()),
+            )
+          }
+        >
+          Link Transaction Reference
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!activeRun}
+          onClick={() => activeRun && onAction("Refresh certification", () => opsPaymentCertificationRefresh(activeRun.id))}
+        >
+          Refresh Certification
+        </Button>
+        <Button type="button" variant="outline" disabled={!activeRun} onClick={() => setShowFinalizeDialog(true)}>
+          Finalize Certification
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!activeRun && !lastCertified}
+          onClick={() => {
+            const run = activeRun ?? lastCertified;
+            if (!run) return;
+            return onAction("Export certification evidence", async () => {
+              const exported = await opsPaymentCertificationExport(run.id);
+              const blob = new Blob([JSON.stringify(exported.payload, null, 2)], {
+                type: exported.content_type,
+              });
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement("a");
+              anchor.href = url;
+              anchor.download = exported.filename;
+              anchor.click();
+              URL.revokeObjectURL(url);
+            });
+          }}
+        >
+          Export Certification Evidence
+        </Button>
+      </div>
+
+      <div className="mt-4">
+        <label className="block text-sm font-semibold text-dark" htmlFor="certification-reference">
+          Transaction reference to link
+        </label>
+        <input
+          id="certification-reference"
+          className="mt-2 w-full rounded-xl border border-border px-3 py-2 text-sm"
+          value={linkReference}
+          onChange={(event) => onLinkReferenceChange(event.target.value)}
+          placeholder="PYL-YYYYMMDD-XXXXXX"
+        />
+      </div>
+
+      {showCreateDialog ? (
+        <AlertCard
+          severity="warning"
+          title="Confirm live certification session"
+          message={
+            <div className="space-y-3">
+              <p>
+                This creates a controlled ₦100 airtime certification session. Complete checkout through the normal
+                customer web flow, then link the resulting transaction reference.
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={confirmCertification}
+                  onChange={(event) => onConfirmCertificationChange(event.target.checked)}
+                />
+                Confirm live certification session
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!confirmCertification}
+                  onClick={() => {
+                    onAction("Create certification session", () =>
+                      opsPaymentCertificationCreate({
+                        product: "airtime",
+                        amount: 100,
+                        confirm_live_certification: true,
+                        force: Boolean(activeRun),
+                      }),
+                    );
+                    setShowCreateDialog(false);
+                  }}
+                >
+                  Create Session
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          }
+        />
+      ) : null}
+
+      {showFinalizeDialog && activeRun ? (
+        <AlertCard
+          severity="warning"
+          title="Confirm live certification finalization"
+          message={
+            <div className="space-y-3">
+              <p>Finalize only after the real-money transaction evidence has been verified end-to-end.</p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={confirmFinalizeCertification}
+                  onChange={(event) => onConfirmFinalizeChange(event.target.checked)}
+                />
+                Confirm live certification finalization
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!confirmFinalizeCertification}
+                  onClick={() => {
+                    onAction("Finalize certification", () =>
+                      opsPaymentCertificationFinalize(activeRun.id, true),
+                    );
+                    setShowFinalizeDialog(false);
+                  }}
+                >
+                  Finalize Certification
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowFinalizeDialog(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          }
+        />
+      ) : null}
+    </SectionCard>
+  );
+}
+
+function CertificationRunSummary({
+  run,
+  title,
+}: {
+  run?: OpsPaymentCertificationRun | null;
+  title: string;
+}) {
+  if (!run) {
+    return (
+      <div className="rounded-xl border border-border px-4 py-3 text-sm">
+        <p className="font-semibold text-dark">{title}</p>
+        <p className="mt-2 text-muted">No certification run recorded yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border px-4 py-3 text-sm">
+      <p className="font-semibold text-dark">{title}</p>
+      <ul className="mt-2 space-y-1 text-muted">
+        <li>Run #{run.id}</li>
+        <li>Reference: {run.reference ?? "—"}</li>
+        <li>Verdict: {run.result}</li>
+        <li>Payment: {run.payment_status ?? "—"}</li>
+        <li>Fulfillment: {run.fulfillment_status ?? "—"}</li>
+        <li>Ledger: {run.ledger_status ?? "—"}</li>
+        <li>Reconciliation: {run.reconciliation_status ?? "—"}</li>
+        <li>Settlement: {run.settlement_expectation_status ?? "—"}</li>
+        <li>Receipt: {run.receipt_status ?? "—"}</li>
+      </ul>
     </div>
   );
 }

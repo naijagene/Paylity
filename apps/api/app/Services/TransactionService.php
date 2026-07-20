@@ -180,10 +180,18 @@ class TransactionService
                 ]);
             }
 
-            $this->launchModeService->assertCheckoutAllowed($productType, (int) $transaction->fresh()->payable_amount);
+            $freshTransaction = $transaction->fresh();
+            $network = strtoupper((string) data_get($freshTransaction->request_payload, 'network', ''));
+
+            $this->launchModeService->assertCheckoutAllowed(
+                productType: $productType,
+                payableAmount: (int) $freshTransaction->payable_amount,
+                productAmount: (int) $freshTransaction->product_amount,
+                network: $network !== '' ? $network : null,
+            );
 
             $this->transactionEventService->record(
-                $transaction->fresh(),
+                $freshTransaction,
                 TransactionEventService::TYPE_CREATED,
                 'Transaction created.',
             );

@@ -112,6 +112,13 @@ Route::middleware(['operator', 'throttle:ops'])->prefix('ops')->group(function (
     Route::get('/go-live/pricing-audit', [OpsGoLiveController::class, 'pricingAudit']);
     Route::get('/go-live/export/json', [OpsGoLiveController::class, 'exportJson']);
     Route::get('/go-live/export/pdf', [OpsGoLiveController::class, 'exportPdf']);
+    Route::get('/go-live/payment-certification', [OpsGoLiveController::class, 'paymentCertificationSnapshot']);
+    Route::post('/go-live/payment-certification/preflight', [OpsGoLiveController::class, 'paymentCertificationPreflight']);
+    Route::post('/go-live/payment-certification', [OpsGoLiveController::class, 'createPaymentCertification']);
+    Route::patch('/go-live/payment-certification/{run}/reference', [OpsGoLiveController::class, 'linkPaymentCertificationReference']);
+    Route::post('/go-live/payment-certification/{run}/refresh', [OpsGoLiveController::class, 'refreshPaymentCertification']);
+    Route::post('/go-live/payment-certification/{run}/finalize', [OpsGoLiveController::class, 'finalizePaymentCertification']);
+    Route::get('/go-live/payment-certification/{run}/export', [OpsGoLiveController::class, 'exportPaymentCertification']);
     Route::get('/marketing/vouchers', [OpsMarketingController::class, 'snapshot']);
     Route::get('/marketing/dashboard', [OpsMarketingController::class, 'dashboard']);
     Route::get('/marketing/campaigns/{campaign}', [OpsMarketingController::class, 'showCampaign']);

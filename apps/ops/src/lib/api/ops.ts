@@ -759,6 +759,8 @@ export type OpsGoLiveSnapshot = {
       gross_collection_naira: number;
       transaction_limit_daily: number;
       revenue_limit_daily: number;
+      transaction_utilization_pct?: number | null;
+      revenue_utilization_pct?: number | null;
     };
   };
   provider_mode: {
@@ -777,6 +779,39 @@ export type OpsGoLiveSnapshot = {
     settlement_difference_kobo: number;
   };
   pricing_audit_summary: { negative_margin_count: number; all_positive: boolean };
+  payment_certification?: OpsPaymentCertificationSnapshot;
+};
+
+export type OpsPaymentCertificationRun = {
+  id: number;
+  reference?: string | null;
+  environment: string;
+  paystack_mode: string;
+  provider_mode?: string | null;
+  intended_product_type: string;
+  intended_product_amount_kobo: number;
+  expected_total_kobo: number;
+  payment_status?: string | null;
+  fulfillment_status?: string | null;
+  ledger_status?: string | null;
+  reconciliation_status?: string | null;
+  settlement_expectation_status?: string | null;
+  receipt_status?: string | null;
+  result: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  is_active?: boolean;
+};
+
+export type OpsPaymentCertificationSnapshot = {
+  paystack_mode: string;
+  vtpass_mode: string;
+  environment: string;
+  launch_mode: string;
+  preflight_verdict: string;
+  daily_usage: OpsGoLiveSnapshot["launch_mode"]["daily_usage"];
+  active_run?: OpsPaymentCertificationRun | null;
+  last_certified?: OpsPaymentCertificationRun | null;
 };
 
 export async function fetchOpsGoLive() {
@@ -815,14 +850,77 @@ export async function opsGoLiveUpdateChecklist(items: Record<string, boolean>) {
 export async function opsGoLiveSetMode(
   mode: "staging" | "soft_launch" | "live" | "maintenance",
   confirmProduction = false,
+  confirmMaintenance = false,
 ) {
   return opsRequest("/ops/go-live/mode", {
     method: "POST",
     body: JSON.stringify({
       mode,
       confirm_production: confirmProduction,
+      confirm_maintenance: confirmMaintenance,
     }),
   });
+}
+
+export async function opsPaymentCertificationPreflight(strict = false) {
+  return opsRequest(`/ops/go-live/payment-certification/preflight?strict=${strict ? "1" : "0"}`, {
+    method: "POST",
+  });
+}
+
+export async function opsPaymentCertificationCreate(payload: {
+  product?: string;
+  amount?: number;
+  phone?: string;
+  network?: string;
+  confirm_live_certification: boolean;
+  force?: boolean;
+}) {
+  const { data } = await opsRequest<OpsPaymentCertificationRun>("/ops/go-live/payment-certification", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return data;
+}
+
+export async function opsPaymentCertificationLinkReference(runId: number, reference: string) {
+  const { data } = await opsRequest<OpsPaymentCertificationRun>(
+    `/ops/go-live/payment-certification/${runId}/reference`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ reference }),
+    },
+  );
+  return data;
+}
+
+export async function opsPaymentCertificationRefresh(runId: number) {
+  const { data } = await opsRequest<OpsPaymentCertificationRun>(
+    `/ops/go-live/payment-certification/${runId}/refresh`,
+    { method: "POST" },
+  );
+  return data;
+}
+
+export async function opsPaymentCertificationFinalize(runId: number, confirmFinalize = true) {
+  const { data } = await opsRequest<OpsPaymentCertificationRun>(
+    `/ops/go-live/payment-certification/${runId}/finalize`,
+    {
+      method: "POST",
+      body: JSON.stringify({ confirm_finalize: confirmFinalize }),
+    },
+  );
+  return data;
+}
+
+export async function opsPaymentCertificationExport(runId: number) {
+  const { data } = await opsRequest<{
+    filename: string;
+    content_type: string;
+    payload: Record<string, unknown>;
+    sha256: string;
+  }>(`/ops/go-live/payment-certification/${runId}/export`);
+  return data;
 }
 
 export async function opsGoLiveExportJson() {
@@ -1033,9 +1131,110 @@ export async function opsMarketingExportUsage(campaignId?: number) {
   URL.revokeObjectURL(url);
 }
 
-export function getOpsMarketingExportCsvUrl(campaignId?: number): string {
+function parseContentDispositionFilename(header: string | null): string | null {
+  if (!header) {
+    return null;
+  }
+
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const basicMatch = header.match(/filename="?([^";]+)"?/i);
+  return basicMatch?.[1] ?? null;
+}
+
+export async function downloadOpsFile(path: string, fallbackFilename: string): Promise<void> {
+  const operatorKey = getOperatorKey();
+
+  if (!operatorKey) {
+    throw new ApiError(
+      "Operator access key is required.",
+      { code: "OPERATOR_KEY_MISSING" },
+      401,
+    );
+  }
+
+  const url = `${getOpsApiBaseUrl()}${path}`;
+  let objectUrl: string | null = null;
+  let anchor: HTMLAnchorElement | null = null;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "text/csv, application/octet-stream, */*",
+        "X-Operator-Key": operatorKey,
+      },
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get("content-type") ?? "";
+
+      if (contentType.includes("application/json")) {
+        const body = (await response.json()) as ApiErrorResponse;
+        const apiError = new ApiError(
+          resolveApiErrorMessage(body.message || "Request failed.", body.errors ?? {}),
+          body.errors ?? {},
+          response.status,
+        );
+
+        if (isOperatorAuthError(apiError)) {
+          handleOperatorAuthFailure();
+        }
+
+        throw apiError;
+      }
+
+      const apiError = new ApiError("Unable to download file.", {}, response.status);
+
+      if (isOperatorAuthError(apiError)) {
+        handleOperatorAuthFailure();
+      }
+
+      throw apiError;
+    }
+
+    const blob = await response.blob();
+    const filename =
+      parseContentDispositionFilename(response.headers.get("Content-Disposition")) ?? fallbackFilename;
+
+    objectUrl = URL.createObjectURL(blob);
+    anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } catch (error) {
+    if (error instanceof ApiError || error instanceof ApiOfflineError) {
+      throw error;
+    }
+
+    if (isNetworkFailure(error)) {
+      throw new ApiOfflineError();
+    }
+
+    throw error;
+  } finally {
+    if (anchor?.parentNode) {
+      anchor.parentNode.removeChild(anchor);
+    }
+
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+}
+
+export async function downloadVoucherCsv(campaignId?: number): Promise<void> {
   const query = campaignId ? `?campaign_id=${campaignId}` : "";
-  return `${getOpsApiBaseUrl()}/ops/marketing/vouchers/export.csv${query}`;
+  const fallbackFilename = campaignId
+    ? `paylity-voucher-usage-${campaignId}.csv`
+    : "paylity-voucher-usage.csv";
+
+  await downloadOpsFile(`/ops/marketing/vouchers/export.csv${query}`, fallbackFilename);
 }
 
 export type OpsVoucherRedemptionLogItem = {

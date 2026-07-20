@@ -32,15 +32,19 @@ class LaunchModeService
     /**
      * @throws FraudCheckException
      */
-    public function assertCheckoutAllowed(string $productType, int $payableAmount): void
-    {
+    public function assertCheckoutAllowed(
+        string $productType,
+        int $payableAmount,
+        int $productAmount = 0,
+        ?string $network = null,
+    ): void {
         if ($this->mode() === self::MODE_MAINTENANCE) {
             throw new FraudCheckException(
                 $this->settings->getString(
                     SystemSettingKeys::LAUNCH_INCIDENT_MESSAGE,
                     'PAYLITY is temporarily unavailable for checkout.',
                 ),
-                'LAUNCH_MAINTENANCE',
+                'LAUNCH_MODE_MAINTENANCE',
             );
         }
 
@@ -49,12 +53,29 @@ class LaunchModeService
         if ($allowedProducts !== [] && ! in_array($productType, $allowedProducts, true)) {
             throw new FraudCheckException(
                 'This product is not available during the current launch phase.',
-                'LAUNCH_PRODUCT_BLOCKED',
+                'PRODUCT_NOT_ALLOWED_DURING_SOFT_LAUNCH',
             );
         }
 
         if (! in_array($this->mode(), [self::MODE_SOFT_LAUNCH, self::MODE_LIVE], true)) {
             return;
+        }
+
+        $maxProductAmount = $this->settings->getInt(SystemSettingKeys::LAUNCH_MAX_TRANSACTION_AMOUNT, 0);
+        if ($maxProductAmount > 0 && $productAmount > $maxProductAmount) {
+            throw new FraudCheckException(
+                'This purchase amount exceeds the current soft-launch limit.',
+                'AMOUNT_EXCEEDS_SOFT_LAUNCH_LIMIT',
+            );
+        }
+
+        $allowedNetworks = $this->allowedNetworks();
+        if ($network !== null && $network !== '' && $allowedNetworks !== []
+            && ! in_array(strtoupper($network), $allowedNetworks, true)) {
+            throw new FraudCheckException(
+                'This network is not available during the current launch phase.',
+                'PRODUCT_NOT_ALLOWED_DURING_SOFT_LAUNCH',
+            );
         }
 
         $usage = $this->dailyUsage();
@@ -63,7 +84,7 @@ class LaunchModeService
         if ($transactionLimit > 0 && $usage['transaction_count'] >= $transactionLimit) {
             throw new FraudCheckException(
                 'PAYLITY has reached today\'s launch transaction limit. Please try again tomorrow.',
-                'LAUNCH_TRANSACTION_CAP',
+                'DAILY_TRANSACTION_LIMIT_REACHED',
             );
         }
 
@@ -71,9 +92,33 @@ class LaunchModeService
         if ($revenueLimit > 0 && ($usage['gross_collection_naira'] + $payableAmount) > $revenueLimit) {
             throw new FraudCheckException(
                 'PAYLITY has reached today\'s launch collection limit. Please try again tomorrow.',
-                'LAUNCH_REVENUE_CAP',
+                'DAILY_REVENUE_LIMIT_REACHED',
             );
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function allowedNetworks(): array
+    {
+        $raw = $this->settings->get(SystemSettingKeys::LAUNCH_ALLOWED_NETWORKS, '');
+
+        if (is_array($raw)) {
+            return array_values(array_filter(array_map(
+                static fn ($network) => strtoupper((string) $network),
+                $raw,
+            )));
+        }
+
+        if ((string) $raw === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (string $network) => strtoupper(trim($network)),
+            explode(',', (string) $raw),
+        )));
     }
 
     /**
@@ -173,6 +218,8 @@ class LaunchModeService
             'mode' => $this->mode(),
             'started_at' => $this->settings->getString(SystemSettingKeys::LAUNCH_STARTED_AT) ?: null,
             'allowed_products' => $this->allowedProducts(),
+            'allowed_networks' => $this->allowedNetworks(),
+            'max_transaction_amount' => $this->settings->getInt(SystemSettingKeys::LAUNCH_MAX_TRANSACTION_AMOUNT, 0),
             'support_phone' => $this->settings->getString(SystemSettingKeys::LAUNCH_SUPPORT_PHONE) ?: null,
             'support_email' => $this->settings->getString(SystemSettingKeys::LAUNCH_SUPPORT_EMAIL) ?: null,
             'incident_message' => $this->settings->getString(SystemSettingKeys::LAUNCH_INCIDENT_MESSAGE) ?: null,

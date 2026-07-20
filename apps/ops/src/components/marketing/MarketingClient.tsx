@@ -15,7 +15,7 @@ import {
   fetchOpsVoucherAnalytics,
   fetchOpsVoucherCustomerLookup,
   fetchOpsVoucherRedemptions,
-  getOpsMarketingExportCsvUrl,
+  downloadVoucherCsv,
   opsMarketingExportUsage,
   opsMarketingSetCampaignActive,
   type OpsMarketingCampaign,
@@ -25,7 +25,7 @@ import {
   type OpsVoucherCustomerLookup,
   type OpsVoucherRedemptionLogItem,
 } from "@/lib/api/ops";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, ApiOfflineError } from "@/lib/api/client";
 import { usePolling } from "@/lib/hooks/usePolling";
 
 type DashboardTab = "overview" | "campaigns" | "redemptions" | "abuse" | "analytics" | "lookup" | "create";
@@ -63,6 +63,7 @@ export function MarketingClient() {
   const [lookupResult, setLookupResult] = useState<OpsVoucherCustomerLookup | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
   const [panelLoading, setPanelLoading] = useState(false);
+  const [csvDownloadingId, setCsvDownloadingId] = useState<number | null>(null);
 
   const loadSnapshot = useCallback(async () => fetchOpsMarketing(search || undefined), [search]);
   const snapshot = usePolling({ fetcher: loadSnapshot, intervalMs: 60000 });
@@ -135,6 +136,25 @@ export function MarketingClient() {
     if (activeTab === "analytics") void loadAnalytics();
   }, [activeTab]);
 
+  async function handleDownloadCsv(campaignId?: number) {
+    setPanelError(null);
+    setCsvDownloadingId(campaignId ?? -1);
+
+    try {
+      await downloadVoucherCsv(campaignId);
+    } catch (error) {
+      if (error instanceof ApiOfflineError) {
+        setPanelError("Network unavailable. Check the API server and try again.");
+      } else if (error instanceof ApiError) {
+        setPanelError(error.message);
+      } else {
+        setPanelError("Unable to download voucher CSV.");
+      }
+    } finally {
+      setCsvDownloadingId(null);
+    }
+  }
+
   const overviewKpis = useMemo(() => buildOverviewKpis(data), [data]);
 
   return (
@@ -192,7 +212,12 @@ export function MarketingClient() {
 
         {activeTab === "overview" && data ? <OverviewPanel kpis={overviewKpis} data={data} /> : null}
         {activeTab === "campaigns" && data ? (
-          <CampaignsPanel campaigns={data.campaigns ?? []} onToggleActive={() => void snapshot.refresh()} />
+          <CampaignsPanel
+            campaigns={data.campaigns ?? []}
+            csvDownloadingId={csvDownloadingId}
+            onToggleActive={() => void snapshot.refresh()}
+            onDownloadCsv={(campaignId) => void handleDownloadCsv(campaignId)}
+          />
         ) : null}
         {activeTab === "redemptions" ? (
           <RedemptionsPanel
@@ -265,10 +290,14 @@ function OverviewPanel({ kpis, data }: { kpis: Array<{ label: string; value: str
 
 function CampaignsPanel({
   campaigns,
+  csvDownloadingId,
   onToggleActive,
+  onDownloadCsv,
 }: {
   campaigns: OpsMarketingCampaign[];
+  csvDownloadingId: number | null;
   onToggleActive: () => void;
+  onDownloadCsv: (campaignId: number) => void;
 }) {
   return (
     <SectionCard title="Campaigns">
@@ -327,9 +356,10 @@ function CampaignsPanel({
                       type="button"
                       variant="outline"
                       className="!px-2 !py-1 text-xs"
-                      onClick={() => window.open(getOpsMarketingExportCsvUrl(campaign.id), "_blank")}
+                      disabled={csvDownloadingId === campaign.id}
+                      onClick={() => onDownloadCsv(campaign.id)}
                     >
-                      Export CSV
+                      {csvDownloadingId === campaign.id ? "Downloading…" : "Export CSV"}
                     </Button>
                   </div>
                 </td>

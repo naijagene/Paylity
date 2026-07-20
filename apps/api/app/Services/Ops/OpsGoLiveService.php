@@ -12,6 +12,7 @@ use App\Services\Launch\LaunchExportService;
 use App\Services\Launch\LaunchModeService;
 use App\Services\Launch\LaunchPreflightService;
 use App\Services\Launch\LaunchTimelineService;
+use App\Services\Launch\PaymentCertificationService;
 use App\Services\Launch\PaystackModeInspector;
 use App\Services\Launch\PricingAuditService;
 use App\Services\Launch\SchedulerHeartbeatService;
@@ -33,6 +34,7 @@ class OpsGoLiveService
         private readonly DatabaseFingerprintService $databaseFingerprintService,
         private readonly PaystackModeInspector $paystackModeInspector,
         private readonly VtpassModeInspector $vtpassModeInspector,
+        private readonly PaymentCertificationService $paymentCertificationService,
         private readonly OpsMonitoringService $opsMonitoringService,
         private readonly FinancialLedgerService $financialLedgerService,
         private readonly SystemSettingsService $settings,
@@ -101,6 +103,7 @@ class OpsGoLiveService
                 'negative_margin_count' => TransactionFinancial::query()->where('gross_margin_kobo', '<', 0)->count(),
                 'all_positive' => TransactionFinancial::query()->where('gross_margin_kobo', '<', 0)->doesntExist(),
             ],
+            'payment_certification' => $this->paymentCertificationService->snapshot(),
         ];
     }
 
