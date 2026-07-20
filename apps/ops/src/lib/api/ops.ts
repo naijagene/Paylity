@@ -779,7 +779,19 @@ export type OpsGoLiveSnapshot = {
     settlement_difference_kobo: number;
   };
   pricing_audit_summary: { negative_margin_count: number; all_positive: boolean };
-  payment_certification?: OpsPaymentCertificationSnapshot;
+  payment_certification: OpsPaymentCertificationSnapshot;
+};
+
+export type OpsPaymentCertificationDailyUsage = {
+  transaction_count: number;
+  transaction_limit_daily: number;
+  transaction_utilization_pct?: number | null;
+};
+
+export type OpsPaymentCertificationRevenueUsage = {
+  gross_collection_naira: number;
+  revenue_limit_daily: number;
+  revenue_utilization_pct?: number | null;
 };
 
 export type OpsPaymentCertificationRun = {
@@ -805,14 +817,110 @@ export type OpsPaymentCertificationRun = {
 
 export type OpsPaymentCertificationSnapshot = {
   paystack_mode: string;
+  provider_mode: string;
   vtpass_mode: string;
   environment: string;
   launch_mode: string;
   preflight_verdict: string;
-  daily_usage: OpsGoLiveSnapshot["launch_mode"]["daily_usage"];
-  active_run?: OpsPaymentCertificationRun | null;
+  active_run: OpsPaymentCertificationRun | null;
+  last_certified_transaction: OpsPaymentCertificationRun | null;
+  last_certification_verdict: string | null;
   last_certified?: OpsPaymentCertificationRun | null;
+  daily_transaction_usage: OpsPaymentCertificationDailyUsage;
+  daily_revenue_usage: OpsPaymentCertificationRevenueUsage;
+  daily_usage: OpsGoLiveSnapshot["launch_mode"]["daily_usage"];
+  last_backup_at?: string | null;
+  scheduler_health: string;
 };
+
+export function defaultPaymentCertificationState(
+  partial?: Partial<OpsPaymentCertificationSnapshot>,
+): OpsPaymentCertificationSnapshot {
+  return {
+    paystack_mode: "unknown",
+    provider_mode: "unknown",
+    vtpass_mode: "unknown",
+    environment: "unknown",
+    launch_mode: "unknown",
+    preflight_verdict: "UNKNOWN",
+    active_run: null,
+    last_certified_transaction: null,
+    last_certification_verdict: null,
+    last_certified: null,
+    daily_transaction_usage: {
+      transaction_count: 0,
+      transaction_limit_daily: 0,
+      transaction_utilization_pct: null,
+    },
+    daily_revenue_usage: {
+      gross_collection_naira: 0,
+      revenue_limit_daily: 0,
+      revenue_utilization_pct: null,
+    },
+    daily_usage: {
+      transaction_count: 0,
+      gross_collection_naira: 0,
+      transaction_limit_daily: 0,
+      revenue_limit_daily: 0,
+      transaction_utilization_pct: null,
+      revenue_utilization_pct: null,
+    },
+    last_backup_at: null,
+    scheduler_health: "unknown",
+    ...partial,
+  };
+}
+
+export function resolvePaymentCertification(
+  snapshot?: OpsGoLiveSnapshot | null,
+): { certification: OpsPaymentCertificationSnapshot; unavailable: boolean } {
+  const raw = snapshot?.payment_certification;
+  const unavailable = !raw;
+
+  if (!raw) {
+    return {
+      unavailable: true,
+      certification: defaultPaymentCertificationState({
+        environment: snapshot?.launch_status?.environment,
+        launch_mode: snapshot?.launch_mode?.mode,
+        preflight_verdict: snapshot?.preflight?.status,
+        last_backup_at: snapshot?.launch_status?.backup?.last_run_at ?? null,
+        scheduler_health: snapshot?.launch_status?.scheduler?.status ?? "unknown",
+        daily_transaction_usage: {
+          transaction_count: snapshot?.launch_mode?.daily_usage?.transaction_count ?? 0,
+          transaction_limit_daily: snapshot?.launch_mode?.daily_usage?.transaction_limit_daily ?? 0,
+          transaction_utilization_pct: snapshot?.launch_mode?.daily_usage?.transaction_utilization_pct ?? null,
+        },
+        daily_revenue_usage: {
+          gross_collection_naira: snapshot?.launch_mode?.daily_usage?.gross_collection_naira ?? 0,
+          revenue_limit_daily: snapshot?.launch_mode?.daily_usage?.revenue_limit_daily ?? 0,
+          revenue_utilization_pct: snapshot?.launch_mode?.daily_usage?.revenue_utilization_pct ?? null,
+        },
+        daily_usage: snapshot?.launch_mode?.daily_usage ?? defaultPaymentCertificationState().daily_usage,
+        paystack_mode: snapshot?.provider_mode?.paystack?.mode ?? "unknown",
+        provider_mode: snapshot?.provider_mode?.vtpass?.mode ?? "unknown",
+        vtpass_mode: snapshot?.provider_mode?.vtpass?.mode ?? "unknown",
+      }),
+    };
+  }
+
+  return {
+    unavailable: false,
+    certification: defaultPaymentCertificationState({
+      ...raw,
+      provider_mode: raw.provider_mode ?? raw.vtpass_mode ?? "unknown",
+      vtpass_mode: raw.vtpass_mode ?? raw.provider_mode ?? "unknown",
+      active_run: raw.active_run ?? null,
+      last_certified_transaction: raw.last_certified_transaction ?? raw.last_certified ?? null,
+      last_certified: raw.last_certified ?? raw.last_certified_transaction ?? null,
+      last_certification_verdict:
+        raw.last_certification_verdict
+        ?? raw.last_certified_transaction?.result
+        ?? raw.last_certified?.result
+        ?? null,
+    }),
+  };
+}
 
 export async function fetchOpsGoLive() {
   const { data } = await opsRequest<OpsGoLiveSnapshot>("/ops/go-live");

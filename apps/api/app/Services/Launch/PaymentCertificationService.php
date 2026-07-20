@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Services\FeeService;
 use App\Services\Finance\FinancialAlertService;
 use App\Services\Finance\FinancialLedgerService;
+use App\Services\Launch\SchedulerHeartbeatService;
 use App\Services\Ops\OpsReliabilityService;
 use App\Services\Platform\SystemSettingsService;
 use App\Services\TransactionEventService;
@@ -19,6 +20,49 @@ use Illuminate\Validation\ValidationException;
 
 class PaymentCertificationService
 {
+    /**
+     * @return array<string, mixed>
+     */
+    public static function emptySnapshot(
+        ?string $environment = null,
+        ?string $launchMode = null,
+        ?string $preflightVerdict = null,
+        ?string $lastBackupAt = null,
+        ?string $schedulerHealth = null,
+    ): array {
+        return [
+            'paystack_mode' => 'unknown',
+            'provider_mode' => 'unknown',
+            'vtpass_mode' => 'unknown',
+            'environment' => $environment ?? (string) config('app.env', 'unknown'),
+            'launch_mode' => $launchMode ?? 'unknown',
+            'preflight_verdict' => $preflightVerdict ?? 'UNKNOWN',
+            'active_run' => null,
+            'last_certified_transaction' => null,
+            'last_certification_verdict' => null,
+            'last_certified' => null,
+            'daily_transaction_usage' => [
+                'transaction_count' => 0,
+                'transaction_limit_daily' => 0,
+                'transaction_utilization_pct' => null,
+            ],
+            'daily_revenue_usage' => [
+                'gross_collection_naira' => 0,
+                'revenue_limit_daily' => 0,
+                'revenue_utilization_pct' => null,
+            ],
+            'daily_usage' => [
+                'transaction_count' => 0,
+                'gross_collection_naira' => 0,
+                'transaction_limit_daily' => 0,
+                'revenue_limit_daily' => 0,
+                'transaction_utilization_pct' => null,
+                'revenue_utilization_pct' => null,
+            ],
+            'last_backup_at' => $lastBackupAt,
+            'scheduler_health' => $schedulerHealth ?? 'unknown',
+        ];
+    }
     public function __construct(
         private readonly PaystackModeInspector $paystackModeInspector,
         private readonly VtpassModeInspector $vtpassModeInspector,
@@ -37,6 +81,15 @@ class PaymentCertificationService
      */
     public function snapshot(): array
     {
+        if (! Schema::hasTable('payment_certification_runs')) {
+            return self::emptySnapshot();
+        }
+
+        $dailyUsage = $this->launchModeService->dailyUsage();
+        $scheduler = app(SchedulerHeartbeatService::class)->snapshot();
+        $settings = app(SystemSettingsService::class);
+        $vtpassMode = (string) ($this->vtpassModeInspector->inspect()['mode'] ?? 'unknown');
+
         $activeRun = $this->activeRun();
         $lastCertified = PaymentCertificationRun::query()
             ->whereIn('result', [
@@ -46,20 +99,35 @@ class PaymentCertificationService
             ->orderByDesc('completed_at')
             ->first();
 
-        $preflightStatus = app(SystemSettingsService::class)->getString(
-            SystemSettingKeys::PAYMENT_LIVE_PREFLIGHT_LAST_STATUS,
-            'UNKNOWN',
-        );
+        $lastCertifiedPayload = $lastCertified ? $this->serializeRun($lastCertified) : null;
 
         return [
-            'paystack_mode' => ($this->paystackModeInspector->inspect()['detected_mode'] ?? 'unknown'),
-            'vtpass_mode' => ($this->vtpassModeInspector->inspect()['mode'] ?? 'unknown'),
+            'paystack_mode' => (string) ($this->paystackModeInspector->inspect()['detected_mode'] ?? 'unknown'),
+            'provider_mode' => $vtpassMode,
+            'vtpass_mode' => $vtpassMode,
             'environment' => (string) config('app.env'),
             'launch_mode' => $this->launchModeService->mode(),
-            'preflight_verdict' => $preflightStatus,
-            'daily_usage' => $this->launchModeService->dailyUsage(),
+            'preflight_verdict' => $settings->getString(
+                SystemSettingKeys::PAYMENT_LIVE_PREFLIGHT_LAST_STATUS,
+                'UNKNOWN',
+            ),
             'active_run' => $activeRun ? $this->serializeRun($activeRun) : null,
-            'last_certified' => $lastCertified ? $this->serializeRun($lastCertified) : null,
+            'last_certified_transaction' => $lastCertifiedPayload,
+            'last_certification_verdict' => $lastCertifiedPayload['result'] ?? null,
+            'last_certified' => $lastCertifiedPayload,
+            'daily_transaction_usage' => [
+                'transaction_count' => (int) ($dailyUsage['transaction_count'] ?? 0),
+                'transaction_limit_daily' => (int) ($dailyUsage['transaction_limit_daily'] ?? 0),
+                'transaction_utilization_pct' => $dailyUsage['transaction_utilization_pct'] ?? null,
+            ],
+            'daily_revenue_usage' => [
+                'gross_collection_naira' => (int) ($dailyUsage['gross_collection_naira'] ?? 0),
+                'revenue_limit_daily' => (int) ($dailyUsage['revenue_limit_daily'] ?? 0),
+                'revenue_utilization_pct' => $dailyUsage['revenue_utilization_pct'] ?? null,
+            ],
+            'daily_usage' => $dailyUsage,
+            'last_backup_at' => $settings->getString(SystemSettingKeys::BACKUP_LAST_RUN_AT) ?: null,
+            'scheduler_health' => (string) ($scheduler['status'] ?? 'unknown'),
         ];
     }
 

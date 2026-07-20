@@ -26,6 +26,7 @@ import {
   type OpsGoLiveCheck,
   type OpsGoLiveSnapshot,
   type OpsPaymentCertificationRun,
+  resolvePaymentCertification,
 } from "@/lib/api/ops";
 import { getOperatorKey } from "@/lib/ops/operatorKey";
 import { usePolling } from "@/lib/hooks/usePolling";
@@ -172,19 +173,28 @@ export function GoLiveClient() {
         {snapshot.loading && !data ? <p className="text-sm text-muted">Loading go-live snapshot…</p> : null}
 
         {data ? (
-          <>
-            <GoLiveSections data={data} onToggleChecklistItem={toggleChecklistItem} />
-            <LivePaymentCertificationSection
-              data={data}
-              confirmCertification={confirmCertification}
-              confirmFinalizeCertification={confirmFinalizeCertification}
-              linkReference={linkReference}
-              onConfirmCertificationChange={setConfirmCertification}
-              onConfirmFinalizeChange={setConfirmFinalizeCertification}
-              onLinkReferenceChange={setLinkReference}
-              onAction={(label, action) => void runAction(label, action)}
-            />
-          </>
+          <GoLiveSections
+            data={data}
+            confirmCertification={confirmCertification}
+            confirmFinalizeCertification={confirmFinalizeCertification}
+            confirmMaintenance={confirmMaintenance}
+            linkReference={linkReference}
+            onConfirmCertificationChange={setConfirmCertification}
+            onConfirmFinalizeChange={setConfirmFinalizeCertification}
+            onConfirmMaintenanceChange={setConfirmMaintenance}
+            onLinkReferenceChange={setLinkReference}
+            onToggleChecklistItem={toggleChecklistItem}
+            onAction={(label, action) => void runAction(label, action)}
+            onSetMode={(mode) =>
+              void runAction(`${mode} mode`, () =>
+                opsGoLiveSetMode(
+                  mode,
+                  mode === "live" ? confirmProduction : false,
+                  mode === "maintenance" ? confirmMaintenance : false,
+                ),
+              )
+            }
+          />
         ) : null}
       </div>
     </PageContainer>
@@ -336,12 +346,33 @@ function GoLiveActions({
 
 function GoLiveSections({
   data,
+  confirmCertification,
+  confirmFinalizeCertification,
+  confirmMaintenance,
+  linkReference,
+  onConfirmCertificationChange,
+  onConfirmFinalizeChange,
+  onConfirmMaintenanceChange,
+  onLinkReferenceChange,
   onToggleChecklistItem,
+  onAction,
+  onSetMode,
 }: {
   data: OpsGoLiveSnapshot;
+  confirmCertification: boolean;
+  confirmFinalizeCertification: boolean;
+  confirmMaintenance: boolean;
+  linkReference: string;
+  onConfirmCertificationChange: (value: boolean) => void;
+  onConfirmFinalizeChange: (value: boolean) => void;
+  onConfirmMaintenanceChange: (value: boolean) => void;
+  onLinkReferenceChange: (value: string) => void;
   onToggleChecklistItem: (key: string, completed: boolean) => Promise<void>;
+  onAction: (label: string, action: () => Promise<unknown>) => void;
+  onSetMode: (mode: "staging" | "soft_launch" | "live" | "maintenance") => void;
 }) {
   const scheduler = data.launch_status.scheduler;
+  const { certification, unavailable } = resolvePaymentCertification(data);
 
   return (
     <>
@@ -458,6 +489,22 @@ function GoLiveSections({
         </div>
       </SectionCard>
 
+      <LivePaymentCertificationSection
+        data={data}
+        certification={certification}
+        unavailable={unavailable}
+        confirmCertification={confirmCertification}
+        confirmFinalizeCertification={confirmFinalizeCertification}
+        confirmMaintenance={confirmMaintenance}
+        linkReference={linkReference}
+        onConfirmCertificationChange={onConfirmCertificationChange}
+        onConfirmFinalizeChange={onConfirmFinalizeChange}
+        onConfirmMaintenanceChange={onConfirmMaintenanceChange}
+        onLinkReferenceChange={onLinkReferenceChange}
+        onAction={onAction}
+        onSetMode={onSetMode}
+      />
+
       <div className="grid gap-6 xl:grid-cols-2">
         <SectionCard title="Provider Mode">
           <ul className="space-y-2 text-sm">
@@ -530,63 +577,104 @@ function TimelineItem({ label, value }: { label: string; value?: string | null }
 
 function LivePaymentCertificationSection({
   data,
+  certification,
+  unavailable,
   confirmCertification,
   confirmFinalizeCertification,
+  confirmMaintenance,
   linkReference,
   onConfirmCertificationChange,
   onConfirmFinalizeChange,
+  onConfirmMaintenanceChange,
   onLinkReferenceChange,
   onAction,
+  onSetMode,
 }: {
   data: OpsGoLiveSnapshot;
+  certification: ReturnType<typeof resolvePaymentCertification>["certification"];
+  unavailable: boolean;
   confirmCertification: boolean;
   confirmFinalizeCertification: boolean;
+  confirmMaintenance: boolean;
   linkReference: string;
   onConfirmCertificationChange: (value: boolean) => void;
   onConfirmFinalizeChange: (value: boolean) => void;
+  onConfirmMaintenanceChange: (value: boolean) => void;
   onLinkReferenceChange: (value: string) => void;
   onAction: (label: string, action: () => Promise<unknown>) => void;
+  onSetMode: (mode: "staging" | "soft_launch" | "live" | "maintenance") => void;
 }) {
-  const certification = data.payment_certification;
-  const activeRun = certification?.active_run ?? null;
-  const lastCertified = certification?.last_certified ?? null;
+  const activeRun = certification.active_run;
+  const lastCertified = certification.last_certified_transaction ?? certification.last_certified ?? null;
+  const displayRun = activeRun ?? lastCertified;
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
-
-  if (!certification) {
-    return null;
-  }
+  const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
 
   return (
     <SectionCard title="Live Payment Certification">
+      {unavailable ? (
+        <AlertCard
+          severity="warning"
+          message="Certification status is currently unavailable."
+        />
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Paystack Mode" value={certification.paystack_mode} />
-        <KpiCard label="VTPass Mode" value={certification.vtpass_mode} />
-        <KpiCard label="Preflight Verdict" value={certification.preflight_verdict} />
+        <KpiCard label="Provider Mode" value={certification.provider_mode ?? certification.vtpass_mode} />
+        <KpiCard label="Live Preflight Verdict" value={certification.preflight_verdict} />
         <KpiCard label="Launch Mode" value={certification.launch_mode} />
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="rounded-xl border border-border px-4 py-3 text-sm">
-          <p className="font-semibold text-dark">Daily Usage</p>
-          <p className="mt-2 text-muted">
-            Transactions: {certification.daily_usage.transaction_count} /{" "}
-            {certification.daily_usage.transaction_limit_daily || "∞"}
+          <p className="font-semibold text-dark">Environment & Capacity</p>
+          <p className="mt-2 text-muted">Environment: {certification.environment}</p>
+          <p className="text-muted">
+            Daily transactions: {certification.daily_transaction_usage.transaction_count} /{" "}
+            {certification.daily_transaction_usage.transaction_limit_daily || "∞"}
           </p>
           <p className="text-muted">
-            Revenue: ₦{certification.daily_usage.gross_collection_naira.toLocaleString()} / ₦
-            {certification.daily_usage.revenue_limit_daily.toLocaleString() || "∞"}
+            Daily revenue: ₦{certification.daily_revenue_usage.gross_collection_naira.toLocaleString()} / ₦
+            {(certification.daily_revenue_usage.revenue_limit_daily || 0).toLocaleString() || "∞"}
           </p>
           <p className="mt-2 text-muted">
-            Last backup: {formatTimestamp(data.launch_status.backup.last_run_at)}
+            Last backup: {formatTimestamp(certification.last_backup_at ?? data.launch_status.backup.last_run_at)}
           </p>
           <p className="text-muted">
-            Scheduler: {data.launch_status.scheduler.status}
+            Scheduler: {certification.scheduler_health ?? data.launch_status.scheduler.status}
           </p>
         </div>
 
-        <CertificationRunSummary run={activeRun ?? lastCertified} title={activeRun ? "Active Certification Run" : "Last Certified Transaction"} />
+        <CertificationRunSummary
+          run={activeRun}
+          title="Active Certification Run"
+          emptyMessage="No active certification session."
+        />
+
+        <CertificationRunSummary
+          run={lastCertified}
+          title="Last Certified Transaction"
+          emptyMessage="No certified transaction recorded yet."
+          verdict={certification.last_certification_verdict}
+        />
       </div>
+
+      {displayRun ? (
+        <div className="mt-4 rounded-xl border border-border px-4 py-3 text-sm">
+          <p className="font-semibold text-dark">Certification Status</p>
+          <ul className="mt-2 grid gap-1 text-muted sm:grid-cols-2">
+            <li>Certification verdict: {displayRun.result}</li>
+            <li>Payment: {displayRun.payment_status ?? "—"}</li>
+            <li>Fulfillment: {displayRun.fulfillment_status ?? "—"}</li>
+            <li>Ledger: {displayRun.ledger_status ?? "—"}</li>
+            <li>Reconciliation: {displayRun.reconciliation_status ?? "—"}</li>
+            <li>Settlement: {displayRun.settlement_expectation_status ?? "—"}</li>
+            <li>Receipt: {displayRun.receipt_status ?? "—"}</li>
+          </ul>
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Button type="button" variant="outline" onClick={() => onAction("Live payment preflight", () => opsPaymentCertificationPreflight(false))}>
@@ -598,7 +686,7 @@ function LivePaymentCertificationSection({
         <Button
           type="button"
           variant="outline"
-          disabled={!activeRun}
+          disabled={!activeRun || linkReference.trim() === ""}
           onClick={() =>
             activeRun &&
             onAction("Link transaction reference", () =>
@@ -642,6 +730,12 @@ function LivePaymentCertificationSection({
         >
           Export Certification Evidence
         </Button>
+        <Button type="button" variant="secondary" onClick={() => setShowMaintenanceDialog(true)}>
+          Enter Maintenance Mode
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => onSetMode("soft_launch")}>
+          Restore Soft Launch Mode
+        </Button>
       </div>
 
       <div className="mt-4">
@@ -656,6 +750,42 @@ function LivePaymentCertificationSection({
           placeholder="PYL-YYYYMMDD-XXXXXX"
         />
       </div>
+
+      {showMaintenanceDialog ? (
+        <AlertCard
+          severity="warning"
+          title="Confirm maintenance mode"
+          message={
+            <div className="space-y-3">
+              <p>I understand this blocks new checkout initialization while preserving payment recovery.</p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={confirmMaintenance}
+                  onChange={(event) => onConfirmMaintenanceChange(event.target.checked)}
+                />
+                Confirm maintenance mode
+              </label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!confirmMaintenance}
+                  onClick={() => {
+                    onSetMode("maintenance");
+                    setShowMaintenanceDialog(false);
+                  }}
+                >
+                  Enter Maintenance Mode
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowMaintenanceDialog(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          }
+        />
+      ) : null}
 
       {showCreateDialog ? (
         <AlertCard
@@ -747,15 +877,20 @@ function LivePaymentCertificationSection({
 function CertificationRunSummary({
   run,
   title,
+  emptyMessage,
+  verdict,
 }: {
   run?: OpsPaymentCertificationRun | null;
   title: string;
+  emptyMessage: string;
+  verdict?: string | null;
 }) {
   if (!run) {
     return (
       <div className="rounded-xl border border-border px-4 py-3 text-sm">
         <p className="font-semibold text-dark">{title}</p>
-        <p className="mt-2 text-muted">No certification run recorded yet.</p>
+        <p className="mt-2 text-muted">{emptyMessage}</p>
+        {verdict ? <p className="mt-1 text-muted">Verdict: {verdict}</p> : null}
       </div>
     );
   }

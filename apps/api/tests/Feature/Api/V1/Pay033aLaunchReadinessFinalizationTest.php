@@ -67,8 +67,29 @@ class Pay033aLaunchReadinessFinalizationTest extends TestCase
                         'last_scheduler_heartbeat',
                     ],
                     'launch_status' => ['environment_badge', 'scheduler'],
+                    'payment_certification' => [
+                        'paystack_mode',
+                        'provider_mode',
+                        'environment',
+                        'launch_mode',
+                        'preflight_verdict',
+                        'active_run',
+                        'last_certified_transaction',
+                        'last_certification_verdict',
+                        'daily_transaction_usage',
+                        'daily_revenue_usage',
+                        'last_backup_at',
+                        'scheduler_health',
+                    ],
                 ],
-            ]);
+            ])
+            ->assertJsonPath('data.payment_certification.active_run', null)
+            ->assertJsonPath('data.payment_certification.last_certified_transaction', null);
+
+        $encoded = json_encode($response->json('data.payment_certification'));
+        $this->assertIsString($encoded);
+        $this->assertStringNotContainsString('sk_live_', $encoded);
+        $this->assertStringNotContainsString('sk_test_128e', $encoded);
     }
 
     public function test_launch_preflight_returns_named_checks_with_severity(): void

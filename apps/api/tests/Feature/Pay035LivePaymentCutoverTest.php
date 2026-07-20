@@ -414,6 +414,28 @@ class Pay035LivePaymentCutoverTest extends TestCase
                     'daily_usage',
                 ],
             ]);
+
+        $snapshot = $this->withHeaders(['X-Operator-Key' => self::OPERATOR_KEY])
+            ->getJson('/api/v1/ops/go-live');
+
+        $snapshot
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'payment_certification' => [
+                        'paystack_mode',
+                        'provider_mode',
+                        'active_run',
+                        'last_certified_transaction',
+                        'last_certification_verdict',
+                    ],
+                ],
+            ]);
+
+        $encoded = json_encode($snapshot->json('data.payment_certification'));
+        $this->assertIsString($encoded);
+        $this->assertStringNotContainsString('sk_test_128e', $encoded);
+        $this->assertStringNotContainsString('sk_live_', $encoded);
     }
 
     public function test_ops_payment_certification_create_requires_confirmation(): void

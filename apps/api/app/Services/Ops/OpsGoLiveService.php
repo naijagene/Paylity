@@ -103,8 +103,34 @@ class OpsGoLiveService
                 'negative_margin_count' => TransactionFinancial::query()->where('gross_margin_kobo', '<', 0)->count(),
                 'all_positive' => TransactionFinancial::query()->where('gross_margin_kobo', '<', 0)->doesntExist(),
             ],
-            'payment_certification' => $this->paymentCertificationService->snapshot(),
+            'payment_certification' => $this->resolvePaymentCertificationSnapshot(
+                environment: $environment,
+                launchMode: $launchMode,
+                schedulerStatus: (string) ($this->schedulerHeartbeatService->snapshot()['status'] ?? 'unknown'),
+                lastBackupAt: $this->settings->getString(SystemSettingKeys::BACKUP_LAST_RUN_AT) ?: null,
+            ),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolvePaymentCertificationSnapshot(
+        string $environment,
+        string $launchMode,
+        string $schedulerStatus,
+        ?string $lastBackupAt,
+    ): array {
+        try {
+            return $this->paymentCertificationService->snapshot();
+        } catch (\Throwable) {
+            return PaymentCertificationService::emptySnapshot(
+                environment: $environment,
+                launchMode: $launchMode,
+                lastBackupAt: $lastBackupAt,
+                schedulerHealth: $schedulerStatus,
+            );
+        }
     }
 
     /**
